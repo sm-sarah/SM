@@ -4,6 +4,11 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>업무관리 프로그램 (프로토타입)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,600;1,600&display=swap" rel="stylesheet">
+<script src="https://apis.google.com/js/api.js"></script>
+<script src="https://accounts.google.com/gsi/client"></script>
 <style>
   :root{
     --bg:#f1f1fb;
@@ -51,21 +56,21 @@
     background:var(--card);
     border-bottom:1px solid var(--border);
     padding:14px 28px;
-    display:flex;
+    display:grid;
+    grid-template-columns:1fr auto 1fr;
     align-items:center;
-    gap:12px;
   }
-  .logo-mark{
-    width:36px; height:36px;
-    border-radius:11px;
-    background:linear-gradient(135deg,var(--primary),#8b8ef7);
-    display:flex; align-items:center; justify-content:center;
-    color:#fff; font-weight:800; font-size:15px;
-    box-shadow:var(--shadow-sm);
+  header .wordmark{
+    justify-self:center;
+    font-family:'Fraunces', Georgia, serif;
+    font-style:italic;
+    font-size:21px;
+    font-weight:600;
+    color:var(--text);
+    letter-spacing:.2px;
   }
-  header .wordmark{ font-size:17px; font-weight:800; color:var(--text); letter-spacing:-.2px; }
   header .today-pill{
-    margin-left:auto;
+    justify-self:end;
     font-size:12.5px;
     color:var(--muted);
     background:var(--bg);
@@ -118,6 +123,7 @@
     padding:28px 32px 60px;
   }
   .page-head{ margin-bottom:22px; }
+  .page-head:empty{ margin-bottom:0; }
   .page-head h1{
     font-size:22px;
     font-weight:800;
@@ -272,16 +278,6 @@
 
   .empty{ text-align:center; color:var(--muted); padding:30px 0; font-size:13px; }
 
-  .note-banner{
-    background:linear-gradient(135deg,#fff8ea,#fff1d6);
-    border:1px solid #fbe3ad;
-    color:#92610a;
-    padding:12px 16px;
-    border-radius:var(--radius-md);
-    font-size:12.5px;
-    margin-bottom:20px;
-  }
-
   .type-tag{ font-size:11px; padding:3px 9px; border-radius:999px; background:var(--bg); color:var(--muted); font-weight:700; }
 
   .date-cell{ display:flex; align-items:center; gap:6px; }
@@ -296,13 +292,38 @@
   .settings-block h3{ font-size:13.5px; font-weight:800; margin-bottom:3px; }
   .settings-block .hint{ font-size:12px; color:var(--muted); line-height:1.5; max-width:420px; }
   .settings-block .ctrl{ display:flex; align-items:center; gap:8px; flex-shrink:0; }
+
+  .cal-title-row{ display:grid; grid-template-columns:1fr auto 1fr; align-items:center; margin-bottom:16px; }
+  .cal-title{ justify-self:center; margin:0; }
+  .cal-title-row button{ justify-self:end; }
+  .cal-head{ display:flex; align-items:center; justify-content:center; gap:14px; margin-bottom:14px; }
+  .cal-head .month-label{ font-size:15px; font-weight:800; min-width:110px; text-align:center; }
+  .cal-grid{ display:grid; grid-template-columns:repeat(7,1fr); grid-auto-rows:92px; gap:6px; }
+  .cal-dow{ text-align:center; font-size:11px; font-weight:800; color:var(--muted-soft); padding:2px 0 8px; text-transform:uppercase; }
+  .cal-day{
+    position:relative; height:92px; overflow:hidden;
+    border-radius:12px; background:var(--bg);
+    padding:7px 7px 8px; border:1px solid transparent;
+  }
+  .cal-day.other{ opacity:.4; }
+  .cal-day.today{ border-color:var(--primary); background:var(--primary-soft); }
+  .cal-daynum{ font-size:11.5px; font-weight:700; color:var(--muted); margin-bottom:5px; }
+  .cal-day.today .cal-daynum{ color:var(--primary-dark); }
+  .cal-tasks{ display:flex; flex-direction:column; gap:3px; overflow:hidden; max-height:60px; }
+  .cal-task{
+    font-size:10.5px; font-weight:700; background:var(--card); color:var(--text);
+    padding:3px 6px; border-radius:6px; cursor:pointer;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+    box-shadow:var(--shadow-sm); flex-shrink:0;
+  }
+  .cal-task.done{ text-decoration:line-through; color:var(--muted); background:var(--bg); box-shadow:none; }
 </style>
 </head>
 <body>
 
 <header>
-  <div class="logo-mark">청</div>
-  <span class="wordmark">업무관리 프로그램</span>
+  <span></span>
+  <span class="wordmark">Sunmin's Works</span>
   <span class="today-pill" id="todayPill"></span>
 </header>
 
@@ -310,13 +331,9 @@
   <aside class="sidebar" id="sidebar"></aside>
 
   <main>
-    <div class="note-banner">
-      화면·기능을 먼저 확인하는 프로토타입입니다. 모든 데이터는 예시이며 새로고침하면 초기화됩니다.
-      다음 단계에서 Google Sheets 연동을 붙이면 실제 데이터로 저장됩니다.
-    </div>
-
     <div class="page-head" id="pageHead"></div>
 
+    <div id="tab-home" class="tab"></div>
     <div id="tab-worklist" class="tab"></div>
     <div id="tab-vat" class="tab"></div>
     <div id="tab-pay" class="tab"></div>
@@ -351,11 +368,30 @@ let tasks = [
 ];
 let nextTaskId = 4;
 
+const _todayForCal = new Date(todayStr());
+let calYear = _todayForCal.getFullYear();
+let calMonth = _todayForCal.getMonth(); // 0-indexed
+
 let settings = {
   soonDays: 7,          // 마감 임박(주의) 기준 일수
   displayName: '김세인', // 대시보드 상단 표시용 이름 (예시)
   sheetsConnected: false,
 };
+
+/* =========================================================
+   Google Drive / Sheets 연동
+   ========================================================= */
+const GOOGLE_CLIENT_ID = '273460053868-nbc6qpi148vv3lkobhrqnrtn8vvk8num.apps.googleusercontent.com';
+const GOOGLE_SCOPES = 'https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive.file';
+const GOOGLE_SHEET_NAME = 'SM_data';
+
+let gapiReady = false;
+let gisReady = false;
+let googleTokenClient = null;
+let googleAccessToken = null;
+let googleSpreadsheetId = null;
+let googleSyncStatus = '';
+let saveTimer = null;
 
 let vatPeriods = ['2025년 2기 확정', '2026년 1기 예정', '2026년 1기 확정'];
 let vatDue = {
@@ -441,6 +477,7 @@ function pill(text, kind){ return `<span class="pill ${kind}">${text}</span>`; }
    ========================================================= */
 
 const ICONS = {
+  home: '<path d="M4 11.5 12 4l8 7.5"/><path d="M6 10v9a1 1 0 0 0 1 1h3.2v-6h3.6v6H17a1 1 0 0 0 1-1v-9"/>',
   worklist: '<rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18"/><path d="M8 3v4"/><path d="M16 3v4"/>',
   vat: '<path d="M6 2.5h12v18l-2.3-1.4L13.3 20.5 11 19.1 8.7 20.5 6.4 19.1z"/><path d="M9 8h6M9 12h6M9 16h3.5"/>',
   pay: '<rect x="3" y="6.5" width="18" height="12.5" rx="2.5"/><path d="M3 10.5h18"/><circle cx="16.5" cy="14.5" r="1.3" fill="currentColor" stroke="none"/>',
@@ -451,7 +488,8 @@ const ICONS = {
 };
 
 const TABS = [
-  {id:'worklist', label:'업무일정'},
+  {id:'home',     label:'홈'},
+  {id:'worklist', label:'To Do List'},
   {id:'vat',      label:'부가세'},
   {id:'pay',      label:'원천세'},
   {id:'corp',     label:'법인세'},
@@ -460,7 +498,8 @@ const TABS = [
   {id:'settings', label:'설정'},
 ];
 const TAB_TITLES = {
-  worklist:['업무일정','이번 달 마감과 할 일을 한 곳에서 확인하세요.'],
+  home:['홈','오늘 기준으로 챙겨야 할 신고 기한과 현황을 한눈에 봅니다.'],
+  worklist:['To Do List','날짜별로 자유롭게 할 일과 메모를 남겨두세요.'],
   vat:['부가가치세','기간별 신고 현황을 관리합니다.'],
   pay:['원천세·급여','월별 급여·원천세 처리 현황입니다.'],
   corp:['법인세','법인 거래처의 결산~신고 단계를 추적합니다.'],
@@ -469,7 +508,7 @@ const TAB_TITLES = {
   settings:['설정','나만 쓰는 도구라 알림은 없고, 필요한 기본값만 여기서 관리합니다.'],
 };
 
-let activeTab = 'worklist';
+let activeTab = 'home';
 
 function renderNav(){
   const sb = document.getElementById('sidebar');
@@ -481,12 +520,16 @@ function renderNav(){
     </button>
   `).join('');
 
-  const [title, subtitle] = TAB_TITLES[activeTab];
-  document.getElementById('pageHead').innerHTML = `
-    <div class="underline-bar"></div>
-    <h1>${title}</h1>
-    <div class="subtitle">${subtitle}</div>
-  `;
+  if(activeTab === 'home'){
+    document.getElementById('pageHead').innerHTML = '';
+  } else {
+    const [title, subtitle] = TAB_TITLES[activeTab];
+    document.getElementById('pageHead').innerHTML = `
+      <div class="underline-bar"></div>
+      <h1>${title}</h1>
+      <div class="subtitle">${subtitle}</div>
+    `;
+  }
 }
 
 function switchTab(id){
@@ -523,32 +566,92 @@ function addTask(){
   if(!textEl.value.trim()) return;
   tasks.push({id: nextTaskId++, date: dateEl.value || todayStr(), text: textEl.value.trim(), done:false});
   textEl.value = '';
-  renderWorklist();
+  renderAll();
 }
-function toggleTask(id){ const t = tasks.find(x => x.id === id); if(t) t.done = !t.done; renderWorklist(); }
-function deleteTask(id){ tasks = tasks.filter(x => x.id !== id); renderWorklist(); }
+function toggleTask(id){ const t = tasks.find(x => x.id === id); if(t) t.done = !t.done; renderAll(); }
+function deleteTask(id){ tasks = tasks.filter(x => x.id !== id); renderAll(); }
 
-function renderWorklist(){
-  const el = document.getElementById('tab-worklist');
-  const sorted = [...tasks].sort((a,b) => a.date.localeCompare(b.date));
+function pad2(n){ return String(n).padStart(2,'0'); }
+
+function calPrev(){ calMonth--; if(calMonth < 0){ calMonth = 11; calYear--; } renderHome(); }
+function calNext(){ calMonth++; if(calMonth > 11){ calMonth = 0; calYear++; } renderHome(); }
+function calToday(){
+  const t = new Date(todayStr());
+  calYear = t.getFullYear(); calMonth = t.getMonth();
+  renderHome();
+}
+
+function addScheduleQuick(){
+  const dateStr = prompt('일정 날짜를 입력하세요 (YYYY-MM-DD)', todayStr());
+  if(!dateStr || !dateStr.trim()) return;
+  const text = prompt('일정 내용을 입력하세요');
+  if(!text || !text.trim()) return;
+  tasks.push({id: nextTaskId++, date: dateStr.trim(), text: text.trim(), done:false});
+  renderAll();
+}
+
+function renderCalendar(){
+  const first = new Date(calYear, calMonth, 1);
+  const startDow = first.getDay();
+  const daysInMonth = new Date(calYear, calMonth + 1, 0).getDate();
+  const daysInPrevMonth = new Date(calYear, calMonth, 0).getDate();
+  const todayS = todayStr();
+
+  const cells = [];
+  for(let i = 0; i < startDow; i++){
+    const d = daysInPrevMonth - startDow + 1 + i;
+    let y = calYear, m = calMonth - 1;
+    if(m < 0){ m = 11; y--; }
+    cells.push({ d, dateStr: `${y}-${pad2(m+1)}-${pad2(d)}`, other:true });
+  }
+  for(let d = 1; d <= daysInMonth; d++){
+    cells.push({ d, dateStr: `${calYear}-${pad2(calMonth+1)}-${pad2(d)}`, other:false });
+  }
+  let nextDay = 1;
+  while(cells.length % 7 !== 0){
+    let y = calYear, m = calMonth + 1;
+    if(m > 11){ m = 0; y++; }
+    cells.push({ d: nextDay, dateStr: `${y}-${pad2(m+1)}-${pad2(nextDay)}`, other:true });
+    nextDay++;
+  }
+
+  const dow = ['일','월','화','수','목','금','토'];
+
+  return `
+    <div class="cal-head">
+      <button class="btn ghost xs" onclick="calPrev()">이전</button>
+      <div class="month-label">${calYear}년 ${calMonth+1}월</div>
+      <button class="btn ghost xs" onclick="calToday()">오늘</button>
+      <button class="btn ghost xs" onclick="calNext()">다음</button>
+    </div>
+    <div class="cal-grid">
+      ${dow.map(x => `<div class="cal-dow">${x}</div>`).join('')}
+      ${cells.map(c => {
+        const dayTasks = tasks.filter(t => t.date === c.dateStr);
+        return `
+        <div class="cal-day ${c.dateStr===todayS?'today':''} ${c.other?'other':''}">
+          <div class="cal-daynum">${c.d}</div>
+          <div class="cal-tasks">
+            ${dayTasks.map(t => `<div class="cal-task ${t.done?'done':''}" onclick="toggleTask(${t.id})" title="${t.text}">${t.text}</div>`).join('')}
+          </div>
+        </div>`;
+      }).join('')}
+    </div>
+  `;
+}
+
+function renderHome(){
+  const el = document.getElementById('tab-home');
   const deadlines = allDeadlines();
-  const soonCount = deadlines.filter(d => dueClass(d.date) !== '').length;
-  const openTasks = tasks.filter(t => !t.done).length;
 
   el.innerHTML = `
-    <div class="hero-row">
-      <div class="hero-tile tone-amber">
-        <div class="n">${soonCount}</div>
-        <div class="label">마감 임박 신고 (7일 이내)</div>
+    <div class="card">
+      <div class="cal-title-row">
+        <span></span>
+        <h2 class="cal-title">일정</h2>
+        <button class="btn primary xs" onclick="addScheduleQuick()">+ 추가</button>
       </div>
-      <div class="hero-tile tone-indigo">
-        <div class="n">${openTasks}</div>
-        <div class="label">처리해야 할 일</div>
-      </div>
-      <div class="hero-tile tone-mint">
-        <div class="n">${clients.length}</div>
-        <div class="label">전체 거래처</div>
-      </div>
+      ${renderCalendar()}
     </div>
 
     <div class="card">
@@ -565,10 +668,15 @@ function renderWorklist(){
           </li>`).join('')}
       </ul>
     </div>
+  `;
+}
 
+function renderWorklist(){
+  const el = document.getElementById('tab-worklist');
+  const sorted = [...tasks].sort((a,b) => a.date.localeCompare(b.date));
+
+  el.innerHTML = `
     <div class="card">
-      <h2>할 일 · 메모</h2>
-      <div class="desc">날짜별로 자유롭게 메모나 할 일을 남겨두는 개인 캘린더입니다.</div>
       <div class="toolbar">
         <input type="date" id="newTaskDate" value="${todayStr()}">
         <input type="text" id="newTaskText" placeholder="할 일을 입력하세요" style="flex:1; min-width:200px;">
@@ -922,6 +1030,197 @@ function renderClients(){
 }
 
 /* =========================================================
+   Google Drive / Sheets 연동
+   ========================================================= */
+
+function setSyncStatus(text){
+  googleSyncStatus = text;
+  const el = document.getElementById('syncStatusLine');
+  if(el) el.textContent = text;
+}
+
+function gapiLoaded(){
+  gapi.load('client', async () => {
+    try {
+      await gapi.client.init({});
+      await gapi.client.load('sheets', 'v4');
+      await gapi.client.load('drive', 'v3');
+      gapiReady = true;
+      maybeEnableGoogleSignIn();
+    } catch(e){
+      console.error('gapi 초기화 실패', e);
+    }
+  });
+}
+
+function gisInit(){
+  try {
+    googleTokenClient = google.accounts.oauth2.initTokenClient({
+      client_id: GOOGLE_CLIENT_ID,
+      scope: GOOGLE_SCOPES,
+      callback: '',
+    });
+    gisReady = true;
+    maybeEnableGoogleSignIn();
+  } catch(e){
+    console.error('Google Identity Services 초기화 실패', e);
+  }
+}
+
+function maybeEnableGoogleSignIn(){
+  const btn = document.getElementById('googleSignInBtn');
+  if(btn && gapiReady && gisReady){ btn.disabled = false; }
+}
+
+function handleGoogleSignIn(){
+  if(!googleTokenClient){
+    alert('Google 연동 스크립트를 아직 불러오지 못했습니다. 인터넷 연결을 확인하고 잠시 후 다시 시도해주세요.');
+    return;
+  }
+  googleTokenClient.callback = async (resp) => {
+    if(resp.error){
+      setSyncStatus('로그인 실패: ' + resp.error);
+      renderSettings();
+      return;
+    }
+    googleAccessToken = resp.access_token;
+    gapi.client.setToken({ access_token: googleAccessToken });
+    await afterGoogleSignIn();
+  };
+  googleTokenClient.requestAccessToken({ prompt: '' });
+}
+
+function handleGoogleSignOut(){
+  if(googleAccessToken && typeof google !== 'undefined'){
+    google.accounts.oauth2.revoke(googleAccessToken, () => {});
+  }
+  googleAccessToken = null;
+  googleSpreadsheetId = null;
+  settings.sheetsConnected = false;
+  setSyncStatus('');
+  renderSettings();
+}
+
+async function afterGoogleSignIn(){
+  setSyncStatus('연결하는 중...');
+  renderSettings();
+  try {
+    const found = await findGoogleDataSheet();
+    googleSpreadsheetId = found || await createGoogleDataSheet();
+    await loadFromGoogleSheet();
+    settings.sheetsConnected = true;
+    setSyncStatus('연동됨 · 방금 불러왔습니다');
+  } catch(e){
+    console.error(e);
+    const msg = (e && e.result && e.result.error && e.result.error.message) || e.message || '알 수 없는 오류';
+    setSyncStatus('연동 실패: ' + msg);
+  }
+  renderAll();
+}
+
+async function findGoogleDataSheet(){
+  const res = await gapi.client.drive.files.list({
+    q: `name='${GOOGLE_SHEET_NAME}' and mimeType='application/vnd.google-apps.spreadsheet' and trashed=false`,
+    fields: 'files(id,name)',
+    spaces: 'drive',
+  });
+  const files = res.result.files || [];
+  return files.length ? files[0].id : null;
+}
+
+async function createGoogleDataSheet(){
+  const res = await gapi.client.sheets.spreadsheets.create({
+    properties: { title: GOOGLE_SHEET_NAME },
+    sheets: [{ properties: { title: 'data' } }],
+  });
+  const id = res.result.spreadsheetId;
+  await gapi.client.sheets.spreadsheets.values.update({
+    spreadsheetId: id,
+    range: 'data!A1:B1',
+    valueInputOption: 'RAW',
+    resource: { values: [['key', 'json']] },
+  });
+  return id;
+}
+
+const GOOGLE_DATA_KEYS = [
+  'clients','tasks','vatData','payData','corpData','indivData','settings',
+  'vatPeriods','payMonths','corpYears','indivYears',
+  'vatDue','payDue','corpDue','indivDue',
+  'nextClientId','nextTaskId',
+];
+
+function collectGoogleSnapshot(){
+  return {
+    clients, tasks, vatData, payData, corpData, indivData, settings,
+    vatPeriods, payMonths, corpYears, indivYears,
+    vatDue, payDue, corpDue, indivDue,
+    nextClientId, nextTaskId,
+  };
+}
+
+async function loadFromGoogleSheet(){
+  const res = await gapi.client.sheets.spreadsheets.values.get({
+    spreadsheetId: googleSpreadsheetId,
+    range: 'data!A2:B1000',
+  });
+  const rows = res.result.values || [];
+  const map = {};
+  rows.forEach(r => { if(r[0] && r[1]) map[r[0]] = r[1]; });
+  if(!Object.keys(map).length) return; // 새로 만든 빈 시트면 현재 목업 데이터를 그대로 유지 (다음 저장 때 반영됨)
+
+  try {
+    if(map.clients)     clients     = JSON.parse(map.clients);
+    if(map.tasks)        tasks        = JSON.parse(map.tasks);
+    if(map.vatData)      vatData      = JSON.parse(map.vatData);
+    if(map.payData)      payData      = JSON.parse(map.payData);
+    if(map.corpData)     corpData     = JSON.parse(map.corpData);
+    if(map.indivData)    indivData    = JSON.parse(map.indivData);
+    if(map.settings)     settings     = Object.assign(settings, JSON.parse(map.settings));
+    if(map.vatPeriods)   vatPeriods   = JSON.parse(map.vatPeriods);
+    if(map.payMonths)    payMonths    = JSON.parse(map.payMonths);
+    if(map.corpYears)    corpYears    = JSON.parse(map.corpYears);
+    if(map.indivYears)   indivYears   = JSON.parse(map.indivYears);
+    if(map.vatDue)        vatDue       = JSON.parse(map.vatDue);
+    if(map.payDue)        payDue       = JSON.parse(map.payDue);
+    if(map.corpDue)       corpDue      = JSON.parse(map.corpDue);
+    if(map.indivDue)      indivDue     = JSON.parse(map.indivDue);
+    if(map.nextClientId)  nextClientId = JSON.parse(map.nextClientId);
+    if(map.nextTaskId)    nextTaskId   = JSON.parse(map.nextTaskId);
+  } catch(e){
+    console.error('시트 데이터 파싱 실패', e);
+  }
+}
+
+async function saveToGoogleSheet(){
+  if(!googleAccessToken || !googleSpreadsheetId) return;
+  const snap = collectGoogleSnapshot();
+  const rows = GOOGLE_DATA_KEYS.map(k => [k, JSON.stringify(snap[k])]);
+  setSyncStatus('저장 중...');
+  try {
+    await gapi.client.sheets.spreadsheets.values.clear({
+      spreadsheetId: googleSpreadsheetId, range: 'data!A2:B1000',
+    });
+    await gapi.client.sheets.spreadsheets.values.update({
+      spreadsheetId: googleSpreadsheetId, range: 'data!A2',
+      valueInputOption: 'RAW',
+      resource: { values: rows },
+    });
+    const t = new Date();
+    setSyncStatus(`연동됨 · ${pad2(t.getHours())}:${pad2(t.getMinutes())} 저장됨`);
+  } catch(e){
+    console.error(e);
+    setSyncStatus('저장 실패 (다음 변경 때 다시 시도합니다)');
+  }
+}
+
+function scheduleGoogleSave(){
+  if(!googleAccessToken || !googleSpreadsheetId) return;
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(saveToGoogleSheet, 900);
+}
+
+/* =========================================================
    설정
    ========================================================= */
 
@@ -980,12 +1279,16 @@ function renderSettings(){
         <div class="row">
           <div>
             <h3>Google Sheets 연동</h3>
-            <div class="hint">현재는 화면 확인용 목업 데이터로 동작합니다. 연동이 준비되면 이 화면에서 내 Google 계정으로 로그인하고, 내 드라이브의 시트에 자동 저장하도록 연결할 예정입니다.</div>
+            <div class="hint">내 Google 계정으로 로그인하면 이 화면의 모든 데이터가 내 드라이브의 "${GOOGLE_SHEET_NAME}" 시트에 자동 저장되고, 다음에 열 때 그대로 불러와집니다.</div>
           </div>
           <div class="ctrl">
-            ${pill(settings.sheetsConnected ? '연동됨' : '미연동 (준비 중)', settings.sheetsConnected ? 'ok' : 'muted')}
+            ${googleAccessToken
+              ? `${pill('연동됨', 'ok')} <button class="btn ghost xs" onclick="handleGoogleSignOut()">연결 해제</button>`
+              : `<button class="btn primary xs" id="googleSignInBtn" onclick="handleGoogleSignIn()" ${(gapiReady && gisReady) ? '' : 'disabled'}>Google로 로그인</button>`
+            }
           </div>
         </div>
+        <div class="hint" id="syncStatusLine" style="margin-top:10px;">${googleSyncStatus}</div>
       </div>
 
       <div class="settings-block">
@@ -1008,12 +1311,24 @@ function renderSettings(){
    ========================================================= */
 
 function renderAll(){
-  renderWorklist(); renderVat(); renderPay(); renderCorp(); renderIndiv(); renderClients(); renderSettings();
+  renderHome(); renderWorklist(); renderVat(); renderPay(); renderCorp(); renderIndiv(); renderClients(); renderSettings();
+  scheduleGoogleSave();
 }
 
 document.getElementById('todayPill').textContent = todayStr().replaceAll('-','.');
 renderNav();
-switchTab('worklist');
+switchTab('home');
+
+if(typeof gapi !== 'undefined'){
+  gapiLoaded();
+} else {
+  console.warn('Google API 스크립트를 불러오지 못했습니다 (네트워크 제한 환경일 수 있음).');
+}
+if(typeof google !== 'undefined' && google.accounts){
+  gisInit();
+} else {
+  console.warn('Google Identity Services를 불러오지 못했습니다 (네트워크 제한 환경일 수 있음).');
+}
 </script>
 </body>
 </html>
