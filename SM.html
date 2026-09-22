@@ -1587,6 +1587,26 @@ function renderSettings(){
       <div class="settings-block">
         <div class="row">
           <div>
+            <h3>GitHub 배포</h3>
+            <div class="hint">수정된 SM.html 파일을 고르면, GitHub 업로드 화면에 직접 들어가지 않아도 이 저장소(${GITHUB_DEPLOY_REPO_OWNER}/${GITHUB_DEPLOY_REPO_NAME})의 ${GITHUB_DEPLOY_FILE_PATH}에 바로 반영돼요. 저장소에 쓰기 권한이 있는 <a href="https://github.com/settings/tokens" target="_blank" rel="noopener">개인 액세스 토큰(PAT)</a>이 한 번 필요해요. 토큰은 이 기기의 브라우저에만 저장돼요.</div>
+          </div>
+        </div>
+        <div style="display:flex; gap:6px; margin-top:10px; max-width:420px;">
+          <input type="password" id="smDeployToken" placeholder="ghp_..." style="flex:1 1 auto;" autocomplete="off">
+          <button type="button" class="btn ghost xs" onclick="saveSmDeployToken()">저장</button>
+        </div>
+        <div class="hint" id="smDeployTokenStatus" style="margin-top:6px;">${smDeployTokenStatusText()}</div>
+        <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top:12px;">
+          <button type="button" class="btn ghost xs" onclick="document.getElementById('smDeployFile').click()">📄 <span id="smDeployFileLabelText">SM.html 파일 선택</span></button>
+          <input type="file" id="smDeployFile" accept=".html,text/html" style="display:none;" onchange="handleSmDeployFileChange(this)">
+          <button type="button" class="btn primary xs" id="smDeployBtn" onclick="runSmDeploy()" disabled>GitHub에 배포</button>
+        </div>
+        <div class="hint" id="smDeployMsg" style="margin-top:6px;"></div>
+      </div>
+
+      <div class="settings-block">
+        <div class="row">
+          <div>
             <h3>데이터 초기화</h3>
             <div class="hint">거래처·신고 기록·할 일을 모두 지우고 빈 화면으로 되돌립니다. 되돌릴 수 없으니 주의하세요.</div>
           </div>
