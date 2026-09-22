@@ -1026,15 +1026,18 @@ function renderClients(){
       </div>
       <div class="table-scroll">
       <table>
-        <thead><tr><th>거래처명</th><th>구분</th><th>대표자</th><th>사업자번호</th><th>법인등록번호</th><th></th></tr></thead>
+        <thead><tr><th>순번</th><th>거래처명</th><th>구분</th><th>대표자</th><th>사업자번호</th><th>법인등록번호</th><th>개업일</th><th>수임료</th><th></th></tr></thead>
         <tbody>
           ${clients.map(c => `
             <tr>
+              <td>${c.seq || '-'}</td>
               <td>${c.name}</td>
               <td><span class="tag ${c.type==='법인'?'tag-corp-type':'tag-indiv-type'}">${c.type}</span></td>
               <td>${c.ceo || '-'}</td>
               <td>${c.biz || '-'}</td>
               <td>${c.corpNo || '-'}</td>
+              <td>${c.openDate || '-'}</td>
+              <td>${c.fee || '-'}</td>
               <td><button class="btn danger ghost" onclick="deleteClient(${c.id})">삭제</button></td>
             </tr>`).join('')}
         </tbody>
@@ -1295,15 +1298,21 @@ function findColIndex(headerTexts, aliases){
 }
 
 // 거래처 기본정보: 상호명 / 사업자등록번호 / 법인등록번호 / 대표자명 (딱 이 4개만, 그 외 민감정보는 가져오지 않음)
+// "기장현황" 탭 기준: 순번·구분·수임·상호·법인번호·사업자 번호·개업일·대표 8개 컬럼만 가져온다.
+// (결산주요사항·주민번호·계좌 등 다른 컬럼이 있는 "기초" 탭 등과는 다른, 더 단순한 탭)
 async function importClientsFromMaster(){
   const titles = await getMasterSheetTitles();
   const found = await findTabByHeaders(titles, [
+    ['순번'],
+    ['구분'],
+    ['수임'],
     ['상호명', '상호'],
+    ['법인번호', '법인등록번호'],
     ['사업자 번호', '사업자등록번호', '사업자번호'],
-    ['법인등록번호'],
-    ['대표자'],
+    ['개업일'],
+    ['대표자', '대표'],
   ]);
-  if(!found){ console.warn('거래처 기본정보 탭을 찾지 못했습니다.'); return 0; }
+  if(!found){ console.warn('거래처 기본정보("기장현황") 탭을 찾지 못했습니다.'); return 0; }
 
   const res = await gapi.client.sheets.spreadsheets.values.get({
     spreadsheetId: MASTER_SHEET_ID,
@@ -1311,26 +1320,35 @@ async function importClientsFromMaster(){
   });
   const rows = res.result.values || [];
   const header = rows[0].map(c => (c || '').toString().trim());
+  const idxSeq  = findColIndex(header, ['순번']);
+  const idxType = findColIndex(header, ['구분']);
+  const idxFee  = findColIndex(header, ['수임']);
   const idxName = findColIndex(header, ['상호명', '상호']);
+  const idxCorp = findColIndex(header, ['법인번호', '법인등록번호']);
   const idxBiz  = findColIndex(header, ['사업자 번호', '사업자등록번호', '사업자번호']);
-  const idxCorp = findColIndex(header, ['법인등록번호']);
-  const idxCeo  = findColIndex(header, ['대표자']);
+  const idxOpen = findColIndex(header, ['개업일']);
+  const idxCeo  = findColIndex(header, ['대표자', '대표']);
+
+  const cell = (r, idx) => idx >= 0 ? (r[idx] || '').toString().trim() : '';
 
   const imported = [];
   for(let i = 1; i < rows.length; i++){
     const r = rows[i];
     if(!r) continue;
-    const name = (r[idxName] || '').toString().trim();
+    const name = cell(r, idxName);
     if(!name) continue;
-    const biz  = idxBiz  >= 0 ? (r[idxBiz]  || '').toString().trim() : '';
-    const corp = idxCorp >= 0 ? (r[idxCorp] || '').toString().trim() : '';
-    const ceo  = idxCeo  >= 0 ? (r[idxCeo]  || '').toString().trim() : '';
-    const isCorp = !!corp && corp !== '-';
+    const corp = cell(r, idxCorp);
+    const explicitType = cell(r, idxType); // 시트에 이미 "법인"/"개인"으로 적혀있으면 그대로 사용
+    const isCorp = explicitType ? explicitType.includes('법인') : (!!corp && corp !== '-');
     imported.push({
       id: nextClientId++,
-      name, ceo,
-      biz: biz && biz !== '-' ? biz : '',
+      seq: cell(r, idxSeq),
+      name,
+      ceo: cell(r, idxCeo),
+      biz: (() => { const v = cell(r, idxBiz); return v && v !== '-' ? v : ''; })(),
       corpNo: corp && corp !== '-' ? corp : '',
+      openDate: cell(r, idxOpen),
+      fee: cell(r, idxFee),
       type: isCorp ? '법인' : '개인',
       source: 'master',
     });
@@ -1583,7 +1601,7 @@ function renderSettings(){
         <div class="row">
           <div>
             <h3>업무용 마스터 시트에서 가져오기</h3>
-            <div class="hint">"★Tax_2026" 시트의 거래처 기본정보(상호명·사업자번호·법인등록번호·대표자)와 Work List 탭의 할 일을 가져옵니다. 읽기 전용이라 마스터 시트는 전혀 건드리지 않고, ID/PW·주민번호 등 민감정보는 가져오지 않습니다. 부가세·원천세·법인세·종소세 연동은 다음 단계에서 따로 진행해요.</div>
+            <div class="hint">"★Tax_2026" 시트의 "기장현황" 탭에서 거래처 기본정보(순번·구분·수임·상호·법인번호·사업자번호·개업일·대표)를, Work List 탭에서 할 일을 가져옵니다. 읽기 전용이라 마스터 시트는 전혀 건드리지 않고, ID/PW·주민번호 등 민감정보는 가져오지 않습니다. 부가세·원천세·법인세·종소세 연동은 다음 단계에서 따로 진행해요.</div>
           </div>
           <div class="ctrl">
             <button class="btn primary xs" onclick="importFromMasterSheet()" ${googleAccessToken ? '' : 'disabled'}>지금 가져오기</button>
