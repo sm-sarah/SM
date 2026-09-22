@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>업무관리 프로그램 (프로토타입)</title>
+<title>Sunmin's Works</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,600;1,600&display=swap" rel="stylesheet">
@@ -1405,6 +1405,97 @@ async function importFromMasterSheet(){
     setMasterSyncStatus('가져오기 실패: ' + msg);
   }
   renderAll();
+}
+
+/* =========================================================
+   GitHub 배포 (Tax.J와 동일한 방식) — 수정된 SM.html 파일을 고르면
+   GitHub(sm-sarah/SM) 저장소의 SM.html에 바로 커밋함. 성공하면 GitHub
+   Pages에 몇 초~몇 분 안에 반영됨. Google Sheets 연동과는 전혀 무관한
+   별개 기능이고, 토큰은 이 기기의 브라우저(localStorage)에만 저장됨.
+   ========================================================= */
+const GITHUB_DEPLOY_REPO_OWNER = 'sm-sarah';
+const GITHUB_DEPLOY_REPO_NAME = 'SM';
+const GITHUB_DEPLOY_FILE_PATH = 'SM.html';
+const GITHUB_DEPLOY_TOKEN_KEY = 'sm_worklog_github_pat'; // Tax.J와 저장 키를 다르게 둬서 서로 섞이지 않게 함
+let smDeploySelectedFile = null;
+
+function smDeployTokenStatusText(){
+  const saved = (localStorage.getItem(GITHUB_DEPLOY_TOKEN_KEY) || '').trim();
+  return saved ? `토큰 저장됨 (이 기기에만) · 끝 4자리 ...${saved.slice(-4)}` : '아직 저장된 토큰이 없어요.';
+}
+function smDeployUpdateBtnState(){
+  const btn = document.getElementById('smDeployBtn');
+  if(!btn) return;
+  const hasToken = !!(localStorage.getItem(GITHUB_DEPLOY_TOKEN_KEY) || '').trim();
+  btn.disabled = !(hasToken && smDeploySelectedFile);
+}
+function saveSmDeployToken(){
+  const input = document.getElementById('smDeployToken');
+  const val = (input.value || '').trim();
+  if(!val){ alert('토큰을 입력해주세요.'); return; }
+  localStorage.setItem(GITHUB_DEPLOY_TOKEN_KEY, val);
+  input.value = '';
+  const statusEl = document.getElementById('smDeployTokenStatus');
+  if(statusEl) statusEl.textContent = smDeployTokenStatusText();
+  smDeployUpdateBtnState();
+}
+function handleSmDeployFileChange(input){
+  smDeploySelectedFile = input.files && input.files[0] ? input.files[0] : null;
+  const labelText = document.getElementById('smDeployFileLabelText');
+  if(labelText) labelText.textContent = smDeploySelectedFile ? smDeploySelectedFile.name : 'SM.html 파일 선택';
+  const msgEl = document.getElementById('smDeployMsg');
+  if(msgEl) msgEl.textContent = smDeploySelectedFile ? `업로드 완료: ${smDeploySelectedFile.name} (아직 배포 전이에요)` : '';
+  smDeployUpdateBtnState();
+}
+function smUtf8ToBase64(str){
+  return btoa(unescape(encodeURIComponent(str)));
+}
+async function runSmDeploy(){
+  const msgEl = document.getElementById('smDeployMsg');
+  const token = (localStorage.getItem(GITHUB_DEPLOY_TOKEN_KEY) || '').trim();
+  if(!token || !smDeploySelectedFile) return;
+  if(!confirm(`GitHub(${GITHUB_DEPLOY_REPO_OWNER}/${GITHUB_DEPLOY_REPO_NAME})의 ${GITHUB_DEPLOY_FILE_PATH}에 커밋할까요?`)) return;
+  const btn = document.getElementById('smDeployBtn');
+  if(btn) btn.disabled = true;
+  try {
+    if(msgEl) msgEl.textContent = '파일 읽는 중...';
+    const content = await smDeploySelectedFile.text();
+    const apiBase = `https://api.github.com/repos/${GITHUB_DEPLOY_REPO_OWNER}/${GITHUB_DEPLOY_REPO_NAME}/contents/${GITHUB_DEPLOY_FILE_PATH}`;
+    const headers = { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json' };
+    if(msgEl) msgEl.textContent = '기존 파일 정보 확인 중...';
+    const getRes = await fetch(apiBase, { headers });
+    if(!getRes.ok){
+      if(getRes.status === 401) throw new Error('토큰이 유효하지 않아요. 저장소 쓰기 권한이 있는 토큰인지 확인해주세요.');
+      if(getRes.status === 404) throw new Error('저장소 또는 파일 경로를 찾을 수 없어요.');
+      throw new Error(`GitHub 조회 실패 (${getRes.status})`);
+    }
+    const cur = await getRes.json();
+    if(msgEl) msgEl.textContent = 'GitHub에 커밋하는 중...';
+    const putRes = await fetch(apiBase, {
+      method: 'PUT',
+      headers: { ...headers, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        message: `SM 업데이트 (${new Date().toLocaleString('ko-KR')})`,
+        content: smUtf8ToBase64(content),
+        sha: cur.sha,
+      }),
+    });
+    if(!putRes.ok){
+      const errBody = await putRes.json().catch(() => ({}));
+      throw new Error(errBody.message || `GitHub 커밋 실패 (${putRes.status})`);
+    }
+    if(msgEl) msgEl.textContent = '배포 완료! 잠시 후 실제 서비스 화면에 반영돼요.';
+    smDeploySelectedFile = null;
+    const labelText = document.getElementById('smDeployFileLabelText');
+    if(labelText) labelText.textContent = 'SM.html 파일 선택';
+    const fileInput = document.getElementById('smDeployFile');
+    if(fileInput) fileInput.value = '';
+  } catch(e){
+    console.error('GitHub 배포 실패', e);
+    if(msgEl) msgEl.textContent = '배포 실패: ' + (e && e.message ? e.message : e);
+  } finally {
+    smDeployUpdateBtnState();
+  }
 }
 
 /* =========================================================
