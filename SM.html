@@ -385,6 +385,10 @@ const GOOGLE_CLIENT_ID = '273460053868-nbc6qpi148vv3lkobhrqnrtn8vvk8num.apps.goo
 const GOOGLE_SCOPES = 'https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive.file';
 const GOOGLE_SHEET_NAME = 'SM_data';
 
+// 실제 업무용 마스터 시트("★Tax_2026") — 읽기 전용으로 참조만 함, 절대 이 시트에 쓰지 않음.
+// ID/PW·주민번호·계좌 등 민감정보가 있는 탭은 건드리지 않고, 아래 화이트리스트 필드만 가져온다.
+const MASTER_SHEET_ID = '19rS-3YbCAR1K74i2L3D0iKrIzJQHOfNB_PYVIY3ZRus';
+
 let gapiReady = false;
 let gisReady = false;
 let googleTokenClient = null;
@@ -392,6 +396,7 @@ let googleAccessToken = null;
 let googleSpreadsheetId = null;
 let googleSyncStatus = '';
 let saveTimer = null;
+let masterSyncStatus = '';
 
 let vatPeriods = ['2025년 2기 확정', '2026년 1기 예정', '2026년 1기 확정'];
 let vatDue = {
@@ -1013,13 +1018,15 @@ function renderClients(){
       </div>
       <div class="table-scroll">
       <table>
-        <thead><tr><th>거래처명</th><th>구분</th><th>사업자번호</th><th></th></tr></thead>
+        <thead><tr><th>거래처명</th><th>구분</th><th>대표자</th><th>사업자번호</th><th>법인등록번호</th><th></th></tr></thead>
         <tbody>
           ${clients.map(c => `
             <tr>
               <td>${c.name}</td>
               <td><span class="tag ${c.type==='법인'?'tag-corp-type':'tag-indiv-type'}">${c.type}</span></td>
+              <td>${c.ceo || '-'}</td>
               <td>${c.biz || '-'}</td>
+              <td>${c.corpNo || '-'}</td>
               <td><button class="btn danger ghost" onclick="deleteClient(${c.id})">삭제</button></td>
             </tr>`).join('')}
         </tbody>
@@ -1221,6 +1228,186 @@ function scheduleGoogleSave(){
 }
 
 /* =========================================================
+   마스터 시트("★Tax_2026")에서 가져오기 — 읽기 전용
+   버튼을 눌렀을 때만 1회성으로 동작. 실제 시트에는 절대 쓰지 않는다.
+   가져온 항목은 source:'master' 로 표시해서, 재실행 시 이전에
+   가져온 항목만 교체하고(수동으로 추가한 항목은 그대로 둠) 중복 생성을 막는다.
+   ========================================================= */
+
+function setMasterSyncStatus(text){
+  masterSyncStatus = text;
+  const el = document.getElementById('masterSyncStatusLine');
+  if(el) el.textContent = text;
+}
+
+// 시트의 탭 이름 목록을 가져온다.
+async function getMasterSheetTitles(){
+  const res = await gapi.client.sheets.spreadsheets.get({
+    spreadsheetId: MASTER_SHEET_ID,
+    fields: 'sheets.properties.title',
+  });
+  return (res.result.sheets || []).map(s => s.properties.title);
+}
+
+// 헤더 행에 필요한 컬럼명이 모두 들어있는 탭을 찾는다 (탭 이름이 바뀌어도 안전하도록).
+async function findTabByHeaders(titles, requiredHeaderGroups){
+  for(const title of titles){
+    try {
+      const res = await gapi.client.sheets.spreadsheets.values.get({
+        spreadsheetId: MASTER_SHEET_ID,
+        range: `'${title}'!A1:Z5`,
+      });
+      const rows = res.result.values || [];
+      // 헤더가 정확히 1행이 아닐 수도 있어 앞 5행 중 컬럼명이 가장 많이 매칭되는 행을 찾는다.
+      let best = null;
+      rows.forEach((row, ri) => {
+        const texts = row.map(c => (c || '').toString().trim());
+        const matchCount = requiredHeaderGroups.filter(group =>
+          group.some(alias => texts.some(t => t.includes(alias)))
+        ).length;
+        if(matchCount === requiredHeaderGroups.length){
+          if(!best) best = { rowIndex: ri, texts };
+        }
+      });
+      if(best) return { title, headerRowIndex: best.rowIndex, headerTexts: best.texts };
+    } catch(e){
+      console.warn(`탭 "${title}" 확인 실패`, e);
+    }
+  }
+  return null;
+}
+
+function findColIndex(headerTexts, aliases){
+  for(let i = 0; i < headerTexts.length; i++){
+    if(aliases.some(a => headerTexts[i].includes(a))) return i;
+  }
+  return -1;
+}
+
+// 거래처 기본정보: 상호명 / 사업자등록번호 / 법인등록번호 / 대표자명 (딱 이 4개만, 그 외 민감정보는 가져오지 않음)
+async function importClientsFromMaster(){
+  const titles = await getMasterSheetTitles();
+  const found = await findTabByHeaders(titles, [
+    ['상호명', '상호'],
+    ['사업자 번호', '사업자등록번호', '사업자번호'],
+    ['법인등록번호'],
+    ['대표자'],
+  ]);
+  if(!found){ console.warn('거래처 기본정보 탭을 찾지 못했습니다.'); return 0; }
+
+  const res = await gapi.client.sheets.spreadsheets.values.get({
+    spreadsheetId: MASTER_SHEET_ID,
+    range: `'${found.title}'!A${found.headerRowIndex + 1}:Z3000`,
+  });
+  const rows = res.result.values || [];
+  const header = rows[0].map(c => (c || '').toString().trim());
+  const idxName = findColIndex(header, ['상호명', '상호']);
+  const idxBiz  = findColIndex(header, ['사업자 번호', '사업자등록번호', '사업자번호']);
+  const idxCorp = findColIndex(header, ['법인등록번호']);
+  const idxCeo  = findColIndex(header, ['대표자']);
+
+  const imported = [];
+  for(let i = 1; i < rows.length; i++){
+    const r = rows[i];
+    if(!r) continue;
+    const name = (r[idxName] || '').toString().trim();
+    if(!name) continue;
+    const biz  = idxBiz  >= 0 ? (r[idxBiz]  || '').toString().trim() : '';
+    const corp = idxCorp >= 0 ? (r[idxCorp] || '').toString().trim() : '';
+    const ceo  = idxCeo  >= 0 ? (r[idxCeo]  || '').toString().trim() : '';
+    const isCorp = !!corp && corp !== '-';
+    imported.push({
+      id: nextClientId++,
+      name, ceo,
+      biz: biz && biz !== '-' ? biz : '',
+      corpNo: corp && corp !== '-' ? corp : '',
+      type: isCorp ? '법인' : '개인',
+      source: 'master',
+    });
+  }
+  clients = clients.filter(c => c.source !== 'master').concat(imported);
+  return imported.length;
+}
+
+// Work List 탭: 날짜별 체크박스+할 일 텍스트만 가져온다 (메모/아이콘 등 부가 열은 제외).
+async function importWorklistFromMaster(){
+  const titles = await getMasterSheetTitles();
+  const title = titles.find(t => t.trim() === 'Work List') || titles.find(t => t.includes('Work List'));
+  if(!title){ console.warn('Work List 탭을 찾지 못했습니다.'); return 0; }
+
+  const res = await gapi.client.sheets.spreadsheets.get({
+    spreadsheetId: MASTER_SHEET_ID,
+    ranges: [`'${title}'!A1:F4000`],
+    fields: 'sheets(merges,data.rowData.values.formattedValue)',
+  });
+  const sheet = (res.result.sheets || [])[0];
+  if(!sheet) return 0;
+  const rowData = (sheet.data && sheet.data[0] && sheet.data[0].rowData) || [];
+  const merges = sheet.merges || [];
+
+  const dateRe = /(\d{2,4})년\s*(\d{1,2})월\s*(\d{1,2})일/;
+  const cellText = (ri, ci) => {
+    const row = rowData[ri];
+    if(!row || !row.values || !row.values[ci]) return '';
+    return (row.values[ci].formattedValue || '').toString().trim();
+  };
+
+  // A열(또는 B열)에서 시작하고 날짜 패턴을 담은 행 병합(헤더 행)만 날짜 구분선으로 인식
+  const dateHeaders = merges
+    .filter(m => m.startColumnIndex === 0 && (m.endColumnIndex - m.startColumnIndex) >= 2)
+    .map(m => ({ merge: m, text: cellText(m.startRowIndex, 0) }))
+    .filter(h => dateRe.test(h.text))
+    .sort((a, b) => a.merge.startRowIndex - b.merge.startRowIndex);
+
+  const imported = [];
+  dateHeaders.forEach((h, idx) => {
+    const m = dateRe.exec(h.text);
+    let year = parseInt(m[1], 10);
+    if(year < 100) year += 2000;
+    const mm = pad2(parseInt(m[2], 10));
+    const dd = pad2(parseInt(m[3], 10));
+    const dateStr = `${year}-${mm}-${dd}`;
+
+    const startRow = h.merge.endRowIndex;
+    const endRow = idx + 1 < dateHeaders.length ? dateHeaders[idx + 1].merge.startRowIndex : rowData.length;
+    for(let ri = startRow; ri < endRow; ri++){
+      const check = cellText(ri, 0);
+      const text = cellText(ri, 1);
+      if(!text) continue;
+      if(check !== 'TRUE' && check !== 'FALSE') continue; // 체크박스 형태가 아니면(구분선 등) 건너뜀
+      imported.push({
+        id: nextTaskId++,
+        date: dateStr,
+        text,
+        done: check === 'TRUE',
+        source: 'master',
+      });
+    }
+  });
+
+  tasks = tasks.filter(t => t.source !== 'master').concat(imported);
+  return imported.length;
+}
+
+async function importFromMasterSheet(){
+  if(!googleAccessToken){ alert('먼저 Google 로그인을 해주세요.'); return; }
+  setMasterSyncStatus('마스터 시트에서 가져오는 중...');
+  try {
+    const [clientCount, taskCount] = [
+      await importClientsFromMaster(),
+      await importWorklistFromMaster(),
+    ];
+    const t = new Date();
+    setMasterSyncStatus(`${pad2(t.getHours())}:${pad2(t.getMinutes())} 기준 · 거래처 ${clientCount}건, 할 일 ${taskCount}건 가져옴`);
+  } catch(e){
+    console.error(e);
+    const msg = (e && e.result && e.result.error && e.result.error.message) || e.message || '알 수 없는 오류';
+    setMasterSyncStatus('가져오기 실패: ' + msg);
+  }
+  renderAll();
+}
+
+/* =========================================================
    설정
    ========================================================= */
 
@@ -1289,6 +1476,19 @@ function renderSettings(){
           </div>
         </div>
         <div class="hint" id="syncStatusLine" style="margin-top:10px;">${googleSyncStatus}</div>
+      </div>
+
+      <div class="settings-block">
+        <div class="row">
+          <div>
+            <h3>업무용 마스터 시트에서 가져오기</h3>
+            <div class="hint">"★Tax_2026" 시트의 거래처 기본정보(상호명·사업자번호·법인등록번호·대표자)와 Work List 탭의 할 일을 가져옵니다. 읽기 전용이라 마스터 시트는 전혀 건드리지 않고, ID/PW·주민번호 등 민감정보는 가져오지 않습니다. 부가세·원천세·법인세·종소세 연동은 다음 단계에서 따로 진행해요.</div>
+          </div>
+          <div class="ctrl">
+            <button class="btn primary xs" onclick="importFromMasterSheet()" ${googleAccessToken ? '' : 'disabled'}>지금 가져오기</button>
+          </div>
+        </div>
+        <div class="hint" id="masterSyncStatusLine" style="margin-top:10px;">${masterSyncStatus}</div>
       </div>
 
       <div class="settings-block">
