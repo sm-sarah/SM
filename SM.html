@@ -1101,6 +1101,7 @@ function handleGoogleSignOut(){
   if(googleAccessToken && typeof google !== 'undefined'){
     google.accounts.oauth2.revoke(googleAccessToken, () => {});
   }
+  clearInterval(googlePollTimer);
   googleAccessToken = null;
   googleSpreadsheetId = null;
   settings.sheetsConnected = false;
@@ -1117,6 +1118,7 @@ async function afterGoogleSignIn(){
     await loadFromGoogleSheet();
     settings.sheetsConnected = true;
     setSyncStatus('연동됨 · 방금 불러왔습니다');
+    startGooglePolling();
   } catch(e){
     console.error(e);
     const msg = (e && e.result && e.result.error && e.result.error.message) || e.message || '알 수 없는 오류';
@@ -1601,10 +1603,55 @@ function renderSettings(){
    초기 렌더
    ========================================================= */
 
-function renderAll(){
+// 폴링(자동 새로고침)으로 다시 그릴 때는 저장을 또 트리거하지 않도록 분리해둠
+// (안 그러면 아무 변경도 없는데 20초마다 시트에 다시 쓰기가 일어남)
+function renderAllNoSave(){
   renderHome(); renderWorklist(); renderVat(); renderPay(); renderCorp(); renderIndiv(); renderClients(); renderSettings();
+}
+function renderAll(){
+  renderAllNoSave();
   scheduleGoogleSave();
 }
+
+/* =========================================================
+   다른 기기에서 저장한 내용 자동으로 받아오기
+   Google Sheets처럼 실시간은 아니지만, 이 창이 열려있는 동안
+   주기적으로 + 창에 다시 포커스할 때 최신 데이터를 다시 불러와서
+   "거의 항상 동기화된" 느낌을 준다. 입력 중(포커스된 input 등)이거나
+   방금 로컬에서 바꿔서 저장 대기 중이면(= saveTimer 있음) 건너뛴다 —
+   그 순간에 덮어쓰면 방금 한 입력이 날아가 보일 수 있어서.
+   ========================================================= */
+const GOOGLE_POLL_INTERVAL_MS = 20000;
+let googlePollTimer = null;
+
+function isEditingNow(){
+  const el = document.activeElement;
+  if(!el) return false;
+  const tag = el.tagName;
+  return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
+}
+
+async function pollGoogleSheetForUpdates(){
+  if(!googleAccessToken || !googleSpreadsheetId) return;
+  if(saveTimer) return; // 방금 로컬에서 바꿔서 곧 저장될 예정 — 이번 폴링은 건너뜀
+  if(isEditingNow()) return; // 뭔가 입력 중이면 화면을 갈아치우지 않음
+  try {
+    await loadFromGoogleSheet();
+    renderAllNoSave();
+  } catch(e){
+    console.warn('자동 새로고침 실패', e);
+  }
+}
+
+function startGooglePolling(){
+  clearInterval(googlePollTimer);
+  googlePollTimer = setInterval(pollGoogleSheetForUpdates, GOOGLE_POLL_INTERVAL_MS);
+}
+
+window.addEventListener('focus', () => { pollGoogleSheetForUpdates(); });
+document.addEventListener('visibilitychange', () => {
+  if(document.visibilityState === 'visible') pollGoogleSheetForUpdates();
+});
 
 document.getElementById('todayPill').textContent = todayStr().replaceAll('-','.');
 renderNav();
