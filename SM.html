@@ -125,12 +125,56 @@
     box-shadow:var(--shadow-md);
   }
 
+  /* ===== 사이드바 하위메뉴(플라이아웃) ===== */
+  .nav-wrap{ position:relative; width:100%; display:flex; justify-content:center; }
+  .nav-flyout{
+    position:absolute;
+    left:calc(100% + 10px);
+    top:0;
+    min-width:168px;
+    background:var(--card);
+    border:1px solid var(--border);
+    border-radius:14px;
+    box-shadow:var(--shadow-md);
+    padding:8px;
+    display:flex;
+    flex-direction:column;
+    gap:2px;
+    opacity:0;
+    visibility:hidden;
+    transform:translateX(-4px);
+    transition:opacity .12s, transform .12s, visibility .12s;
+    z-index:40;
+  }
+  .nav-wrap.has-sub:hover .nav-flyout,
+  .nav-wrap.has-sub:focus-within .nav-flyout{
+    opacity:1; visibility:visible; transform:translateX(0);
+  }
+  .nav-flyout-title{
+    font-size:11px; font-weight:800; color:var(--muted);
+    padding:6px 10px 4px; white-space:nowrap;
+  }
+  .nav-flyout-item{
+    font-family:inherit; font-size:12.5px; font-weight:600;
+    text-align:left; white-space:nowrap;
+    padding:8px 10px; border-radius:9px; border:none;
+    background:transparent; color:var(--text); cursor:pointer;
+  }
+  .nav-flyout-item:hover{ background:var(--bg); color:var(--primary-dark); }
+
   main{
     flex:1;
     min-width:0;
-    padding:28px 32px 60px;
+    padding:28px 32px 60px 48px;
+    margin-left:0;
+    transition:margin-left .16s ease;
   }
-  .page-head{ margin-bottom:22px; }
+  /* 하위메뉴(플라이아웃)가 펼쳐진 동안, 본문이 그만큼 오른쪽으로 비켜서 겹치지 않게 함 */
+  .app-shell:has(.nav-wrap.has-sub:hover) main,
+  .app-shell:has(.nav-wrap.has-sub:focus-within) main{
+    margin-left:194px;
+  }
+  .page-head{ margin-bottom:22px; text-align:center; }
   .page-head:empty{ margin-bottom:0; }
   .page-head h1{
     font-size:22px;
@@ -142,7 +186,7 @@
     width:52px; height:5px;
     border-radius:999px;
     background:linear-gradient(90deg,var(--mint),var(--primary));
-    margin-bottom:8px;
+    margin:0 auto 8px;
   }
   .page-head .subtitle{ color:var(--muted); font-size:13px; }
 
@@ -293,9 +337,15 @@
   button.btn.xs{ padding:5px 10px; font-size:11px; }
   .step-date{ display:block; font-size:9.5px; font-weight:600; opacity:.75; margin-top:1px; }
 
-  .settings-block{ padding:18px 0; border-bottom:1px solid var(--border); }
-  .settings-block:first-child{ padding-top:2px; }
-  .settings-block:last-child{ border-bottom:none; }
+  .settings-card{ max-width:820px; margin-left:auto; margin-right:auto; }
+  .settings-block{
+    padding:16px 18px;
+    background:var(--bg);
+    border:1px solid var(--border);
+    border-radius:14px;
+    margin-bottom:12px;
+  }
+  .settings-block:last-child{ margin-bottom:0; }
   .settings-block .row{ display:flex; align-items:center; justify-content:space-between; gap:18px; flex-wrap:wrap; }
   .settings-block h3{ font-size:13.5px; font-weight:800; margin-bottom:3px; }
   .settings-block .hint{ font-size:12px; color:var(--muted); line-height:1.5; max-width:420px; }
@@ -521,17 +571,50 @@ const TAB_TITLES = {
   settings:['설정','나만 쓰는 도구라 알림은 없고, 필요한 기본값만 여기서 관리합니다.'],
 };
 
+// 사이드바에서 마우스를 올리면 옆으로 펼쳐지는 하위메뉴(플라이아웃). 지금은 "설정"만 하위 섹션이
+// 여러 개라 대상이지만, 나중에 다른 탭도 섹션이 늘어나면 여기에 추가하면 됨.
+const NAV_SUBMENUS = {
+  settings: [
+    {anchor:'settings-basic',   label:'기본 설정'},
+    {anchor:'settings-google',  label:'Google 연동'},
+    {anchor:'settings-master',  label:'마스터 시트 가져오기'},
+    {anchor:'settings-deploy',  label:'GitHub 배포'},
+    {anchor:'settings-reset',   label:'데이터 초기화'},
+  ],
+};
+
+function goToSettingsSection(anchor){
+  if(activeTab !== 'settings'){ switchTab('settings'); }
+  setTimeout(() => {
+    const target = document.getElementById(anchor);
+    if(target) target.scrollIntoView({behavior:'smooth', block:'start'});
+  }, activeTab === 'settings' ? 0 : 60);
+}
+
 let activeTab = 'home';
 
 function renderNav(){
   const sb = document.getElementById('sidebar');
-  sb.innerHTML = TABS.map(t => `
-    <button class="nav-item ${t.id===activeTab?'active':''}"
-            title="${t.label}" onclick="switchTab('${t.id}')">
-      <svg viewBox="0 0 24 24">${ICONS[t.id]}</svg>
-      <span class="tiny">${t.label}</span>
-    </button>
-  `).join('');
+  sb.innerHTML = TABS.map(t => {
+    const sub = NAV_SUBMENUS[t.id];
+    const btn = `
+      <button class="nav-item ${t.id===activeTab?'active':''}"
+              title="${t.label}" onclick="switchTab('${t.id}')">
+        <svg viewBox="0 0 24 24">${ICONS[t.id]}</svg>
+        <span class="tiny">${t.label}</span>
+      </button>
+    `;
+    if(!sub) return `<div class="nav-wrap">${btn}</div>`;
+    return `
+      <div class="nav-wrap has-sub">
+        ${btn}
+        <div class="nav-flyout">
+          <div class="nav-flyout-title">${t.label}</div>
+          ${sub.map(s => `<button class="nav-flyout-item" onclick="goToSettingsSection('${s.anchor}')">${s.label}</button>`).join('')}
+        </div>
+      </div>
+    `;
+  }).join('');
 
   if(activeTab === 'home'){
     document.getElementById('pageHead').innerHTML = '';
@@ -1570,11 +1653,11 @@ function resetAllData(){
 function renderSettings(){
   const el = document.getElementById('tab-settings');
   el.innerHTML = `
-    <div class="card">
+    <div class="card settings-card">
       <h2>기본 설정</h2>
       <div class="desc">나만 쓰는 도구라 알림·권한 설정 없이, 화면에 필요한 기본값만 관리합니다.</div>
 
-      <div class="settings-block">
+      <div class="settings-block" id="settings-basic">
         <div class="row">
           <div>
             <h3>마감 임박 기준</h3>
@@ -1600,7 +1683,7 @@ function renderSettings(){
         </div>
       </div>
 
-      <div class="settings-block">
+      <div class="settings-block" id="settings-google">
         <div class="row">
           <div>
             <h3>Google Sheets 연동</h3>
@@ -1616,7 +1699,7 @@ function renderSettings(){
         <div class="hint" id="syncStatusLine" style="margin-top:10px;">${googleSyncStatus}</div>
       </div>
 
-      <div class="settings-block">
+      <div class="settings-block" id="settings-master">
         <div class="row">
           <div>
             <h3>업무용 마스터 시트에서 가져오기</h3>
@@ -1630,7 +1713,7 @@ function renderSettings(){
         <div class="hint" id="masterSyncStatusLine" style="margin-top:10px;">${masterSyncStatus}</div>
       </div>
 
-      <div class="settings-block">
+      <div class="settings-block" id="settings-deploy">
         <div class="row">
           <div>
             <h3>GitHub 배포</h3>
@@ -1650,7 +1733,7 @@ function renderSettings(){
         <div class="hint" id="smDeployMsg" style="margin-top:6px;"></div>
       </div>
 
-      <div class="settings-block">
+      <div class="settings-block" id="settings-reset">
         <div class="row">
           <div>
             <h3>데이터 초기화</h3>
