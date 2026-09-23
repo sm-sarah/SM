@@ -137,38 +137,51 @@
   .nav-wrap{ position:relative; width:100%; display:flex; justify-content:center; }
   .nav-flyout{
     position:absolute;
-    left:calc(100% + 10px);
-    top:0;
-    min-width:168px;
-    background:var(--card);
-    border:1px solid var(--border);
-    border-radius:14px;
-    box-shadow:var(--shadow-md);
-    padding:8px;
+    left:calc(100% + 18px);
+    top:6px;
+    min-width:150px;
+    background:transparent;
+    border:none;
+    box-shadow:none;
+    padding-left:14px;
     display:flex;
     flex-direction:column;
-    gap:2px;
+    gap:0;
     opacity:0;
     visibility:hidden;
     transform:translateX(-4px);
     transition:opacity .12s, transform .12s, visibility .12s;
     z-index:40;
   }
-  .nav-wrap.has-sub:hover .nav-flyout,
-  .nav-wrap.has-sub:focus-within .nav-flyout{
+  .nav-flyout.open{
     opacity:1; visibility:visible; transform:translateX(0);
   }
-  .nav-flyout-title{
-    font-size:11px; font-weight:800; color:var(--muted);
-    padding:6px 10px 4px; white-space:nowrap;
+  .nav-flyout::before{
+    content:'';
+    position:absolute;
+    left:0; top:4px; bottom:4px;
+    width:1.5px;
+    border-radius:2px;
+    background:linear-gradient(180deg, var(--primary), var(--mint));
+    opacity:.4;
   }
   .nav-flyout-item{
-    font-family:inherit; font-size:12.5px; font-weight:600;
+    position:relative;
+    font-family:inherit; font-size:13.5px; font-weight:600;
     text-align:left; white-space:nowrap;
-    padding:8px 10px; border-radius:9px; border:none;
+    padding:9px 0 9px 14px; border:none;
     background:transparent; color:var(--text); cursor:pointer;
   }
-  .nav-flyout-item:hover{ background:var(--bg); color:var(--primary-dark); }
+  .nav-flyout-item::before{
+    content:'';
+    position:absolute;
+    left:-14px; top:50%;
+    width:10px; height:1.5px;
+    background:var(--border);
+    transform:translateY(-50%);
+  }
+  .nav-flyout-item:hover{ color:var(--primary-dark); }
+  .nav-flyout-item:hover::before{ background:var(--primary); }
 
   main{
     flex:1;
@@ -610,8 +623,7 @@ function renderNav(){
     return `
       <div class="nav-wrap has-sub">
         ${btn}
-        <div class="nav-flyout">
-          <div class="nav-flyout-title">${t.label}</div>
+        <div class="nav-flyout ${t.id===activeTab?'open':''}">
           ${sub.map(s => `<button class="nav-flyout-item" onclick="goToSettingsSection('${s.anchor}')">${s.label}</button>`).join('')}
         </div>
       </div>
