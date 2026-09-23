@@ -125,7 +125,15 @@
     box-shadow:var(--shadow-md);
   }
 
-  /* ===== 사이드바 하위메뉴(플라이아웃) ===== */
+  /* ===== 사이드바 하위메뉴(플라이아웃) + 고정 구분선 =====
+     하위메뉴가 펼쳐질 수 있는 만큼 항상 자리를 비워두고(.nav-gutter),
+     그 오른쪽 끝에 세로 구분선을 그어서 본문 시작 위치가 늘 그 선을 기준으로 고정되게 함. */
+  .nav-gutter{
+    width:168px;
+    flex:none;
+    align-self:stretch;
+    border-right:1px solid var(--border);
+  }
   .nav-wrap{ position:relative; width:100%; display:flex; justify-content:center; }
   .nav-flyout{
     position:absolute;
@@ -165,14 +173,7 @@
   main{
     flex:1;
     min-width:0;
-    padding:28px 32px 60px 48px;
-    margin-left:0;
-    transition:margin-left .16s ease;
-  }
-  /* 하위메뉴(플라이아웃)가 펼쳐진 동안, 본문이 그만큼 오른쪽으로 비켜서 겹치지 않게 함 */
-  .app-shell:has(.nav-wrap.has-sub:hover) main,
-  .app-shell:has(.nav-wrap.has-sub:focus-within) main{
-    margin-left:194px;
+    padding:28px 32px 60px;
   }
   .page-head{ margin-bottom:22px; text-align:center; }
   .page-head:empty{ margin-bottom:0; }
@@ -387,6 +388,7 @@
 
 <div class="app-shell">
   <aside class="sidebar" id="sidebar"></aside>
+  <div class="nav-gutter"></div>
 
   <main>
     <div class="page-head" id="pageHead"></div>
@@ -552,7 +554,7 @@ const ICONS = {
 
 const TABS = [
   {id:'home',     label:'홈'},
-  {id:'worklist', label:'To Do List'},
+  {id:'worklist', label:'To do'},
   {id:'vat',      label:'부가세'},
   {id:'pay',      label:'원천세'},
   {id:'corp',     label:'법인세'},
@@ -562,7 +564,7 @@ const TABS = [
 ];
 const TAB_TITLES = {
   home:['홈','오늘 기준으로 챙겨야 할 신고 기한과 현황을 한눈에 봅니다.'],
-  worklist:['To Do List','날짜별로 자유롭게 할 일과 메모를 남겨두세요.'],
+  worklist:['To do','날짜별로 자유롭게 할 일과 메모를 남겨두세요.'],
   vat:['부가가치세','기간별 신고 현황을 관리합니다.'],
   pay:['원천세·급여','월별 급여·원천세 처리 현황입니다.'],
   corp:['법인세','법인 거래처의 결산~신고 단계를 추적합니다.'],
