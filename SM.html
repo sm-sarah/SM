@@ -1417,6 +1417,23 @@ async function importWorklistFromMaster(){
   return imported.length;
 }
 
+async function importClientsOnlyFromMaster(){
+  if(!googleAccessToken){ alert('먼저 Google 로그인을 해주세요.'); return; }
+  const ok = confirm('마스터 시트("기장현황")에서 거래처 기본정보만 가져올까요?\n이전에 가져왔던 거래처는 지금 시트 내용으로 교체돼요. (직접 추가한 항목·할 일은 그대로 남아요)');
+  if(!ok) return;
+  setMasterSyncStatus('거래처 가져오는 중...');
+  try {
+    const clientCount = await importClientsFromMaster();
+    const t = new Date();
+    setMasterSyncStatus(`${pad2(t.getHours())}:${pad2(t.getMinutes())} 기준 · 거래처 ${clientCount}건 가져옴`);
+  } catch(e){
+    console.error(e);
+    const msg = (e && e.result && e.result.error && e.result.error.message) || e.message || '알 수 없는 오류';
+    setMasterSyncStatus('가져오기 실패: ' + msg);
+  }
+  renderAll();
+}
+
 async function importFromMasterSheet(){
   if(!googleAccessToken){ alert('먼저 Google 로그인을 해주세요.'); return; }
   const ok = confirm('마스터 시트("기장현황"·Work List)에서 최신 내용을 가져올까요?\n이전에 가져왔던 거래처·할 일은 지금 시트 내용으로 교체돼요. (직접 추가한 항목은 그대로 남아요)');
@@ -1605,8 +1622,9 @@ function renderSettings(){
             <h3>업무용 마스터 시트에서 가져오기</h3>
             <div class="hint">"★Tax_2026" 시트의 "기장현황" 탭에서 거래처 기본정보(순번·구분·수임·상호·법인번호·사업자번호·개업일·대표)를, Work List 탭에서 할 일을 가져옵니다. 읽기 전용이라 마스터 시트는 전혀 건드리지 않고, ID/PW·주민번호 등 민감정보는 가져오지 않습니다. 부가세·원천세·법인세·종소세 연동은 다음 단계에서 따로 진행해요.</div>
           </div>
-          <div class="ctrl">
-            <button class="btn primary xs" onclick="importFromMasterSheet()" ${googleAccessToken ? '' : 'disabled'}>지금 가져오기</button>
+          <div class="ctrl" style="display:flex; gap:6px;">
+            <button class="btn ghost xs" onclick="importClientsOnlyFromMaster()" ${googleAccessToken ? '' : 'disabled'}>거래처만 가져오기</button>
+            <button class="btn primary xs" onclick="importFromMasterSheet()" ${googleAccessToken ? '' : 'disabled'}>거래처+할 일 가져오기</button>
           </div>
         </div>
         <div class="hint" id="masterSyncStatusLine" style="margin-top:10px;">${masterSyncStatus}</div>
