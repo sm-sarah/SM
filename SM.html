@@ -428,7 +428,9 @@
   <div class="gate-card">
     <div class="gate-title">Sunmin's Works</div>
     <div class="gate-desc">나만 쓰는 개인 업무 도구예요.<br>등록된 Google 계정으로만 열 수 있습니다.</div>
-    <div class="gate-btn-wrap" id="gSignInDiv"></div>
+    <div class="gate-btn-wrap">
+      <button class="btn primary" id="gateSignInBtn" onclick="gateSignIn()" disabled>Google로 로그인</button>
+    </div>
     <div class="gate-error" id="gateError">이 계정으로는 열 수 없어요. 등록된 계정으로 다시 시도해주세요.</div>
   </div>
 </div>
@@ -475,9 +477,11 @@ function parseJwt(token){
   }catch(e){ return null; }
 }
 
-function showGateError(){
+function showGateError(msg){
   const el = document.getElementById('gateError');
-  if(el) el.classList.add('show');
+  if(!el) return;
+  if(msg) el.textContent = msg;
+  el.classList.add('show');
 }
 
 function unlockApp(){
@@ -492,17 +496,54 @@ function lockApp(){
   document.getElementById('authGate').style.display = 'flex';
 }
 
-function handleCredentialResponse(response){
-  const payload = parseJwt(response.credential);
-  if(!payload || !payload.email || !payload.email_verified || !ALLOWED_EMAILS.includes(payload.email)){
-    showGateError();
-    if(typeof google !== 'undefined' && google.accounts && google.accounts.id){
-      google.accounts.id.disableAutoSelect();
-    }
+// 게이트에서 "Google로 로그인"을 누르면, 신원 확인(이 계정이 맞는지)과 Google Sheets 연동용
+// access token 발급을 한 번의 클릭으로 같이 처리한다. 예전에는 이 둘이 분리돼 있어서
+// 게이트만 통과하고 설정 탭의 "Google Sheets 연동"은 따로 눌러야 했는데, 그러면 로그인했는데도
+// 연동 버튼이 그대로 남아있는 것처럼 보이는 문제가 있었음.
+async function fetchGoogleUserEmail(accessToken){
+  try{
+    const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+      headers: { Authorization: 'Bearer ' + accessToken },
+    });
+    if(!res.ok) return null;
+    const info = await res.json();
+    return info && info.email ? info.email : null;
+  }catch(e){ return null; }
+}
+
+function gateSignIn(){
+  if(!googleTokenClient){
+    alert('Google 연동 스크립트를 아직 불러오지 못했습니다. 인터넷 연결을 확인하고 잠시 후 다시 시도해주세요.');
     return;
   }
-  try{ localStorage.setItem(AUTH_STORAGE_KEY, payload.email); }catch(e){}
-  unlockApp();
+  const btn = document.getElementById('gateSignInBtn');
+  if(btn){ btn.disabled = true; btn.textContent = '로그인 중...'; }
+
+  googleTokenClient.callback = async (resp) => {
+    if(resp.error){
+      if(btn){ btn.disabled = false; btn.textContent = 'Google로 로그인'; }
+      showGateError('로그인에 실패했어요. 다시 시도해주세요.');
+      return;
+    }
+    const accessToken = resp.access_token;
+    const email = await fetchGoogleUserEmail(accessToken);
+
+    if(!email || !ALLOWED_EMAILS.includes(email)){
+      if(typeof google !== 'undefined' && google.accounts){
+        google.accounts.oauth2.revoke(accessToken, () => {});
+      }
+      if(btn){ btn.disabled = false; btn.textContent = 'Google로 로그인'; }
+      showGateError();
+      return;
+    }
+
+    googleAccessToken = accessToken;
+    gapi.client.setToken({ access_token: googleAccessToken });
+    try{ localStorage.setItem(AUTH_STORAGE_KEY, email); }catch(e){}
+    unlockApp();
+    await afterGoogleSignIn(); // 같은 토큰으로 Sheets 연동까지 바로 진행 (자동 연동됨 표시)
+  };
+  googleTokenClient.requestAccessToken({ prompt: 'consent' });
 }
 
 function initAuthGate(){
@@ -513,20 +554,12 @@ function initAuthGate(){
       return;
     }
   }catch(e){}
+  maybeEnableGateButton();
+}
 
-  if(typeof google === 'undefined' || !google.accounts || !google.accounts.id){
-    setTimeout(initAuthGate, 300);
-    return;
-  }
-  google.accounts.id.initialize({
-    client_id: GOOGLE_CLIENT_ID,
-    callback: handleCredentialResponse,
-  });
-  google.accounts.id.renderButton(
-    document.getElementById('gSignInDiv'),
-    { theme:'outline', size:'large', text:'signin_with', shape:'pill' }
-  );
-  google.accounts.id.prompt();
+function maybeEnableGateButton(){
+  const btn = document.getElementById('gateSignInBtn');
+  if(btn && gapiReady && gisReady){ btn.disabled = false; }
 }
 
 /* =========================================================
@@ -566,7 +599,7 @@ let settings = {
    Google Drive / Sheets 연동
    ========================================================= */
 const GOOGLE_CLIENT_ID = '273460053868-nbc6qpi148vv3lkobhrqnrtn8vvk8num.apps.googleusercontent.com';
-const GOOGLE_SCOPES = 'https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive.file';
+const GOOGLE_SCOPES = 'https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/userinfo.email';
 const GOOGLE_SHEET_NAME = 'SM_data';
 
 const MASTER_SHEET_ID = '19rS-3YbCAR1K74i2L3D0iKrIzJQHOfNB_PYVIY3ZRus';
@@ -1292,6 +1325,7 @@ function gisInit(){
 function maybeEnableGoogleSignIn(){
   const btn = document.getElementById('googleSignInBtn');
   if(btn && gapiReady && gisReady){ btn.disabled = false; }
+  maybeEnableGateButton();
 }
 
 function handleGoogleSignIn(){
@@ -1749,10 +1783,12 @@ function updateDisplayName(v){
   renderSettings();
 }
 function resetAllData(){
-  if(!confirm('모든 거래처·신고 기록·할 일이 초기화됩니다. 계속할까요?')) return;
+  if(!confirm('모든 거래처·신고 기록·할 일·기본 설정이 초기화됩니다. 계속할까요?')) return;
   clients = [];
   tasks = [];
   vatData = {}; payData = {}; corpData = {}; indivData = {};
+  settings.displayName = '';
+  settings.soonDays = 7;
   renderNav();
   renderAll();
 }
@@ -1915,17 +1951,19 @@ function startAppAfterAuth(){
   document.getElementById('todayPill').textContent = todayStr().replaceAll('-','.');
   renderNav();
   switchTab('home');
+}
 
-  if(typeof gapi !== 'undefined'){
-    gapiLoaded();
-  } else {
-    console.warn('Google API 스크립트를 불러오지 못했습니다 (네트워크 제한 환경일 수 있음).');
-  }
-  if(typeof google !== 'undefined' && google.accounts){
-    gisInit();
-  } else {
-    console.warn('Google Identity Services를 불러오지 못했습니다 (네트워크 제한 환경일 수 있음).');
-  }
+// gapi/GIS는 게이트 버튼(로그인+Sheets 연동을 한 번에 처리)이 쓸 수 있어야 하므로
+// 인증 여부와 상관없이 페이지 로드 시 바로 초기화한다.
+if(typeof gapi !== 'undefined'){
+  gapiLoaded();
+} else {
+  console.warn('Google API 스크립트를 불러오지 못했습니다 (네트워크 제한 환경일 수 있음).');
+}
+if(typeof google !== 'undefined' && google.accounts){
+  gisInit();
+} else {
+  console.warn('Google Identity Services를 불러오지 못했습니다 (네트워크 제한 환경일 수 있음).');
 }
 
 initAuthGate();
