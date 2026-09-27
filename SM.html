@@ -439,7 +439,10 @@
 <header>
   <span></span>
   <span class="wordmark">Sunmin's Works</span>
-  <span class="today-pill" id="todayPill"></span>
+  <span style="justify-self:end; display:flex; align-items:center; gap:8px;">
+    <span class="pill warn" id="syncWarningBadge" style="display:none; cursor:pointer;" onclick="goToSettingsSection('settings-google')" title="눌러서 다시 연결하기">⚠ 연동 끊김 · 다시 로그인</span>
+    <span class="today-pill" id="todayPill"></span>
+  </span>
 </header>
 
 <div class="app-shell">
@@ -1355,10 +1358,12 @@ function handleGoogleSignOut(){
   googleSpreadsheetId = null;
   settings.sheetsConnected = false;
   setSyncStatus('');
+  clearSyncWarningBadge();
   renderSettings();
 }
 
 async function afterGoogleSignIn(){
+  clearSyncWarningBadge();
   setSyncStatus('연결하는 중...');
   renderSettings();
   try {
@@ -1450,6 +1455,30 @@ async function loadFromGoogleSheet(){
   }
 }
 
+// 로그인 만료(access token 만료/취소)를 감지해서 사용자가 알아챌 수 있게 만드는 부분.
+// 예전에는 저장/자동새로고침이 조용히 실패만 하고, 설정 탭을 직접 열어봐야만 알 수 있었음.
+// 이제는 401(권한 없음) 오류가 나면 즉시 연동을 끊긴 상태로 표시하고, 어느 탭에 있든
+// 헤더에 "연동 끊김" 배지가 떠서 바로 알 수 있게 함.
+function isAuthError(e){
+  const code = (e && e.status) || (e && e.result && e.result.error && e.result.error.code);
+  return code === 401 || code === 403;
+}
+
+function handleGoogleTokenExpired(){
+  googleAccessToken = null;
+  settings.sheetsConnected = false;
+  clearInterval(googlePollTimer);
+  setSyncStatus('로그인이 만료됐어요 · 설정에서 다시 로그인해주세요');
+  const badge = document.getElementById('syncWarningBadge');
+  if(badge) badge.style.display = '';
+  if(activeTab === 'settings') renderSettings();
+}
+
+function clearSyncWarningBadge(){
+  const badge = document.getElementById('syncWarningBadge');
+  if(badge) badge.style.display = 'none';
+}
+
 async function saveToGoogleSheet(){
   if(!googleAccessToken || !googleSpreadsheetId) return;
   const snap = collectGoogleSnapshot();
@@ -1465,10 +1494,15 @@ async function saveToGoogleSheet(){
       resource: { values: rows },
     });
     const t = new Date();
+    clearSyncWarningBadge();
     setSyncStatus(`연동됨 · ${pad2(t.getHours())}:${pad2(t.getMinutes())} 저장됨`);
   } catch(e){
     console.error(e);
-    setSyncStatus('저장 실패 (다음 변경 때 다시 시도합니다)');
+    if(isAuthError(e)){
+      handleGoogleTokenExpired();
+    } else {
+      setSyncStatus('저장 실패 (다음 변경 때 다시 시도합니다)');
+    }
   }
 }
 
@@ -1934,6 +1968,9 @@ async function pollGoogleSheetForUpdates(){
     renderAllNoSave();
   } catch(e){
     console.warn('자동 새로고침 실패', e);
+    if(isAuthError(e)){
+      handleGoogleTokenExpired();
+    }
   }
 }
 
