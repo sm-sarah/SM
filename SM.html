@@ -327,6 +327,26 @@
   .task-list .task-text{ flex:1; }
   .task-list li.done .task-text{ text-decoration:line-through; color:var(--muted); }
 
+  /* ===== To do: 연속 스크롤 아젠다(네이버 할일 스타일) ===== */
+  .wl-agenda{
+    max-height:620px;
+    overflow-y:auto;
+    border:1px solid var(--border);
+    border-radius:14px;
+    padding:0 16px;
+    background:var(--bg);
+  }
+  .wl-day{ padding:6px 0 4px; }
+  .wl-day-head{
+    position:sticky; top:0; z-index:2;
+    background:var(--bg);
+    padding:10px 0 6px;
+    font-size:12.5px; font-weight:800; color:var(--muted);
+  }
+  .wl-day-head.today{ color:var(--primary-dark); }
+  .wl-day .task-list{ margin:0; }
+  .wl-day .task-list li{ padding:8px 0; }
+
   .deadline-list{ list-style:none; margin:0; padding:0; }
   .deadline-list li{ display:flex; align-items:center; gap:10px; justify-content:space-between; padding:10px 0; border-bottom:1px solid var(--border); font-size:13px; }
   .deadline-list li:last-child{ border-bottom:none; }
@@ -582,11 +602,504 @@ let clients = [
 let nextClientId = 9;
 
 let tasks = [
-  {id:1, date:'2026-09-20', text:'가나상사 결산 자료 요청 회신 확인', done:false},
-  {id:2, date:'2026-09-24', text:'부가세 1기 예정고지 대상 여부 재확인', done:false},
-  {id:3, date:'2026-09-19', text:'다솜푸드 4대보험 취득신고 접수증 저장', done:true},
+  {id:1, date:"2026-07-01", text:"엽떡 연금 소득총액신고서 팩스송신 여부확인 오전(09:54), 성실신고확인서 미제출 불이익없음 확인", done:true},
+  {id:2, date:"2026-07-01", text:"비앤피,엽떡 건보 보수총액신고(EDI) 결과확인 / 정산내역 드라이브 저장", done:true},
+  {id:3, date:"2026-07-01", text:"박배영 개인지방소득세 납부여부 확인하기 → 위택스 점검으로 인하여 확인불가", done:true},
+  {id:4, date:"2026-07-01", text:"와이인 급여 확인 및 급여명세서 송부", done:true},
+  {id:5, date:"2026-07-01", text:"엽떡 급여확인 및 급여명세서 송부", done:true},
+  {id:6, date:"2026-07-01", text:"체크리스트 양식 만들기", done:true},
+  {id:7, date:"2026-07-01", text:"ㅇ", done:false},
+  {id:8, date:"2026-07-02", text:"부가세 안내문 작업 및 발송(pm 06:00)", done:true},
+  {id:9, date:"2026-07-02", text:"프린웍스 부가세 자료 저장", done:true},
+  {id:10, date:"2026-07-02", text:"박배영 개인지방소득세 납부여부 확인하기", done:true},
+  {id:11, date:"2026-07-02", text:"업무List 양식 정리/분리/", done:true},
+  {id:12, date:"2026-07-02", text:"한국세무사회 책 구입(27,000원)", done:true},
+  {id:13, date:"2026-07-02", text:"나우재무제표 준비&사업자등록증 재발급 후 회계사님께 공유", done:true},
+  {id:14, date:"2026-07-03", text:"세성, 태하, 프린웍스 급여명세서 송부", done:true},
+  {id:15, date:"2026-07-03", text:"왓츠랩 기타소득자료 입력", done:true},
+  {id:16, date:"2026-07-03", text:"급여완료된곳 급여신고 /신고서류 저장하기", done:true},
+  {id:17, date:"2026-07-03", text:"식대 지출결의서(6월분 상신하기)", done:true},
+  {id:18, date:"2026-07-03", text:"근로내용확인신고서 (엽떡, 세성) / 접수증 저장완료", done:true},
+  {id:19, date:"2026-07-03", text:"전체스크래핑", done:true},
+  {id:20, date:"2026-07-03", text:"제미나이, 회사계정관련 설정 알아보기/ 세팅하기", done:true},
+  {id:21, date:"2026-07-03", text:"샌드박스 설치(카카오실행)", done:true},
+  {id:22, date:"2026-07-03", text:"와이인 최윤정 취득신고", done:true},
+  {id:23, date:"2026-07-03", text:"건국&연세 인승서 및 수집정보 재등록 / 수임동의체크(요청후완료함)/ 26.12기 스크래핑", done:true},
+  {id:24, date:"2026-07-03", text:"원천세 신고현황 시트 작성/ 납부서 금액 매칭(이상없음) /나우 검토표 서식 하나 틀린것 수정함", done:true},
+  {id:25, date:"2026-07-06", text:"회사pc에 샌드박스&카카오깔기", done:true},
+  {id:26, date:"2026-07-06", text:"부가세 준비하기 (검토표 26년 확정분 작성)", done:true},
+  {id:27, date:"2026-07-06", text:"태하 소득총액신고(건보,연금 하기) - 오후 01:43 발송", done:true},
+  {id:28, date:"2026-07-06", text:"와이인 최윤정 취득신고 결과 확인하기 (의료수급자_건보 반려. 연금+고용 취득완료 but 취득신고 요청/접수하기)", done:true},
+  {id:29, date:"2026-07-06", text:"왓츠랩 6월 귀속 급여 입력 / 검토표 완료해두기", done:true},
+  {id:30, date:"2026-07-06", text:"비앤피랩 급여요청 (메일발신)", done:true},
+  {id:31, date:"2026-07-06", text:"최윤정 연금 결과 확인/신고서 저장 /", done:true},
+  {id:32, date:"2026-07-06", text:"리빙 결산자료 스캔메일발송한거 파쇄하기", done:true},
+  {id:33, date:"2026-07-06", text:"pc 휴지통비우기/ 캐논 팩스송신결과 확인(pc, 기계)_잠겨있음", done:true},
+  {id:34, date:"2026-07-06", text:"업무폴더 정리하기 (파일 등) / 즐겨찾기 정리", done:true},
+  {id:35, date:"2026-07-06", text:"부가세 신고도움서비스 저장하기", done:true},
+  {id:36, date:"2026-07-07", text:"최윤정 고용 취소 결과 확인하기", done:true},
+  {id:37, date:"2026-07-07", text:"비앤피랩 급여 입력/ 신고하기 / 납부서 발송", done:true},
+  {id:38, date:"2026-07-07", text:"루나팸 부가세 준비, 결산 (6월까지 통장내역)", done:true},
+  {id:39, date:"2026-07-07", text:"세무사랑(예정고지세액 및 통합자료 조회_스크래핑)", done:true},
+  {id:40, date:"2026-07-07", text:"부가세 검토표 양식 수정/ 확정하기", done:true},
+  {id:41, date:"2026-07-08", text:"프린웍스 우리은행서류 발송하기 (파인드ㅇ+메일보완), 19년도이후부터 법인세 신고서 확인함", done:true},
+  {id:42, date:"2026-07-08", text:"보우에코 부가세 검토표 부터 작성하기", done:true},
+  {id:43, date:"2026-07-08", text:"왓츠랩 메일회신", done:true},
+  {id:44, date:"2026-07-08", text:"나우이엔지 급여 작성 및 마감", done:true},
+  {id:45, date:"2026-07-08", text:"나우 조서현 대표 보수월액정정(건보만)  + 결과확인완료", done:true},
+  {id:46, date:"2026-07-08", text:"회계사님 구글 pc드라이브설치도와드리기, 부가세관련 및 기타 상의드릴것하기, 경비수정요청", done:true},
+  {id:47, date:"2026-07-09", text:"나우 급여 확정짓기&검토표작성&원이행 및 지방세 마감해두기 / 급여내역 공유드리기 (안해도 된다 하심)", done:true},
+  {id:48, date:"2026-07-09", text:"후즈랩홀딩스 사업용카드사용이력없음(메일로확인문의함)/ +통합조회자료 대조하기", done:true},
+  {id:49, date:"2026-07-09", text:"프린웍스 부가세 준비(카드, 고정자산)", done:false},
+  {id:50, date:"2026-07-09", text:"더키즈아인풀빌라 조기환급 안분 재정산 내역 정리하기", done:false},
+  {id:51, date:"2026-07-09", text:"수기세금계산서 매출(체크하기)/ 매입분 체크", done:false},
+  {id:52, date:"2026-07-09", text:"왓츠랩 메일 답장하기 / 부가세 추가질의 메일드리기", done:true},
+  {id:53, date:"2026-07-09", text:"왓츠랩 전표넘기기, 계정과목 등 확인", done:true},
+  {id:54, date:"2026-07-09", text:"우유 예정고지 자료 조회 후 리스트에 반영하기", done:true},
+  {id:55, date:"2026-07-09", text:"나빌레라 전표넘기기, 질의회신 하기", done:true},
+  {id:56, date:"2026-07-09", text:"나빌레라 문지혜 연금, 건강, 고용 복직 연장하기", done:true},
+  {id:57, date:"2026-07-10", text:"원천세 미납 확인/ 납기일 안내하기(청양) -> 택스봇에서 납부서류 수집으로 해야함", done:true},
+  {id:58, date:"2026-07-10", text:"리빙디자인 급여요청/ 입력/ 마감/ 신고/ 납부서전달 하기 / 납부촉구함", done:true},
+  {id:59, date:"2026-07-10", text:"프린웍스 부가세 작업 (위하고에서 수집 다시 하기)", done:false},
+  {id:60, date:"2026-07-10", text:"나빌레라 별도 매출 있는지 확인하기 (티켓링크등) -상반기 판매대행 매출 없음 확인", done:true},
+  {id:61, date:"2026-07-10", text:"나빌레라 문지혜 연금, 건강, 고용 복직 연장 처리결과 확인하기 / 전부처리완료됨(오후04:35 확인완료)", done:true},
+  {id:62, date:"2026-07-10", text:"APM 플레이스 수기세금계산서 생성하여 전달하기 (오후 5시 완료)", done:true},
+  {id:63, date:"2026-07-10", text:"우영물류 유가보조금 체크하기", done:false},
+  {id:64, date:"2026-07-10", text:"(주)프린웍스산업 계정원장 보완회신(김미정과장)/ 원천세 납부했는지 확인완료", done:true},
+  {id:65, date:"2026-07-10", text:"나우이엔지 시정서 관련 회신, 통화 (노무법인 이용하셔서 확인 후 월욜에  연락주시기로 _>회계사님께 공유함)", done:true},
+  {id:66, date:"2026-07-10", text:"나우이엔지 부가세 결산 (사업내용 확인 같이 하기) _ 진행중", done:true},
+  {id:67, date:"2026-07-13", text:"유엘랩스 외화계좌 체크하기 / 매출 어떻게 잡을지 (인출일 기준)", done:true},
+  {id:68, date:"2026-07-13", text:"와이인 신용카드(5월) 현금 (6월) 판매대행(3월) 까지 매출잡기", done:true},
+  {id:69, date:"2026-07-13", text:"왓츠랩 부가세 자료 검토하기", done:false},
+  {id:70, date:"2026-07-13", text:"클로드 프로 결제", done:true},
+  {id:71, date:"2026-07-13", text:"엘비케이 매출 체크 (통장내역 요청하기)", done:true},
+  {id:72, date:"2026-07-13", text:"엘비케이,엽떡,비앤피랩 수기세금계산서 확인하기 &리빙 / APM", done:false},
+  {id:73, date:"2026-07-13", text:"리빙디자인공감 결산자료 검토하면서 전표넘기기", done:true},
+  {id:74, date:"2026-07-14", text:"부가세 신고서 마감 (9곳)", done:true},
+  {id:75, date:"2026-07-14", text:"부가세 결재(9곳)", done:true},
+  {id:76, date:"2026-07-14", text:"1기 전체스크래핑 다시  (세무사랑)", done:true},
+  {id:77, date:"2026-07-14", text:"부가세 신고자료 통합조회 재조회 (오늘 신고 마감하는 거래처들)", done:true},
+  {id:78, date:"2026-07-14", text:"나우 기보 표준재무제표 코파인드재발송하기 /", done:true},
+  {id:79, date:"2026-07-15", text:"택스봇 집계 수집하기 (07.15 기준으로)", done:true},
+  {id:80, date:"2026-07-15", text:"우영물류 작업하기 / 결재완료", done:true},
+  {id:81, date:"2026-07-15", text:"태하/ 프린웍스 카드입력", done:false},
+  {id:82, date:"2026-07-15", text:"프린웍스 고정자산 확인", done:false},
+  {id:83, date:"2026-07-15", text:"엘비케이,엽떡,비앤피랩 수기세금계산서 확인하기 &리빙 / APM", done:false},
+  {id:84, date:"2026-07-15", text:"프린웍스 장기차입금 (본인꺼) 확인하여 회신주기 (오전09:46 메일회신, 본사 거래처 착오설정 있어서 수정 후 송부)", done:true},
+  {id:85, date:"2026-07-15", text:"엘비케이 매출내역 재요청하기", done:true},
+  {id:86, date:"2026-07-15", text:"왓츠랩,세성,우영,후즈랩,엘비케이,와이인", done:false},
+  {id:87, date:"2026-07-15", text:"보우에코 법인변동자료 회계사님께 확인요청함", done:true},
+  {id:88, date:"2026-07-16", text:"프린웍스 & 청양 고정자산 리스트 작성/ 회신요청하기", done:false},
+  {id:89, date:"2026-07-16", text:"프린웍스 & 청양 카드 및 받은서류 체크하기", done:true},
+  {id:90, date:"2026-07-16", text:"유엘랩스 매출 설정하기 / 25년도 세금계산서 있음; 체크하기", done:true},
+  {id:91, date:"2026-07-16", text:"엘비케이 부가세 회계처리 후 검토표 및 신고서 마감하기/ 결재올리기", done:true},
+  {id:92, date:"2026-07-16", text:"엘비케이 (→엽떡,비앤피랩) 수기세금계산서 저장 및 복붙하기", done:true},
+  {id:93, date:"2026-07-17", text:"휴무", done:false},
+  {id:94, date:"2026-07-20", text:"와이인 카드 높은금액 문의하기 / 카드매출 등 입력했는지 확인하기 / 판매대행매출자료요청", done:true},
+  {id:95, date:"2026-07-20", text:"청양 고정자산 확인 &카드 내역 반영하기", done:true},
+  {id:96, date:"2026-07-20", text:"유엘랩스 결재 다시올리기", done:true},
+  {id:97, date:"2026-07-20", text:"태하 카드반영하기", done:false},
+  {id:98, date:"2026-07-20", text:"비앤피랩 수기세금계산서 반영,  불공, 판매대행 매출 확인 및 입력 / 매출자료 요청(이메일)", done:true},
+  {id:99, date:"2026-07-20", text:"프린웍스산업, 청양 결재올리기", done:true},
+  {id:100, date:"2026-07-20", text:"키즈 6월 카드내역 다시 확인하기", done:false},
+  {id:101, date:"2026-07-20", text:"기장현황에 코넥트 스튜디오 업데이트하기 / 내 기장리스트도 업데이트", done:true},
+  {id:102, date:"2026-07-20", text:"부가세 결재 완료된곳 12업체 신고 후 납부서 발송하기", done:true},
+  {id:103, date:"2026-07-20", text:"집가서: 태하, 왓츠랩, 불닭, 아빠꺼, 키즈", done:false},
+  {id:104, date:"2026-07-21", text:"엽떡 판매대행 자료 각각 확인 후 입력하기", done:true},
+  {id:105, date:"2026-07-21", text:"태하 카드 반영 후 신고마감", done:true},
+  {id:106, date:"2026-07-21", text:"와이인 판매대행 자료 확인 & 마감", done:false},
+  {id:107, date:"2026-07-21", text:"엽떡 임대료 수기세금계산서 요청하기", done:true},
+  {id:108, date:"2026-07-21", text:"왓츠랩 카드엑셀회신내역확인, 전표넘기기, 부가세 신고서 마감 후 결제 / 환급서류 요청하기", done:true},
+  {id:109, date:"2026-07-22", text:"후즈랩홀딩스 _ 이메일 업데이트, 상반기 카드 비용 반영해드리기 (티머니 과세매출)", done:false},
+  {id:110, date:"2026-07-22", text:"엽떡 검토표 작성 후 결재올리기", done:true},
+  {id:111, date:"2026-07-22", text:"후즈랩기장계약요청 -> 노푸름 매니저", done:true},
+  {id:112, date:"2026-07-22", text:"엽떡 간이 카과 확인 -> 간세였음 신고마감  / 납부서 발송하기 (오후 08:42)", done:true},
+  {id:113, date:"2026-07-23", text:"후즈랩카드반영하여 올리기 / 검토표 카드매입 수정/ 카드번호 문의하여 수령명세서 백업", done:true},
+  {id:114, date:"2026-07-23", text:"와이인 판매대행 자료 확인 후 마감 & 결재", done:true},
+  {id:115, date:"2026-07-23", text:"우유 매출 잡기 / 연세우유", done:false},
+  {id:116, date:"2026-07-23", text:"비앤피랩, 후즈랩 결재 완료되면 신고서 발송하기", done:true},
+  {id:117, date:"2026-07-23", text:"키즈 아이디 비번 확인/ 안분 내역 검토", done:true},
+  {id:118, date:"2026-07-23", text:"비앤피랩 판매대행 자료 확인/ 안분 확인 / 신고서 마감 후 결재올리기", done:true},
+  {id:119, date:"2026-07-23", text:"코넥트는 총괄사업장납부 확인하기 (주사업장총괄납부, 총괄납부관리번호) /이혜민차장메일송신하기, 회계사님공유", done:true},
+  {id:120, date:"2026-07-23", text:"코넥트 신고 마감", done:true},
+  {id:121, date:"2026-07-24", text:"부가세 환급서류 제출하기", done:false},
+  {id:122, date:"2026-07-24", text:"와이인 신고 후 발송하기", done:true},
+  {id:123, date:"2026-07-24", text:"키즈 안분검토 (종일)", done:true},
+  {id:124, date:"2026-07-24", text:"우유대리점 매출 파악 (종일)", done:true},
+  {id:125, date:"2026-07-24", text:"토요일까지 일함", done:false},
+  {id:126, date:"2026-07-27", text:"부가세 부속서류 제출하기 (체크완료)", done:true},
+  {id:127, date:"2026-07-27", text:"건국, 연세 매출 계산 (종일)/ 매출 마진율 부가율 인식/ 결재올리기 / 신고 후 납부서 발송하기", done:true},
+  {id:128, date:"2026-07-27", text:"부가세 납부 여부 및 납부기한 안내하기", done:true},
+  {id:129, date:"2026-07-27", text:"부가세 신고 거래처 전체 스크래핑", done:true},
+  {id:130, date:"2026-07-27", text:"컴퓨터세팅(드라이브, 세무사랑, 구글시트, 기타설치파일, 북마크 등 즐겨찾기 정리, 구글계정동기화, 카카오)", done:true},
+  {id:131, date:"2026-07-27", text:"네이트온 글씨체 및 색상변경", done:true},
+  {id:132, date:"2026-07-28", text:"서선희 육아휴직 신청 (등본확인하기)", done:false},
+  {id:133, date:"2026-07-28", text:"코넥트 기초정보 수정하기 (서류 확인) , 사업장 4대보험 위임신청하기 / 급여신고 7월부터", done:false},
+  {id:134, date:"2026-07-28", text:"간이지급 / 지급명세서 제출하기", done:false},
+  {id:135, date:"2026-07-28", text:"부가세 신고서류 저장하기 (후즈랩, 프린웍스는 신고서도)", done:false},
+  {id:136, date:"2026-07-28", text:"코넥트스튜디오 주사업장총괄납부 해지신청하기 / EDI 위임신청", done:false},
+  {id:137, date:"2026-07-28", text:"휴가, 재택일정 체크하기", done:false},
+  {id:138, date:"2026-07-28", text:"프린웍스 지방세 환급신청하기", done:false},
+  {id:139, date:"2026-07-28", text:"정리내역정리", done:false},
+  {id:140, date:"2026-07-28", text:"워크리스트 양식 정리", done:false},
+  {id:141, date:"2026-07-28", text:"클로드, 크롬캐스트, 프린터 설치", done:true},
+  {id:142, date:"2026-07-29", text:"간이지급 / 지급명세서 제출하기 _ 접수증 저장하기", done:true},
+  {id:143, date:"2026-07-29", text:"워크리스트 양식세팅", done:true},
+  {id:144, date:"2026-07-29", text:"클로드- 휴가, 경비 등 정리되게 _ 진행중", done:true},
+  {id:145, date:"2026-07-29", text:"웹팩스 신청, 준비하기", done:true},
+  {id:146, date:"2026-07-29", text:"금요일 휴가 (말씀드리기) , 올리기", done:true},
+  {id:147, date:"2026-07-29", text:"원천세 간이지급양식수정하기 / 코넥트 리스트업하기", done:true},
+  {id:148, date:"2026-07-30", text:"프린웍스 지방세 환급신청하기 (2주소요, 안들어오면 다음주 월욜에 전화주시기로)", done:true},
+  {id:149, date:"2026-07-30", text:"코넥트스튜디오 주사업장총괄납부 해지신청하기 /", done:true},
+  {id:150, date:"2026-07-30", text:"서선희 육아휴직 신청 (등본확인하기) - 자료만 저장, 8.1이후 신청가능", done:true},
+  {id:151, date:"2026-07-30", text:"코넥트 EDI 수임", done:true},
+  {id:152, date:"2026-07-30", text:"부가세 신고서류 저장하기", done:true},
+  {id:153, date:"2026-07-30", text:"코넥트 기초정보 수정하기 (서류 확인) , 급여 7월부터 체크 (사원 확인 후 등록하기, 급여 체크)", done:true},
+  {id:154, date:"2026-07-30", text:"휴가, 재택일정표 달력 등 만들어서 체크하기 (클로드) - 계속활용함", done:true},
+  {id:155, date:"2026-07-30", text:"식대, 포상휴가, 재택횟수 관련 지침 업데이트 (제미나이)", done:true},
+  {id:156, date:"2026-07-30", text:"7월 급여 고정된 곳 급여명세서 발송", done:false},
+  {id:157, date:"2026-07-30", text:"왓츠랩 기타소득 등록", done:false},
+  {id:158, date:"2026-07-30", text:"업무보고하고 퇴근하기", done:false},
+  {id:159, date:"2026-07-30", text:"후즈랩, 코넥트 기장계약서 정리, 원본 백업, 날인본 체크", done:true},
+  {id:160, date:"2026-07-30", text:"프린웍스청양 _ 환급서류 (이체내역,세무서연락왔다고. 본인이 준비해서 통화한다고 하심) _ 오후 04:27 통화완료", done:true},
+  {id:161, date:"2026-07-30", text:"카카오프로필 부재내역 업데이트 방법 /", done:false},
+  {id:162, date:"2026-07-31", text:"휴가", done:false},
+  {id:163, date:"2026-08-01", text:"코넥트 스튜디오 위하고 전환하기", done:false},
+  {id:164, date:"2026-08-01", text:"기장현황, 거래처 정보 등 도 프로그램 만들어보기", done:false},
+  {id:165, date:"2026-08-02", text:"ㄴㄴㄴ", done:false},
+  {id:166, date:"2026-08-03", text:"코넥트 EDI 수임 승인여부 확인하기", done:true},
+  {id:167, date:"2026-08-03", text:"급여명세서 작성 후 발송하기 (와이인, 엽떡, 태하, 세성, 프린, 청양)", done:true},
+  {id:168, date:"2026-08-03", text:"서선희 4대보험 납부유예 신청 (26.08.01~12.31, 8.1일 이후 신청가능)", done:false},
+  {id:169, date:"2026-08-03", text:"코넥트 윤일규 주민번호 뒷자리 확인하기 / EDI로 확인안되면 본사 질의하기 (질의메일발송)", done:true},
+  {id:170, date:"2026-08-03", text:"코넥트 총괄납부사업장 포기신청 접수결과 확인하기 (홈택스 사업장 아이디 비번 로그인)", done:false},
+  {id:171, date:"2026-08-03", text:"나우 7월 귀속 최정호 사업소득 등록", done:true},
+  {id:172, date:"2026-08-03", text:"왓츠랩 기타소득 등록", done:true},
+  {id:173, date:"2026-08-03", text:"부재알림 서비스 설정하기 (비즈니스는유료라 패스, 택스봇으로 문구 설정함)", done:true},
+  {id:174, date:"2026-08-03", text:"나우 은행 공동인증서 비번 변경된거 총괄현황에 업데이트하기", done:true},
+  {id:175, date:"2026-08-03", text:"4대보험 환급 체크하기 (소득금액증명원 결손 인곳)", done:true},
+  {id:176, date:"2026-08-04", text:"서선희 휴직 신청 (건강 ㅇ 연금 ㅇ 고용 ㅇ)", done:true},
+  {id:177, date:"2026-08-04", text:"클로드 작업한거 체크하기, 마감 및 활용하기", done:true},
+  {id:178, date:"2026-08-04", text:"급여 완료된곳 일괄신고 / 납부서 발송하기", done:true},
+  {id:179, date:"2026-08-04", text:"일용- 근확제출하기 (엽떡, 세성) / 접수증 저장", done:true},
+  {id:180, date:"2026-08-04", text:"엣지 회사계정으로 다시 로그인, 즐겨찾기 다시 설정", done:true},
+  {id:181, date:"2026-08-04", text:"결산하기 (청양, 본부)", done:true},
+  {id:182, date:"2026-08-04", text:"법인 중간예납 대상 체크 (납부할곳없음(", done:true},
+  {id:183, date:"2026-08-04", text:"납부서 및 신고서류 저장 / 검토표 납부세액 입력하기", done:true},
+  {id:184, date:"2026-08-04", text:"엽떡 한봄이 급여수정하기 _ 급여명세서 재공유", done:true},
+  {id:185, date:"2026-08-05", text:"Tax 파일 필요없는것 중복정리", done:true},
+  {id:186, date:"2026-08-05", text:"코넥트 택스봇 세팅 다시하기", done:true},
+  {id:187, date:"2026-08-05", text:"코넥트 위하고 전환", done:false},
+  {id:188, date:"2026-08-05", text:"나빌레라, 코넥트 급여 등 보완요청", done:true},
+  {id:189, date:"2026-08-05", text:"코넥트 주사업장총괄납부 포기신청결과 확인, 드라이브에 저장하기", done:true},
+  {id:190, date:"2026-08-05", text:"세무사랑 기장업체 26.1월~7월 전체 스크래핑하기", done:true},
+  {id:191, date:"2026-08-05", text:"노타 폴더 따로 만들기", done:false},
+  {id:192, date:"2026-08-06", text:"엘비케이파트너스 사업자등록증 정정신청(주소변경), → 결과확인하기 / 사업자등록증 재발급 후 대표 공유드리기", done:true},
+  {id:193, date:"2026-08-06", text:"코넥트 급여명세서 전달, 급여 마감하기 (김희석 대표 보수 확인하기) / 근로자 계약직여부 확인하기(근복)", done:true},
+  {id:194, date:"2026-08-06", text:"코넥트 위하고 변환 (최근 5개년)", done:false},
+  {id:195, date:"2026-08-06", text:"나빌레라 급여요청하기! 급여신고 막마해야됨!!!!", done:true},
+  {id:196, date:"2026-08-06", text:"지출결의서 클로드 외부연동 설정", done:true},
+  {id:197, date:"2026-08-06", text:"조민주 주임 휴직 연장 (기존 8.28 → 27.2.28)", done:true},
+  {id:198, date:"2026-08-06", text:"나우이엔지 급여입력 및 마감하기", done:true},
+  {id:199, date:"2026-08-06", text:"왓츠랩 급여입력 및 마감하기", done:true},
+  {id:200, date:"2026-08-06", text:"나빌레라 급여 입력", done:true},
+  {id:201, date:"2026-08-06", text:"나빌레라 조혜선 퇴사(권고사직) 신고 / 상실신고  /혜선 4대보험 정산반영, 소득세 반영, 연금 두루누리 익월 지원여부 확인", done:true},
+  {id:202, date:"2026-08-06", text:"엘비케이 기초정보 (택스봇, 세무사랑 변경해놓기)", done:true},
+  {id:203, date:"2026-08-07", text:"계약서 작성 예절", done:true},
+  {id:204, date:"2026-08-07", text:"조혜선 고용보험 정산내역 크로스체킹하기 (정산오기전 급여발송함) _ 환급10원 (40원 부과함 ㅠ 패스)/ 내역저장완료", done:true},
+  {id:205, date:"2026-08-07", text:"나우 조민주 휴직연장결과 확인하기 , 정수희 과장님께 안내하기", done:true},
+  {id:206, date:"2026-08-07", text:"나빌레라 신고 및 납부서 전달하기 / 납부세액없음 안내하기 / 신고서류 저장하기", done:true},
+  {id:207, date:"2026-08-07", text:"비앤피랩 급여 입력해두기 (세달에 한번 기타, 사업 주기로)", done:true},
+  {id:208, date:"2026-08-08", text:"코넥트 위하고 변환 (최근 5개년)", done:false},
+  {id:209, date:"2026-08-10", text:"원천세 미납 여부 확인 후 멘트발송하기 (엽떡, 나우, 청양)", done:true},
+  {id:210, date:"2026-08-10", text:"나우 이선문 취득신고 / 4대보험 일괄 & 위하고사원등록하기", done:true},
+  {id:211, date:"2026-08-10", text:"왓츠랩 백윤철 급여수정하기 / 재마감/ 원이행 검토표 작성", done:true},
+  {id:212, date:"2026-08-10", text:"5시 전에 납부여부 한번 더 확인하기", done:false},
+  {id:213, date:"2026-08-10", text:"클로드 마무리, 지출결의서 상신하기", done:true},
+  {id:214, date:"2026-08-11", text:"나우 이선문 취득신고 결과 확인하기 / 4대보험 일괄", done:true},
+  {id:215, date:"2026-08-11", text:"프린웍스산업 결산하기 (고정자산 체크)", done:false},
+  {id:216, date:"2026-08-11", text:"윤일규 취득취소 - 4대공단 ㅇ / 세무사랑 급여삭제, 사원삭제 , 재작성", done:true},
+  {id:217, date:"2026-08-11", text:"김희석 취득취소 - 건보ㅇ 연금 ㅇ", done:true},
+  {id:218, date:"2026-08-11", text:"왓츠랩 결산재무제표 시일확인 / 스크래핑 후 결산하기", done:true},
+  {id:219, date:"2026-08-11", text:"클로드 계정연동시키기 - 회사, 회계사님", done:true},
+  {id:220, date:"2026-08-11", text:"코넥트 -> 무보수확인서, 근로자 동의서 작성요청(이메일) 발송하기", done:true},
+  {id:221, date:"2026-08-11", text:"엽떡 건강보험 퇴사재정산 접수 (건보, 연금 문의 - 연금은 잘 접수함, 중도 사업장탈퇴 여부 상관없다고)", done:true},
+  {id:222, date:"2026-08-11", text:"제미나이 - 스프레드시트 작업시트 고정 열리기 처리", done:true},
+  {id:223, date:"2026-08-12", text:"엽떡 공단 통화 내용 다시 들어서 정리하기", done:false},
+  {id:224, date:"2026-08-12", text:"김희석(건보) 4대보험 취득취소 어제 반려됨/ 서류보완(무보수시작일, 재접수) /", done:false},
+  {id:225, date:"2026-08-12", text:"윤일규(건보,근복), 김희석(건보) 4대보험 취득취소 결과 확인하기", done:true},
+  {id:226, date:"2026-08-12", text:"원천세 검토표 메모에 윤일규, 김희석 해당 내용 정리하여 반영하기", done:true},
+  {id:227, date:"2026-08-12", text:"청양 화재보험 자료 메일온것 백업해두기", done:true},
+  {id:228, date:"2026-08-12", text:"왓츠랩 결산 /질의할것 정리 후 발송하기 /급여 정리하기", done:true},
+  {id:229, date:"2026-08-12", text:"엽떡 김지혜 4대보험 상실신고 (ㅇ)", done:true},
+  {id:230, date:"2026-08-12", text:"엽떡 이수지 4대보험 취득신고 ( 계약직) (ㅇ) /사원등록", done:true},
+  {id:231, date:"2026-08-13", text:"왓츠랩 결산- 회계사님컨펌 / 재무제표 발송 & 이메일발송", done:false},
+  {id:232, date:"2026-08-13", text:"(윤일규, 김희석 연금- 증명서발급시 미반영, 익일확인하기) +윤일규 고용 결과확인하기 (접수누락, 접수함)", done:true},
+  {id:233, date:"2026-08-13", text:"엽떡 김지혜(4대 모두완료), 이수지 상실신고(4대 모두 완료) 내역 확인", done:true},
+  {id:234, date:"2026-08-13", text:"회사 유투브 계정 설정, 폰 내부정리, 업데이트 / 보미매니저한테 계정 물어봄", done:true},
+  {id:235, date:"2026-08-13", text:"ez pdf 재다운로드", done:true},
+  {id:236, date:"2026-08-13", text:"윤일규 고용보험 취득취소접수( 이전에 안한듯;)", done:true},
+  {id:237, date:"2026-08-13", text:"(주)왓츠랩 상반기 4대보험 고지내역 요청하기 (노무사무소)", done:true},
+  {id:238, date:"2026-08-14", text:"리빙 급여 입력 & 마감 & 검토표 작성", done:false},
+  {id:239, date:"2026-08-14", text:"지급명세서 제출(전체)", done:false},
+  {id:240, date:"2026-08-14", text:"클로드 계속 업데이트하기", done:true},
+  {id:241, date:"2026-08-14", text:"윤일규 고용, 연금취득취소 결과 확인하기 -> 차장님께 전달하기", done:true},
+  {id:242, date:"2026-08-14", text:"4대보험 요율공제, 고지내역 공제회계처리방법 / 왓츠랩 결산 다시보기", done:false},
+  {id:243, date:"2026-08-14", text:"회계사님 회사 계정 공유 편집권한주기, 링크초대하기", done:false},
+  {id:244, date:"2026-08-18", text:"김희석 연금 취득취소 동작지사 전화 → 무보수 팩스발송 (오전중에 처리가능) 확인완료", done:true},
+  {id:245, date:"2026-08-18", text:"회계사님 회사 계정 공유 편집권한주기, 링크초대하기", done:true},
+  {id:246, date:"2026-08-18", text:"리빙 급여 입력 & 마감 & 검토표 작성", done:true},
+  {id:247, date:"2026-08-18", text:"지급명세서 제출(전체) / 접수증 저장하기", done:true},
+  {id:248, date:"2026-08-18", text:"코넥트 위하고 변환 (25년, 26년)", done:false},
+  {id:249, date:"2026-08-18", text:"클로드 작업 업데이트하기 (로그인 최종, 거래처관리 메뉴 신규 생성)", done:true},
+  {id:250, date:"2026-08-18", text:"유엘랩스(25.26) , 후즈랩 위하고 변환 (26)", done:false},
+  {id:251, date:"2026-08-19", text:"왓츠랩 결산자료보기", done:false},
+  {id:252, date:"2026-08-19", text:"결산 후딱후딱 잘하기", done:false},
+  {id:253, date:"2026-08-19", text:"노아 빠른조회 해보기", done:false},
+  {id:254, date:"2026-08-19", text:"신고현황 업데이트, 엑셀에 업로드한것들도 가능한지)", done:true},
+  {id:255, date:"2026-08-19", text:"엘비케이 8월부터 신고대리 전환 (거래처현황 업데이트) , 거래처 2개 신규수임", done:false},
+  {id:256, date:"2026-08-19", text:"위하고 변환 고객센터 문의하기 1688-6000", done:false},
+  {id:257, date:"2026-08-19", text:"재택일정 말씀드리기", done:true},
+  {id:258, date:"2026-08-20", text:"티스테이션, 케이지모빌리티 이관업체 세무사무소 연락하기 (케이지 회계사님이)", done:true},
+  {id:259, date:"2026-08-20", text:"왓츠랩 답변하기 (이메일, 수출관련) & 회계사님 컨텀, 굿세청 유선문의", done:true},
+  {id:260, date:"2026-08-20", text:"/ 입력한것들 다 맞는지 검증 요청하기", done:true},
+  {id:261, date:"2026-08-20", text:"엘비케이 8월부터 신고대리 전환 (거래처현황 업데이트)", done:true},
+  {id:262, date:"2026-08-20", text:"리빙 일용직 추가로 인한 지급명세서 재 제출하기 / 접수증 등 재 저장", done:true},
+  {id:263, date:"2026-08-20", text:"노타월 스톡옵션 문의 → 회계사님이 확인 후 회신예정", done:true},
+  {id:264, date:"2026-08-20", text:"클로드 계속 업데이트", done:true},
+  {id:265, date:"2026-08-21", text:"나우 8월 사업소득 입력하기", done:false},
+  {id:266, date:"2026-08-21", text:"티스테이션 세무사무실 연락하기 (인건비 근로소득, 반기신고)", done:true},
+  {id:267, date:"2026-08-21", text:"왓츠랩 결산자료보기", done:false},
+  {id:268, date:"2026-08-21", text:"결산 후딱후딱 잘하기", done:false},
+  {id:269, date:"2026-08-21", text:"노아 빠른조회 해보기", done:false},
+  {id:270, date:"2026-08-21", text:"아이디 비번 (청인꺼) 도 웹에 정리하기", done:true},
+  {id:271, date:"2026-08-21", text:"입력한것들 다시 확인하기(웹)", done:false},
+  {id:272, date:"2026-08-21", text:"코넥트 ( 25년 26년 귀속 확인하기) & 회사등록 확인하기", done:true},
+  {id:273, date:"2026-08-21", text:"케이지모빌리티 - 위하고 변환(자료실패,추후다시받기) &신규2개 폴더생성,", done:true},
+  {id:274, date:"2026-08-21", text:"법인/개인 주민세 관련해서 찾아보기", done:false},
+  {id:275, date:"2026-08-21", text:"노타 사업자 번호 찾기", done:true},
+  {id:276, date:"2026-08-21", text:"티스테이션 위하고 복구하기", done:false},
+  {id:277, date:"2026-08-24", text:"코넥트 변환 자료 데이터 매칭 하기. 인사자료 입력(+반기설정) / 스크래핑(7월까지) / 전표넘기기(회계,인사)", done:true},
+  {id:278, date:"2026-08-24", text:"기장거래처 사업자번호 등 다 맞는지 ID PW 입력하기", done:false},
+  {id:279, date:"2026-08-24", text:"티스테이션 위하고 복구하기(24~26)/웹에 목록만 추가하기", done:true},
+  {id:280, date:"2026-08-24", text:"나우 8월 사업소득 입력하기", done:true},
+  {id:281, date:"2026-08-24", text:"위하고 거래처 및 회사 관리자 권한 부여/ 잘못 등록된 거래처 삭제 등 정리하기", done:true},
+  {id:282, date:"2026-08-24", text:"후즈랩, 유엘랩스 부가세 신고서 작성해놓기", done:true},
+  {id:283, date:"2026-08-24", text:"프린웍스산업(개인), 제우(신고대리) , 루나팸 위하고 변환한기", done:false},
+  {id:284, date:"2026-08-24", text:"나우 7월까지 통장 넘기기", done:true},
+  {id:285, date:"2026-08-24", text:"세무사랑 기장업체 타사업장 (종소세때만 하는것) 거래처들 위하고로 변환하기 (2025년만) & 이효빈, 백윤철, 박배영", done:false},
+  {id:286, date:"2026-08-24", text:"티스테이션 _ 아직 수임동의 안되어있음(등록하면서 확인함)", done:true},
+  {id:287, date:"2026-08-24", text:"기장2개 조광덕세무사무소 이관자료 확인해서 사물함에 보관하기", done:true},
+  {id:288, date:"2026-08-24", text:"유앨랩스 수출입력 (매입매출유형 수정하는 방법 찾아보기)", done:false},
+  {id:289, date:"2026-08-25", text:"최선희 퇴직급여 수정신고 여부 체크하기 (지급월기준)", done:false},
+  {id:290, date:"2026-08-25", text:"제우/ 루나팸 변환하기", done:false},
+  {id:291, date:"2026-08-25", text:"유앨랩스 수출입력 (매입매출유형 수정하는 방법 찾아보기)", done:false},
+  {id:292, date:"2026-08-25", text:"티스테이션 수임해지 등 요청하기 (메일발송) 오전 09:59", done:true},
+  {id:293, date:"2026-08-25", text:"주민세 사업소분", done:false},
+  {id:294, date:"2026-08-25", text:"이관업체들 백업 비번 텍스트 문서로 기초자료에 저장해두기", done:false},
+  {id:295, date:"2026-08-25", text:"데이터 변환 완료된 거래처 세무사랑에 형광펜 표시하기", done:false},
+  {id:296, date:"2026-08-25", text:"엘비케이 기장료 미납안내", done:true},
+  {id:297, date:"2026-08-25", text:"제우 24년도 이전 복구 자료 위하고 복구/ 각 거래처마다 위하고 자료 있는 지 체크하기", done:false},
+  {id:298, date:"2026-08-25", text:"조광덕 세무사무소 케이지 인수증 팩스전달하기 (직인)", done:true},
+  {id:299, date:"2026-08-25", text:"케이지 23년~26년 위하고 파일 복구하기 / (둘다 인사자료, 신고서류 확인/업체폴더 만들어놓기)", done:true},
+  {id:300, date:"2026-08-25", text:"국세청 수임동의 등록, 택스봇 거래처 등록", done:true},
+  {id:301, date:"2026-08-25", text:"나우 회계처리 하는거 체크하기 (재평가)", done:false},
+  {id:302, date:"2026-08-25", text:"거래처 기초폴더양식 다시 수정해놓기 / 수임두곳 기초폴더 셋팅해두기", done:true},
+  {id:303, date:"2026-08-25", text:"나우 상반기 임시 재무상태표 전달드리기 (잉여금만 본다고) (건물, 토지 자산가액 크로스체크하기)", done:true},
+  {id:304, date:"2026-08-26", text:"국세청 수임동의  EDI 수임하기", done:false},
+  {id:305, date:"2026-08-26", text:"티스테이션 급여명세서 송부해주기", done:false},
+  {id:306, date:"2026-08-26", text:"제우코퍼레이션 25년, 26년 변환자료 검증하기 (세무사랑하고) / 빠른조회 가입요청하기", done:true},
+  {id:307, date:"2026-08-26", text:"티스,등 기초자료 관련 대표 휴대폰 번호 요청하기 & 수임동의", done:true},
+  {id:308, date:"2026-08-26", text:"왓츠랩 25.07~26.06 부가세 메타게이트전송, 결산부속명세서 메일 발송하기 / 대표에게 안내함(메일발송)", done:true},
+  {id:309, date:"2026-08-26", text:"나우, 제우 기초자료 필요한것들 요청하기", done:true},
+  {id:310, date:"2026-08-26", text:"루나팸 위하고 변환 작업하기", done:true},
+  {id:311, date:"2026-08-27", text:"제우 위하고 회사등록, 빠른조회 여부등 체크하기", done:false},
+  {id:312, date:"2026-08-27", text:"루나팸 계정 원장 등 맞추기 (매칭완료)", done:true},
+  {id:313, date:"2026-08-27", text:"국세청 수임동의 요청 /", done:true},
+  {id:314, date:"2026-08-27", text:"데이터 변환 완료된 거래처 세무사랑에 형광펜 표시하기", done:false},
+  {id:315, date:"2026-08-27", text:"이관업체들 백업 비번 텍스트 문서로 기초자료에 저장해두기", done:false},
+  {id:316, date:"2026-08-27", text:"나우 회계처리 하는거 체크하기 (재평가)", done:false},
+  {id:317, date:"2026-08-27", text:"키즈 백업 후 위하고 데이터 구성해놓기 (25.26 귀속)", done:true},
+  {id:318, date:"2026-08-27", text:"신규업체 세팅하기 (폴더 정리, 자료요청, 홈택스 수임동의)", done:true},
+  {id:319, date:"2026-08-27", text:"티스테이션 자료수령(종이), 인계증 팩스발송함", done:true},
+  {id:320, date:"2026-08-27", text:"택스봇 부재메시지 설정 및 테스트, 거래처 발송하기", done:true},
+  {id:321, date:"2026-08-27", text:"청인 전용 스트리밍 계정 요청하기 & 정수기 업그레이드", done:true},
+  {id:322, date:"2026-08-28", text:"휴가", done:false},
+  {id:323, date:"2026-08-28", text:"김연이 합계잔액시산표부터 맞춰보기 (2025년 )", done:false},
+  {id:324, date:"2026-08-28", text:"기초정보 데이터 팀 웹에 입력하기", done:false},
+  {id:325, date:"2026-08-28", text:"내꺼 클로드 구현하기", done:false},
+  {id:326, date:"2026-08-31", text:"8월 귀속 급여명세서 (급여고정인곳) 체크해서 발송하기", done:false},
+  {id:327, date:"2026-08-31", text:"EDI 수임하기 (티스, 속초) 건강ㅇ 연금ㅇ 근복 ㅇ", done:true},
+  {id:328, date:"2026-08-31", text:"최선희 퇴직급여 수정신고 여부 체크하기 (지급월기준)", done:false},
+  {id:329, date:"2026-08-31", text:"유앨랩스 수출입력 (매입매출유형 수정하는 방법 찾아보기)", done:false},
+  {id:330, date:"2026-08-31", text:"주민세 사업소분 마감일 안내", done:false},
+  {id:331, date:"2026-08-31", text:"제우 빠른조회 및 보완서류 요청 확인하기", done:false},
+  {id:332, date:"2026-08-31", text:"왓츠랩 8월 기타소득 자료 입력하기", done:false},
+  {id:333, date:"2026-08-31", text:"왓츠랩 부가세 분기별자료 요청 건 메일 회신하기", done:true},
+  {id:334, date:"2026-08-31", text:"와이인 신규입사자 확인하기", done:false},
+  {id:335, date:"2026-08-31", text:"비앤피랩 연도별 근로자 명부 메일 회신하기", done:true},
+  {id:336, date:"2026-08-31", text:"9월 스케줄표 업로드하기", done:true},
+  {id:337, date:"2026-08-31", text:"서버 pc 재부팅 부탁하기 (소영, 지수)", done:true},
+  {id:338, date:"2026-09-01", text:"티스테이션 수임동의 등 체크하기_ 기초서류 및 수임동의 요청하기", done:true},
+  {id:339, date:"2026-09-01", text:"티스테이션 급여관련 대표 통화 (9월부터 기본급에 맞춰가기로)", done:true},
+  {id:340, date:"2026-09-01", text:"급여명세서 발송 (고정된곳, 신규 등)", done:true},
+  {id:341, date:"2026-09-01", text:"제우 빠른조회 및 보완서류 요청 확인하기", done:true},
+  {id:342, date:"2026-09-01", text:"왓츠랩 8월 기타소득 자료 입력하기", done:true},
+  {id:343, date:"2026-09-01", text:"티스테이션 기초자료 체크하기", done:true},
+  {id:344, date:"2026-09-01", text:"와이인 신규입사자 확인하기&취득신고&급여발송 및 마감", done:true},
+  {id:345, date:"2026-09-01", text:"케이지, 티스테 _ EDI 수임여부 확인하기", done:true},
+  {id:346, date:"2026-09-02", text:"와이인_임다혜 김하선 고용취득결과 확인하기 / 확인완료", done:true},
+  {id:347, date:"2026-09-02", text:"위하고 변환 작업 이어서 하기 (키즈,우영,엘비, 세성)", done:true},
+  {id:348, date:"2026-09-02", text:"유앨랩스 수출입력 (매입매출유형 수정하는 방법 찾아보기)", done:false},
+  {id:349, date:"2026-09-02", text:"최선희 퇴직급여 수정신고 여부 체크하기 (지급월기준)", done:false},
+  {id:350, date:"2026-09-02", text:"나우+제우 기초자료 재요청,", done:false},
+  {id:351, date:"2026-09-02", text:"티스테이션 급여 고민하기 /안내문 공유, 퇴직연금관련하여 안내", done:true},
+  {id:352, date:"2026-09-02", text:"속초, 티스테이션 컴토표 및 현황추가/ 컴토표 작성", done:false},
+  {id:353, date:"2026-09-02", text:"급여 일괄신고 (이상없는곳)", done:false},
+  {id:354, date:"2026-09-02", text:"클로드 수정 반영/ 서버컴 재부팅하기", done:true},
+  {id:355, date:"2026-09-03", text:"키즈아인 급여입력 (사업소득)", done:true},
+  {id:356, date:"2026-09-03", text:"위하고 세무사랑 거래처 25~26 전체 변환 완료함", done:true},
+  {id:357, date:"2026-09-03", text:"급여신고하기 (이상없는곳)", done:false},
+  {id:358, date:"2026-09-03", text:"티스테이션 급여 관련하여 확정하기", done:false},
+  {id:359, date:"2026-09-03", text:"- 검토표 클로드 작업하기", done:true},
+  {id:360, date:"2026-09-04", text:"티스테이션 급여 관련하여 확정하기 (8월 그대로, 9월 부터 근로계약서 쓰는걸로) /급여명세서 발송드리기", done:true},
+  {id:361, date:"2026-09-04", text:"티스테이션 사업용카드 2개 등록", done:true},
+  {id:362, date:"2026-09-04", text:"급여 전체 신고 / 납부서발송/ 납부서 저장", done:true},
+  {id:363, date:"2026-09-04", text:"위하고 변환거래처 정보 매칭", done:false},
+  {id:364, date:"2026-09-04", text:"부가세 검토표 업로드하기", done:true},
+  {id:365, date:"2026-09-04", text:"클로드 원천세 컴토표 작성 업뎃.", done:true},
+  {id:366, date:"2026-09-04", text:"기장거래처 정보 업뎃하기", done:false},
+  {id:367, date:"2026-09-04", text:"필요한 부분 전체 엑셀? 데이터 다운로드 필요", done:true},
+  {id:368, date:"2026-09-07", text:"일용근로내용확인신고서 제출하기 (엽떡) / 접수증 저장", done:true},
+  {id:369, date:"2026-09-07", text:"최선희 퇴직급여 수정신고 여부 체크하기 (지급월기준)", done:false},
+  {id:370, date:"2026-09-07", text:"나우+제우 기초자료 재요청,", done:false},
+  {id:371, date:"2026-09-07", text:"티스테이션 사업용카드 등록완료되었는지 확인하기  (담달에 확인하기)", done:true},
+  {id:372, date:"2026-09-07", text:"세성, 티스테이션 경조사비 저장하기", done:true},
+  {id:373, date:"2026-09-07", text:"위하고 변환작업( 태하~ )", done:true},
+  {id:374, date:"2026-09-07", text:"웹 기장거래처에 폴더 다 연결시켜놓기(링크저장)", done:true},
+  {id:375, date:"2026-09-07", text:"나우 급여 입력하기", done:false},
+  {id:376, date:"2026-09-07", text:"나빌레라 급여 재문의 하기 /해외공연관련 내용 11월 귀속폴더에 백업해놓기", done:true},
+  {id:377, date:"2026-09-08", text:"법인세 종소세 검토표 (손익계산서) 출력 작업", done:false},
+  {id:378, date:"2026-09-08", text:"나우 급여 작업 마감 후 공유하기 / 새 급여양식 만들어서 공유드리기", done:true},
+  {id:379, date:"2026-09-08", text:"나우+제우 기초자료 재요청,", done:true},
+  {id:380, date:"2026-09-08", text:"지출결의서 결재올리기 / 9월 식대 사용분까지 입력해두기", done:false},
+  {id:381, date:"2026-09-08", text:"김연이 부가세 신고서 마감 하고 끝내기( 임대공급가액명세서 재계약시)", done:true},
+  {id:382, date:"2026-09-08", text:"왓츠랩 급여입력 /검토표 작성/ 마감", done:true},
+  {id:383, date:"2026-09-08", text:"나우+제우 기초자료 재요청,  / 폴더에 정리해놓기", done:true},
+  {id:384, date:"2026-09-09", text:"개인법인 기초서류 관련하여 안내문 클로드화 하기", done:false},
+  {id:385, date:"2026-09-09", text:"위하고 변환 작업", done:true},
+  {id:386, date:"2026-09-09", text:"티스테이션, 케이지 회사등록 및 인증서 등 최종 정리하기", done:true},
+  {id:387, date:"2026-09-09", text:"리빙 급여 입력하기", done:false},
+  {id:388, date:"2026-09-09", text:"우영 25년도 마감 이월부터 하기", done:false},
+  {id:389, date:"2026-09-10", text:"원천세 미납 확인 및 납기일 안내 (와이인, 나우)", done:true},
+  {id:390, date:"2026-09-10", text:"지급명세서 제출하기", done:false},
+  {id:391, date:"2026-09-10", text:"위하고 변환 이어서", done:true},
+  {id:392, date:"2026-09-10", text:"개인법인 기초서류 관련하여 안내문 클로드화 하기", done:false},
+  {id:393, date:"2026-09-10", text:"리빙 급여 입력하기", done:false},
+  {id:394, date:"2026-09-10", text:"우영 25년도 마감 이월부터 하기", done:true},
+  {id:395, date:"2026-09-10", text:"지출결의서 올리기", done:true},
+  {id:396, date:"2026-09-11", text:"리빙 급여 입력하기", done:false},
+  {id:397, date:"2026-09-11", text:"지급명세서 제출하기", done:false},
+  {id:398, date:"2026-09-11", text:"개인법인 기초서류 관련하여 안내문 클로드화 하기", done:true},
+  {id:399, date:"2026-09-11", text:"나우 조민주 급여자료 아마란스 작업해서 메일 드리기", done:true},
+  {id:400, date:"2026-09-14", text:"지급명세서 제출하기", done:false},
+  {id:401, date:"2026-09-14", text:"리빙급여입력하기", done:true},
+  {id:402, date:"2026-09-14", text:"세성 여신금융 아이디 비번 등록하기 - 오류", done:true},
+  {id:403, date:"2026-09-15", text:"리빙 일용급여 작성 후 지급명세서 전체 제출하기", done:true},
+  {id:404, date:"2026-09-15", text:"세성 여신금융 아이디 비번 등록하기", done:true},
+  {id:405, date:"2026-09-15", text:"위하고 작업 (키즈 변환, 26년도 손익 이상함/ 수기로 조정해야될듯) _ 6월 3일 부터 다시보기", done:true},
+  {id:406, date:"2026-09-15", text:"비앤피랩 근로소득 입력 후 마감하기", done:true},
+  {id:407, date:"2026-09-15", text:"지급명세서 접수증, 신고서 저장하기", done:true},
+  {id:408, date:"2026-09-15", text:"키즈아인 2025년도 귀속분 다시 위하고 변환(백업용으로만 두기),", done:true},
+  {id:409, date:"2026-09-16", text:"키즈 -  매입매출, 카드 관련 중복 체크 해서 전표넘기기  / 사업전비용(25~26.06.14)", done:true},
+  {id:410, date:"2026-09-16", text:"나우 서류 하나은행에 발송하기", done:true},
+  {id:411, date:"2026-09-16", text:"와이인 급여수정신고 답변", done:true},
+  {id:412, date:"2026-09-16", text:"위하고 변환 작업 게속", done:true},
+  {id:413, date:"2026-09-16", text:"휴가 결재 올리기", done:true},
+  {id:414, date:"2026-09-16", text:"클로드 웹 업그레이드 계속", done:true},
+  {id:415, date:"2026-09-17", text:"키즈 자산,비용, 차입금 인식", done:false},
+  {id:416, date:"2026-09-17", text:"와이인, 엽떡, 변환 작업", done:true},
+  {id:417, date:"2026-09-17", text:"클로드 업데이트", done:true},
+  {id:418, date:"2026-09-20", text:"와이인 부가세 신고서 변환 마무리하기", done:true},
+  {id:419, date:"2026-09-20", text:"비앤피랩, 노아 변환작업", done:false},
+  {id:420, date:"2026-09-20", text:"키즈 자산, 비용, 차입금", done:false},
+  {id:421, date:"2026-09-20", text:"웹 검토표 등 입력해놓기", done:false},
+  {id:422, date:"2026-09-20", text:"위하고 문의 (통장수집, 인증서)", done:true},
+  {id:423, date:"2026-09-20", text:"클로드,", done:true},
+  {id:424, date:"2026-09-20", text:"나우 9월 사업소득 내역 저장해두기", done:true},
+  {id:425, date:"2026-09-21", text:"노아 변환 _ 신고서까지 끝", done:true},
+  {id:426, date:"2026-09-21", text:"비앤피랩, 노아 변환작업", done:true},
+  {id:427, date:"2026-09-21", text:"세성 경조사비 저장해두기 & 금액확인", done:true},
+  {id:428, date:"2026-09-21", text:"웹에 거래처 기본정보들 저장해두기", done:false},
+  {id:429, date:"2026-09-21", text:"클로드 계속", done:true},
+  {id:430, date:"2026-09-21", text:"나우 최선희 퇴사일자 및 수정 신고 관련 체크하기", done:false},
+  {id:431, date:"2026-09-21", text:"내꺼 업무 리스트 관리, 진행 이어서 (클로드)", done:false},
+  {id:432, date:"2026-09-21", text:"나우 통장자동수집 관련 위하고 답변 확인 후 내용 전달하기 (인증서 로그인과 무관)", done:true},
+  {id:433, date:"2026-09-21", text:"비앤피랩 고정자산 미등록항목  체크 (회계사님하고) _ 비품, 시설장치 _ 의제감가상각처리 or 경정청구 검토", done:true},
+  {id:434, date:"2026-09-22", text:"리빙, 나빌레라 변환작업", done:false},
+  {id:435, date:"2026-09-22", text:"위하고 변환 작업 끈낸 후 일괄 수집하기 (26년도)", done:false},
+  {id:436, date:"2026-09-22", text:"급여있는곳 인사정보 반영하기", done:false},
+  {id:437, date:"2026-09-22", text:"키즈 자산, 비용, 차입금", done:false},
+  {id:438, date:"2026-09-22", text:"웹에 거래처 기본정보들 저장해두기", done:false},
+  {id:439, date:"2026-09-22", text:"나우 최선희 퇴사일자 및 수정 신고 관련 체크하기", done:false},
+  {id:440, date:"2026-09-22", text:"내꺼 업무 리스트 관리, 진행 이어서 (클로드)", done:true},
+  {id:441, date:"2026-09-22", text:"나우 9월 사업소득 내역 입력,마감하기", done:false},
+  {id:442, date:"2026-09-22", text:"코인원 수임계약서 발송ㄹ하기", done:true},
+  {id:443, date:"2026-09-23", text:"노아 빠른조회 요청하기", done:false},
+  {id:444, date:"2026-09-23", text:"인사자료 옮기기", done:false},
+  {id:445, date:"2026-09-23", text:"노아 여신금융등록 (계속오류)", done:false},
+  {id:446, date:"2026-09-23", text:"비앤피랩 고정자산 기초 분개 해놓기", done:false},
+  {id:447, date:"2026-09-23", text:"키즈 자산, 비용, 차입금", done:false},
+  {id:448, date:"2026-09-23", text:"개인경비 지출품의서 다우오피스꺼 백업해두기", done:true},
+  {id:449, date:"2026-09-23", text:"리빙 부가세 신고서 위하고 마감하기", done:true},
+  {id:450, date:"2026-09-28", text:"리빙 이도현 일용급여명세서 수정 후 지급명세서 수정제출하기 (주민번호, 정상근무 확인하기)", done:false},
+  {id:451, date:"2026-09-28", text:"노아 여신금융등록 (계속오류)", done:false},
+  {id:452, date:"2026-09-28", text:"노아 빠른조회 요청하기", done:false},
+  {id:453, date:"2026-09-28", text:"나우 9월 사업소득 내역 입력,마감하기", done:false},
+  {id:454, date:"2026-09-28", text:"나우 최선희 퇴사일자 및 수정 신고 관련 체크하기", done:false},
+  {id:455, date:"2026-09-28", text:"위하고 변환 작업 끈낸 후 일괄 수집하기 (26년도)", done:false},
+  {id:456, date:"2026-09-28", text:"나빌레라 전기분 손익계산서부터 입력하기", done:false},
 ];
-let nextTaskId = 4;
+let nextTaskId = 457;
+let worklistChecklist = {
+  "7월": [
+    {text:"결산/ 증권거래세 신고 대상 체크", done:false},
+    {text:"부가세 신고 안내문 작업", done:false},
+    {text:"나우 고정자산& 법인세 신고서 업로드하기", done:false},
+    {text:"업무 모르는것 메모한거 한번 정리하기", done:false},
+    {text:"거래처 리스트 정리 (기초세팅, 기초자료 분할)", done:false},
+    {text:"공제감면, 주요사항 등 정리하기 (통합고용 다시 정리)", done:false},
+    {text:"태하 보수총액신고 (결손)_ 팩스 접수", done:false},
+    {text:"거래처폴더양식 및 거래처별 폴더 제목 정리", done:false},
+    {text:"세무사랑 사원코드 정리방법 찾아보기", done:false},
+  ],
+  "8월": [
+    {text:"나우 고정자산& 법인세 신고서 업로드하기 /프린웍스 고정자산 정리 컨펌", done:false},
+    {text:"업무 모르는것 메모한거 한번 정리하기", done:false},
+    {text:"공제감면, 주요사항 등 정리하기 (통합고용 다시 정리)", done:false},
+    {text:"거래처폴더양식 및 거래처별 폴더 제목 정리", done:false},
+    {text:"세무사랑 사원코드 정리방법 찾아보기", done:false},
+    {text:"비즈플레이 기타수단 신용카드 중복인지 체크하기", done:false},
+    {text:"나우- 급여양식 정리해서 다시 드리기", done:false},
+    {text:"코넥트위하고 전환하기 / 사업자 단위과세(총괄납부주)확인 .택스봇 세팅", done:false},
+    {text:"기장현황, 매뉴얼 지침 등 필요한 것들 정리하기  (클로드, 스프레드시트) / 거래처 폴더양식도 수정", done:false},
+  ],
+  "9월": [
+    {text:"나우, 프린웍스 고정자산 정리", done:false},
+    {text:"왓츠랩 주발초 설명드리기", done:false},
+    {text:"4대보험 요율공제, 고지내역 공제회계처리방법", done:false},
+    {text:"전체거래처 위하고 변환", done:false},
+    {text:"결산!", done:false},
+    {text:"클로드 작업", done:false},
+    {text:"나우나우 결산", done:false},
+    {text:"위하고 인사 자료 옮기기", done:false},
+  ],
+};
+
+let worklistSchedule = {
+  "7월": ["7/10 반기사업장 급여신고", "7/31 근로소득 상반기 간이지급명세서 / 매월제출 지급명세서 check", "7/27 부가가치세 확정신고 및 납부", "후즈랩 홀딩스 대표 별도 계정 업데이트/ 기장계약서 및 자료 이쪽으로"],
+  "8월": ["증권거래세 신고", "법인세 중간예납", "조건부 인수계약 * 등 공부하기", "법인,개인 주민세 관련"],
+  "9월": ["부가세 예정고지대상, 예정신고 리스트 체크필요"],
+};
 
 const _todayForCal = new Date(todayStr());
 let calYear = _todayForCal.getFullYear();
@@ -924,27 +1437,95 @@ function renderHome(){
   `;
 }
 
+function toggleWorklistCheck(month, idx){
+  const item = worklistChecklist[month] && worklistChecklist[month][idx];
+  if(item) item.done = !item.done;
+  renderWorklist();
+}
+
+function scrollToWorklistDate(dateStr){
+  const container = document.getElementById('worklistAgenda');
+  if(!container || !dateStr) return;
+  let target = document.getElementById('wl-day-' + dateStr);
+  if(!target){
+    const days = Array.from(container.querySelectorAll('.wl-day'));
+    target = days.find(d => d.id.replace('wl-day-','') >= dateStr) || days[days.length - 1];
+  }
+  if(target) target.scrollIntoView({behavior:'smooth', block:'start'});
+}
+function jumpToWorklistDate(){
+  const val = document.getElementById('worklistJumpDate').value;
+  scrollToWorklistDate(val);
+}
+function jumpToWorklistToday(){ scrollToWorklistDate(todayStr()); }
+
+const WL_DOW = ['일','월','화','수','목','금','토'];
+function worklistDayLabel(dateStr){
+  const d = new Date(dateStr);
+  return `${dateStr} (${WL_DOW[d.getDay()]})`;
+}
+
 function renderWorklist(){
   const el = document.getElementById('tab-worklist');
-  const sorted = [...tasks].sort((a,b) => a.date.localeCompare(b.date));
+  const months = Object.keys(worklistChecklist);
+
+  const refSections = months.map(m => `
+    <div class="card">
+      <h2>${m} 체크리스트</h2>
+      <div class="desc">그 달에 반복적으로 챙겨야 하는 항목이에요. 특정 날짜에 매이지 않아요.</div>
+      <ul class="task-list">
+        ${(worklistChecklist[m] || []).map((item, idx) => `
+          <li class="${item.done ? 'done' : ''}">
+            <input type="checkbox" ${item.done ? 'checked' : ''} onchange="toggleWorklistCheck('${m}', ${idx})">
+            <span class="task-text">${item.text}</span>
+          </li>`).join('')}
+      </ul>
+      ${(worklistSchedule[m] || []).length ? `
+        <div class="desc" style="margin-top:14px; margin-bottom:6px;">주요 세무일정 (참고용)</div>
+        <ul class="deadline-list">
+          ${(worklistSchedule[m] || []).map(s => `<li><span class="left">${s}</span></li>`).join('')}
+        </ul>` : ''}
+    </div>
+  `).join('');
+
+  const sorted = [...tasks].sort((a, b) => a.date.localeCompare(b.date));
+  const byDate = {};
+  sorted.forEach(t => { (byDate[t.date] = byDate[t.date] || []).push(t); });
+  const dateKeys = Object.keys(byDate).sort();
+  const todayS = todayStr();
+
+  const agenda = dateKeys.map(date => `
+    <div class="wl-day" id="wl-day-${date}">
+      <div class="wl-day-head ${date === todayS ? 'today' : ''}">${worklistDayLabel(date)}</div>
+      <ul class="task-list">
+        ${byDate[date].map(t => `
+          <li class="${t.done ? 'done' : ''}">
+            <input type="checkbox" ${t.done ? 'checked' : ''} onchange="toggleTask(${t.id})">
+            <span class="task-text">${t.text}</span>
+            <button class="btn ghost xs" onclick="deleteTask(${t.id})">삭제</button>
+          </li>`).join('')}
+      </ul>
+    </div>
+  `).join('');
 
   el.innerHTML = `
+    ${refSections}
     <div class="card">
+      <h2>날짜별 할 일</h2>
+      <div class="desc">스크롤로 날짜를 계속 이어서 볼 수 있고, 특정 날짜로 바로 이동할 수도 있어요.</div>
       <div class="toolbar">
-        <input type="date" id="newTaskDate" value="${todayStr()}">
+        <input type="date" id="newTaskDate" value="${todayS}">
         <input type="text" id="newTaskText" placeholder="할 일을 입력하세요" style="flex:1; min-width:200px;">
         <button class="btn primary" onclick="addTask()">추가</button>
       </div>
-      ${sorted.length ? `
-        <ul class="task-list">
-          ${sorted.map(t => `
-            <li class="${t.done?'done':''}">
-              <input type="checkbox" ${t.done?'checked':''} onchange="toggleTask(${t.id})">
-              <span class="task-date ${dueClass(t.date)}">${t.date}</span>
-              <span class="task-text">${t.text}</span>
-              <button class="btn ghost" onclick="deleteTask(${t.id})">삭제</button>
-            </li>`).join('')}
-        </ul>` : `<div class="empty">등록된 할 일이 없습니다.</div>`}
+      <div class="toolbar">
+        <input type="date" id="worklistJumpDate" value="${todayS}">
+        <button class="btn" onclick="jumpToWorklistDate()">이 날짜로 이동</button>
+        <button class="btn ghost" onclick="jumpToWorklistToday()">오늘로 이동</button>
+      </div>
+      <div class="wl-agenda" id="worklistAgenda">
+        ${dateKeys.length ? agenda : `<div class="empty">등록된 할 일이 없습니다.</div>`}
+      </div>
     </div>
   `;
 }
@@ -1411,6 +1992,7 @@ const GOOGLE_DATA_KEYS = [
   'vatPeriods','payMonths','corpYears','indivYears',
   'vatDue','payDue','corpDue','indivDue',
   'nextClientId','nextTaskId',
+  'worklistChecklist','worklistSchedule',
 ];
 
 function collectGoogleSnapshot(){
@@ -1419,6 +2001,7 @@ function collectGoogleSnapshot(){
     vatPeriods, payMonths, corpYears, indivYears,
     vatDue, payDue, corpDue, indivDue,
     nextClientId, nextTaskId,
+    worklistChecklist, worklistSchedule,
   };
 }
 
@@ -1450,6 +2033,8 @@ async function loadFromGoogleSheet(){
     if(map.indivDue)      indivDue     = JSON.parse(map.indivDue);
     if(map.nextClientId)  nextClientId = JSON.parse(map.nextClientId);
     if(map.nextTaskId)    nextTaskId   = JSON.parse(map.nextTaskId);
+    if(map.worklistChecklist) worklistChecklist = JSON.parse(map.worklistChecklist);
+    if(map.worklistSchedule)  worklistSchedule  = JSON.parse(map.worklistSchedule);
   } catch(e){
     console.error('시트 데이터 파싱 실패', e);
   }
@@ -1620,62 +2205,108 @@ async function importClientsFromMaster(){
   return imported.length;
 }
 
-async function importWorklistFromMaster(){
+// "Work List" 형식 탭은 이름이 아니라 A1 셀 내용("Work List")으로 찾는다. 실제 마스터 시트는
+// 탭 이름이 "Work List"가 아니라 달마다 W7·W8·W9처럼 늘어나는 구조라서, 이름으로 찾으면 계속
+// 못 찾게 됨. A1로 식별하면 다음 달에 탭이 하나 더 생겨도(W10 등) 자동으로 같이 가져와진다.
+// 각 탭에서 상단 고정 체크리스트(Check·주요세무일정)와, 날짜별 할 일을 모두 가져온다.
+async function findWorkListTabs(){
   const titles = await getMasterSheetTitles();
-  const title = titles.find(t => t.trim() === 'Work List') || titles.find(t => t.includes('Work List'));
-  if(!title){ console.warn('Work List 탭을 찾지 못했습니다.'); return 0; }
+  const found = [];
+  for(const title of titles){
+    try{
+      const res = await gapi.client.sheets.spreadsheets.values.get({
+        spreadsheetId: MASTER_SHEET_ID,
+        range: `'${title}'!A1`,
+      });
+      const v = res.result.values && res.result.values[0] && res.result.values[0][0];
+      if(v && v.toString().trim() === 'Work List') found.push(title);
+    }catch(e){ /* 열람 권한이 없거나 오류가 난 탭은 건너뜀 */ }
+  }
+  return found;
+}
 
-  const res = await gapi.client.sheets.spreadsheets.get({
-    spreadsheetId: MASTER_SHEET_ID,
-    ranges: [`'${title}'!A1:F4000`],
-    fields: 'sheets(merges,data.rowData.values.formattedValue)',
-  });
-  const sheet = (res.result.sheets || [])[0];
-  if(!sheet) return 0;
-  const rowData = (sheet.data && sheet.data[0] && sheet.data[0].rowData) || [];
-  const merges = sheet.merges || [];
+async function importWorklistFromMaster(){
+  const tabTitles = await findWorkListTabs();
+  if(!tabTitles.length){ console.warn('Work List 형식의 탭을 찾지 못했습니다.'); return { taskCount: 0, checklistMonths: 0 }; }
 
   const dateRe = /(\d{2,4})년\s*(\d{1,2})월\s*(\d{1,2})일/;
-  const cellText = (ri, ci) => {
-    const row = rowData[ri];
-    if(!row || !row.values || !row.values[ci]) return '';
-    return (row.values[ci].formattedValue || '').toString().trim();
-  };
+  const importedTasks = [];
+  const newChecklist = {};
+  const newSchedule = {};
 
-  const dateHeaders = merges
-    .filter(m => m.startColumnIndex === 0 && (m.endColumnIndex - m.startColumnIndex) >= 2)
-    .map(m => ({ merge: m, text: cellText(m.startRowIndex, 0) }))
-    .filter(h => dateRe.test(h.text))
-    .sort((a, b) => a.merge.startRowIndex - b.merge.startRowIndex);
+  for(const title of tabTitles){
+    const res = await gapi.client.sheets.spreadsheets.get({
+      spreadsheetId: MASTER_SHEET_ID,
+      ranges: [`'${title}'!A1:F4000`],
+      fields: 'sheets(merges,data.rowData.values.formattedValue)',
+    });
+    const sheet = (res.result.sheets || [])[0];
+    if(!sheet) continue;
+    const rowData = (sheet.data && sheet.data[0] && sheet.data[0].rowData) || [];
+    const merges = sheet.merges || [];
+    const cellText = (ri, ci) => {
+      const row = rowData[ri];
+      if(!row || !row.values || !row.values[ci]) return '';
+      return (row.values[ci].formattedValue || '').toString().trim();
+    };
 
-  const imported = [];
-  dateHeaders.forEach((h, idx) => {
-    const m = dateRe.exec(h.text);
-    let year = parseInt(m[1], 10);
-    if(year < 100) year += 2000;
-    const mm = pad2(parseInt(m[2], 10));
-    const dd = pad2(parseInt(m[3], 10));
-    const dateStr = `${year}-${mm}-${dd}`;
-
-    const startRow = h.merge.endRowIndex;
-    const endRow = idx + 1 < dateHeaders.length ? dateHeaders[idx + 1].merge.startRowIndex : rowData.length;
-    for(let ri = startRow; ri < endRow; ri++){
-      const check = cellText(ri, 0);
-      const text = cellText(ri, 1);
-      if(!text) continue;
-      if(check !== 'TRUE' && check !== 'FALSE') continue;
-      imported.push({
-        id: nextTaskId++,
-        date: dateStr,
-        text,
-        done: check === 'TRUE',
-        source: 'master',
-      });
+    // 상단 고정 체크리스트(4~12행: B열)와 주요 세무일정(4~12행: E열)
+    const checklist = [];
+    const schedule = [];
+    for(let ri = 3; ri <= 11; ri++){
+      const b = cellText(ri, 1);
+      const e = cellText(ri, 4);
+      if(b) checklist.push(b);
+      if(e) schedule.push(e);
     }
-  });
 
-  tasks = tasks.filter(t => t.source !== 'master').concat(imported);
-  return imported.length;
+    const dateHeaders = merges
+      .filter(m => m.startColumnIndex === 0 && (m.endColumnIndex - m.startColumnIndex) >= 2)
+      .map(m => ({ merge: m, text: cellText(m.startRowIndex, 0) }))
+      .filter(h => dateRe.test(h.text))
+      .sort((a, b) => a.merge.startRowIndex - b.merge.startRowIndex);
+
+    const dayTasks = [];
+    const monthCounts = {};
+    dateHeaders.forEach((h, idx) => {
+      const m = dateRe.exec(h.text);
+      let year = parseInt(m[1], 10);
+      if(year < 100) year += 2000;
+      const mo = parseInt(m[2], 10);
+      const mm = pad2(mo);
+      const dd = pad2(parseInt(m[3], 10));
+      const dateStr = `${year}-${mm}-${dd}`;
+      monthCounts[mo] = (monthCounts[mo] || 0) + 1;
+
+      const startRow = h.merge.endRowIndex;
+      const endRow = idx + 1 < dateHeaders.length ? dateHeaders[idx + 1].merge.startRowIndex : rowData.length;
+      for(let ri = startRow; ri < endRow; ri++){
+        const check = cellText(ri, 0);
+        const text = cellText(ri, 1);
+        if(!text) continue;
+        if(check !== 'TRUE' && check !== 'FALSE') continue;
+        dayTasks.push({ date: dateStr, text, done: check === 'TRUE' });
+      }
+    });
+
+    // 탭의 실제 월은 A2에 적힌 라벨보다, 날짜 항목 중 가장 많이 나온 월을 더 신뢰한다.
+    // (예: 어떤 탭은 A2가 실수로 다른 달로 적혀 있어도 실제 날짜들은 그 탭의 진짜 달인 경우가 있었음)
+    let monthLabel = null, bestCount = -1;
+    Object.entries(monthCounts).forEach(([mo, cnt]) => {
+      if(cnt > bestCount){ bestCount = cnt; monthLabel = `${parseInt(mo, 10)}월`; }
+    });
+    if(!monthLabel) monthLabel = cellText(1, 0) || title;
+
+    if(checklist.length) newChecklist[monthLabel] = checklist.map(text => ({ text, done: false }));
+    if(schedule.length) newSchedule[monthLabel] = schedule;
+    dayTasks.forEach(t => importedTasks.push({ id: nextTaskId++, date: t.date, text: t.text, done: t.done, source: 'master' }));
+  }
+
+  tasks = tasks.filter(t => t.source !== 'master').concat(importedTasks);
+  worklistChecklist = Object.assign({}, worklistChecklist, newChecklist);
+  worklistSchedule = Object.assign({}, worklistSchedule, newSchedule);
+
+  return { taskCount: importedTasks.length, checklistMonths: Object.keys(newChecklist).length };
 }
 
 async function importClientsOnlyFromMaster(){
@@ -1701,12 +2332,12 @@ async function importFromMasterSheet(){
   if(!ok) return;
   setMasterSyncStatus('마스터 시트에서 가져오는 중...');
   try {
-    const [clientCount, taskCount] = [
+    const [clientCount, worklistResult] = [
       await importClientsFromMaster(),
       await importWorklistFromMaster(),
     ];
     const t = new Date();
-    setMasterSyncStatus(`${pad2(t.getHours())}:${pad2(t.getMinutes())} 기준 · 거래처 ${clientCount}건, 할 일 ${taskCount}건 가져옴`);
+    setMasterSyncStatus(`${pad2(t.getHours())}:${pad2(t.getMinutes())} 기준 · 거래처 ${clientCount}건, 할 일 ${worklistResult.taskCount}건, 체크리스트 ${worklistResult.checklistMonths}개월분 가져옴`);
   } catch(e){
     console.error(e);
     const msg = (e && e.result && e.result.error && e.result.error.message) || e.message || '알 수 없는 오류';
@@ -1821,6 +2452,7 @@ function resetAllData(){
   clients = [];
   tasks = [];
   vatData = {}; payData = {}; corpData = {}; indivData = {};
+  worklistChecklist = {}; worklistSchedule = {};
   settings.displayName = '';
   settings.soonDays = 7;
   renderNav();
