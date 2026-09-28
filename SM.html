@@ -768,9 +768,9 @@
   .notice-sched-label{ color:var(--muted); }
   .notice-sched-chip{ background:#f7f1f4; color:var(--text); border:1px solid var(--border); }
 
-  /* 홈 달력: 화면 높이에 맞춰 칸을 크게 (최소 150px) */
-  .cal-grid{ grid-auto-rows:minmax(max(150px, calc((100vh - 300px) / 5)), auto); }
-  .cal-day{ min-height:max(150px, calc((100vh - 300px) / 5)); }
+  /* 홈 달력: 스크롤 없이 한 화면에 들어오도록 화면 높이에 맞춤 (칸 최소 90px) */
+  .cal-grid{ grid-auto-rows:minmax(max(90px, calc((100vh - 360px) / 6)), auto); }
+  .cal-day{ min-height:max(90px, calc((100vh - 360px) / 6)); }
 
   /* 거래처 관리 아이콘 */
   .cl-actions{ text-align:center; white-space:nowrap; }
