@@ -768,6 +768,28 @@
   .notice-sched-label{ color:var(--muted); }
   .notice-sched-chip{ background:#f7f1f4; color:var(--text); border:1px solid var(--border); }
 
+  /* 홈 달력: 화면 높이에 맞춰 칸을 크게 (최소 150px) */
+  .cal-grid{ grid-auto-rows:minmax(max(150px, calc((100vh - 300px) / 5)), auto); }
+  .cal-day{ min-height:max(150px, calc((100vh - 300px) / 5)); }
+
+  /* 거래처 관리 아이콘 */
+  .cl-actions{ text-align:center; white-space:nowrap; }
+  .icon-btn{ width:30px; height:30px; border-radius:8px; border:1px solid transparent; background:transparent; color:var(--muted);
+    display:inline-flex; align-items:center; justify-content:center; cursor:pointer; }
+  .icon-btn:hover{ background:var(--primary-soft); color:var(--primary-dark); }
+  .icon-btn.danger:hover{ background:#ffe4e6; color:#e2445c; }
+  .cl-edited{ color:var(--primary-dark); font-weight:700; border-bottom:1px dashed var(--primary); }
+  .sm-modal.wide{ max-width:460px; }
+  .sm-modal-field select{ width:100%; border-radius:12px; padding:10px 12px; }
+  .sm-modal-html{ text-align:left; max-height:50vh; overflow:auto; }
+  .cl-hist-meta{ font-size:12.5px; color:var(--muted); margin-bottom:10px; }
+  .cl-hist-item{ border-top:1px solid var(--border); padding:9px 0; }
+  .cl-hist-head{ display:flex; justify-content:space-between; font-size:13.5px; color:var(--text); }
+  .cl-hist-head span{ color:var(--muted); font-size:12.5px; }
+  .cl-hist-chg{ font-size:13px; color:var(--text); margin-top:3px; }
+  .cl-hist-chg s{ color:var(--muted); }
+  .cl-hist-empty{ color:var(--muted); font-size:13.5px; padding:8px 0; }
+
 </style>
 </head>
 <body>
@@ -1927,19 +1949,83 @@ function renderIndiv(){
    거래처 마스터
    ========================================================= */
 
+const ICON_EDIT = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>';
+const ICON_HISTORY = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/></svg>';
+const ICON_TRASH = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/></svg>';
+
+function sortedClients(){
+  const n = v => { const x = parseInt(String(v || '').replace(/\D/g, ''), 10); return isNaN(x) ? Infinity : x; };
+  return [...clients].sort((a, b) => n(a.seq) - n(b.seq) || String(a.name).localeCompare(String(b.name), 'ko'));
+}
+
+async function editClient(id){
+  const c = clients.find(x => x.id === id);
+  if(!c) return;
+  const fields = [
+    { key:'seq', label:'순번' },
+    { key:'type', label:'구분', options:['법인','개인'] },
+    { key:'name', label:'상호명' },
+    { key:'biz', label:'사업자번호', placeholder:'000-00-00000' },
+    { key:'corpNo', label:'법인등록번호', placeholder:'000000-0000000' },
+    { key:'ceo', label:'대표자' },
+    { key:'openDate', label:'개업일', placeholder:'예: 2020-01-01' },
+    { key:'fee', label:'수임료' },
+  ];
+  const r = await smForm(`${c.name} 수정`, fields.map(f => ({ ...f, value: c[f.key] || '' })), { okText:'저장', icon:'✎', wide:true });
+  if(!r) return;
+  const changes = [];
+  fields.forEach((f, i) => {
+    const to = (r[i] || '').trim(), from = c[f.key] || '';
+    if(to !== from){ changes.push({ field:f.key, label:f.label, from, to }); c[f.key] = to; }
+  });
+  if(!changes.length) return;
+  if(!c.name) c.name = changes.find(x => x.field === 'name')?.from || '(이름 없음)';
+  c.overrides = Object.assign({}, c.overrides || {}, Object.fromEntries(changes.map(x => [x.field, true])));
+  c.history = (c.history || []).concat([{ at: new Date().toISOString(), kind:'직접 수정', changes }]);
+  renderAll();
+}
+
+function showClientHistory(id){
+  const c = clients.find(x => x.id === id);
+  if(!c) return;
+  const esc = v => String(v == null ? '' : v).replace(/&/g,'&amp;').replace(/</g,'&lt;');
+  const fmt = iso => { const d = new Date(iso); return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`; };
+  const hist = (c.history || []).slice().reverse();
+  const edited = Object.keys(c.overrides || {});
+  const html = `
+    <div class="cl-hist">
+      <div class="cl-hist-meta">출처: ${c.source === 'master' ? '마스터 시트(★Tax_2026)' : '직접 추가'}${edited.length ? ` · 직접 수정한 칸은 마스터를 다시 가져와도 유지돼요` : ''}</div>
+      ${hist.length ? hist.map(h => `
+        <div class="cl-hist-item">
+          <div class="cl-hist-head"><b>${esc(h.kind)}</b><span>${fmt(h.at)}</span></div>
+          ${(h.changes || []).map(x => `<div class="cl-hist-chg">${esc(x.label)}: <s>${esc(x.from || '(빈칸)')}</s> → <b>${esc(x.to || '(빈칸)')}</b></div>`).join('')}
+        </div>`).join('') : '<div class="cl-hist-empty">아직 기록된 이력이 없어요.</div>'}
+      ${edited.length ? `<button class="btn xs" style="margin-top:10px;" onclick="resetClientOverrides(${c.id}); document.querySelector('.sm-modal-ok').click();">직접 수정 해제 (다음 가져오기 때 마스터 값으로)</button>` : ''}
+    </div>`;
+  smDialog({ title: `${c.name} 이력`, html, icon:'⟲', cancelText:null, okText:'닫기', wide:true });
+}
+function resetClientOverrides(id){
+  const c = clients.find(x => x.id === id);
+  if(!c) return;
+  c.overrides = {};
+  c.history = (c.history || []).concat([{ at: new Date().toISOString(), kind:'직접 수정 해제', changes: [] }]);
+  renderAll();
+}
+
 function addClient(){
   const nameEl = document.getElementById('newClientName');
   const typeEl = document.getElementById('newClientType');
   const bizEl = document.getElementById('newClientBiz');
   if(!nameEl.value.trim()) return;
-  clients.push({id: nextClientId++, name:nameEl.value.trim(), type:typeEl.value, biz:bizEl.value.trim()});
+  clients.push({id: nextClientId++, name:nameEl.value.trim(), type:typeEl.value, biz:bizEl.value.trim(),
+    history:[{ at:new Date().toISOString(), kind:'직접 추가', changes:[] }]});
   nameEl.value = ''; bizEl.value = '';
-  renderClients();
+  renderAll();
 }
 async function deleteClient(id){
   if(!(await smConfirm('이 거래처를 삭제할까요?', '각 신고 탭의 기록도 함께 지워져요.', { tone:'danger', icon:'!', okText:'삭제' }))) return;
   clients = clients.filter(c => c.id !== id);
-  renderClients();
+  renderAll();
 }
 
 function renderClients(){
@@ -1959,20 +2045,27 @@ function renderClients(){
       </div>
       <div class="table-scroll">
       <table>
-        <thead><tr><th>순번</th><th>거래처명</th><th>구분</th><th>대표자</th><th>사업자번호</th><th>법인등록번호</th><th>개업일</th><th>수임료</th><th></th></tr></thead>
+        <thead><tr><th>순번</th><th>구분</th><th>상호명</th><th>사업자번호</th><th>법인등록번호</th><th>대표자</th><th>개업일</th><th>수임료</th><th style="text-align:center;">관리</th></tr></thead>
         <tbody>
-          ${clients.map(c => `
+          ${sortedClients().map(c => {
+            const ov = c.overrides || {};
+            const cellV = (k, v) => `<span class="${ov[k] ? 'cl-edited' : ''}" ${ov[k] ? 'title="직접 수정한 값"' : ''}>${v || '-'}</span>`;
+            return `
             <tr>
-              <td>${c.seq || '-'}</td>
-              <td>${c.name}</td>
+              <td>${cellV('seq', c.seq)}</td>
               <td><span class="tag ${c.type==='법인'?'tag-corp-type':'tag-indiv-type'}">${c.type}</span></td>
-              <td>${c.ceo || '-'}</td>
-              <td>${c.biz || '-'}</td>
-              <td>${c.corpNo || '-'}</td>
-              <td>${c.openDate || '-'}</td>
-              <td>${c.fee || '-'}</td>
-              <td><button class="btn danger ghost" onclick="deleteClient(${c.id})">삭제</button></td>
-            </tr>`).join('')}
+              <td>${cellV('name', c.name)}</td>
+              <td>${cellV('biz', c.biz)}</td>
+              <td>${cellV('corpNo', c.corpNo)}</td>
+              <td>${cellV('ceo', c.ceo)}</td>
+              <td>${cellV('openDate', c.openDate)}</td>
+              <td>${cellV('fee', c.fee)}</td>
+              <td class="cl-actions">
+                <button class="icon-btn" onclick="editClient(${c.id})" title="수정" aria-label="수정">${ICON_EDIT}</button>
+                <button class="icon-btn" onclick="showClientHistory(${c.id})" title="이력" aria-label="이력">${ICON_HISTORY}</button>
+                <button class="icon-btn danger" onclick="deleteClient(${c.id})" title="삭제" aria-label="삭제">${ICON_TRASH}</button>
+              </td>
+            </tr>`; }).join('')}
         </tbody>
       </table>
       </div>
@@ -2414,64 +2507,103 @@ function findColIndex(headerTexts, aliases){
 }
 
 let lastMasterClientTab = '';
+let lastMasterClientMap = '';
+const CLIENT_FIELDS = [
+  // key, 화면 이름, 정확히 일치할 제목들(우선), 포함 검색 제목들(보조)
+  { key:'seq',      label:'순번',         exact:['순번','No','NO','no','번호','연번'], incl:['순번'] },
+  { key:'type',     label:'구분',         exact:['구분','법인/개인','법인구분'],     incl:['구분'] },
+  { key:'name',     label:'상호명',       exact:['상호명','상호','거래처명','회사명','업체명'], incl:['상호','거래처명'] },
+  { key:'biz',      label:'사업자번호',   exact:['사업자번호','사업자등록번호','사업자 번호'], incl:['사업자번호','사업자등록번호','사업자 번호'] },
+  { key:'corpNo',   label:'법인등록번호', exact:['법인등록번호','법인번호','법인(주민)번호','주민/법인번호'], incl:['법인등록','법인번호'] },
+  { key:'ceo',      label:'대표자',       exact:['대표자','대표','대표자명'],        incl:['대표자'] },
+  { key:'openDate', label:'개업일',       exact:['개업일','개업일자','개업연월일','설립일'], incl:['개업'] },
+  { key:'fee',      label:'수임료',       exact:['수임료','기장료','수수료','월기장료'], incl:['수임료','기장료'] },
+];
+const normHead = v => (v == null ? '' : String(v)).replace(/\s+/g, '').trim();
+
+// 제목줄(1~2줄짜리 이중 제목도 대응)을 찾아 각 항목이 몇 번째 열인지 알아냄
+function mapClientColumns(rows){
+  const top = rows.slice(0, 20).map(r => (r || []).map(normHead));
+  let bestRow = -1, bestScore = 0;
+  top.forEach((r, ri) => {
+    let score = 0;
+    CLIENT_FIELDS.forEach(f => { if(r.some(t => f.exact.map(normHead).includes(t))) score += 2; else if(r.some(t => t && f.incl.some(a => t.includes(normHead(a))))) score += 1; });
+    if(score > bestScore){ bestScore = score; bestRow = ri; }
+  });
+  if(bestRow < 0) return null;
+  const used = new Set(); const idx = {}; const idxRow = {};
+  const tryRows = [bestRow, bestRow + 1, bestRow - 1].filter(r => r >= 0 && r < top.length);
+  CLIENT_FIELDS.forEach(f => {   // 1순위: 정확히 일치
+    for(const r of tryRows){ const c = top[r].findIndex((t, ci) => !used.has(ci) && f.exact.map(normHead).includes(t)); if(c >= 0){ idx[f.key] = c; idxRow[f.key] = r; used.add(c); return; } }
+  });
+  CLIENT_FIELDS.forEach(f => {   // 2순위: 포함
+    if(idx[f.key] != null) return;
+    for(const r of tryRows){ const c = top[r].findIndex((t, ci) => t && !used.has(ci) && f.incl.some(a => t.includes(normHead(a)))); if(c >= 0){ idx[f.key] = c; idxRow[f.key] = r; used.add(c); return; } }
+  });
+  // 수임료를 못 찾았을 때만 "수임" 열을 사용
+  if(idx.fee == null){ const c = top[bestRow].findIndex((t, ci) => !used.has(ci) && t === '수임'); if(c >= 0){ idx.fee = c; idxRow.fee = bestRow; used.add(c); } }
+  // 데이터 시작 줄: 제목줄 다음 줄이 또 제목(하위 제목)이면 한 줄 더 내려감
+  let dataStart = bestRow + 1;
+  if(top[bestRow + 1]){
+    const sub = CLIENT_FIELDS.filter(f => top[bestRow + 1].some(t => f.exact.map(normHead).includes(t))).length;
+    if(sub >= 2) dataStart = bestRow + 2;
+  }
+  return { headerRow: bestRow, dataStart, idx, idxRow, headerTexts: rows[bestRow] || [] };
+}
+
 async function importClientsFromMaster(){
   const titles = await getMasterSheetTitles();
-  // 꼭 있어야 하는 제목: 상호 + 사업자번호(또는 법인번호) + 대표자. 나머지(순번·구분·수임·개업일)는 있으면 가져옴
-  const found = await findTabByHeaders(titles, [
-    ['상호명', '상호', '거래처명', '회사명'],
-    ['사업자 번호', '사업자등록번호', '사업자번호', '법인번호', '법인등록번호'],
-    ['대표자', '대표'],
-  ]);
-  if(!found){
-    const e = new Error(`거래처 표를 찾지 못했어요. 확인한 탭: ${titles.join(', ')} — "상호", "사업자번호", "대표자" 제목이 있는 탭이 필요해요.`);
-    throw e;
+  const ordered = titles.filter(t => t.includes('기장현황')).concat(titles.filter(t => !t.includes('기장현황')));
+  let found = null, rows = null, map = null;
+  for(const title of ordered){
+    try{
+      const res = await gapi.client.sheets.spreadsheets.values.get({ spreadsheetId: MASTER_SHEET_ID, range: `'${title.replace(/'/g, "''")}'!A1:AZ3000` });
+      const rs = res.result.values || [];
+      const m = mapClientColumns(rs);
+      if(m && m.idx.name != null && (m.idx.biz != null || m.idx.corpNo != null)){ found = title; rows = rs; map = m; break; }
+    }catch(e){ console.warn(`탭 "${title}" 확인 실패`, e); }
   }
+  if(!found) throw new Error(`거래처 표를 찾지 못했어요. 확인한 탭: ${titles.join(', ')} — "상호"와 "사업자번호" 제목이 있는 탭이 필요해요.`);
 
-  const res = await gapi.client.sheets.spreadsheets.values.get({
-    spreadsheetId: MASTER_SHEET_ID,
-    range: `'${found.title.replace(/'/g, "''")}'!A${found.headerRowIndex + 1}:AZ3000`,
-  });
-  const rows = res.result.values || [];
-  const header = rows[0].map(c => (c || '').toString().trim());
-  const idxSeq  = findColIndex(header, ['순번']);
-  const idxType = findColIndex(header, ['구분']);
-  const idxFee  = findColIndex(header, ['수임']);
-  const idxName = findColIndex(header, ['상호명', '상호', '거래처명', '회사명']);
-  const idxCorp = findColIndex(header, ['법인번호', '법인등록번호']);
-  const idxBiz  = findColIndex(header, ['사업자 번호', '사업자등록번호', '사업자번호']);
-  const idxOpen = findColIndex(header, ['개업일']);
-  const idxCeo  = findColIndex(header, ['대표자', '대표']);
-
-  const cell = (r, idx) => idx >= 0 ? (r[idx] || '').toString().trim() : '';
-
-  const imported = [];
-  for(let i = 1; i < rows.length; i++){
-    const r = rows[i];
-    if(!r) continue;
-    const name = cell(r, idxName);
-    if(!name) continue;
-    const corp = cell(r, idxCorp);
-    const explicitType = cell(r, idxType);
-    const isCorp = explicitType ? explicitType.includes('법인') : (!!corp && corp !== '-');
-    imported.push({
-      id: nextClientId++,
-      seq: cell(r, idxSeq),
-      name,
-      ceo: cell(r, idxCeo),
-      biz: (() => { const v = cell(r, idxBiz); return v && v !== '-' ? v : ''; })(),
-      corpNo: corp && corp !== '-' ? corp : '',
-      openDate: cell(r, idxOpen),
-      fee: cell(r, idxFee),
-      type: isCorp ? '법인' : '개인',
-      source: 'master',
+  const cell = (r, key) => { const c = map.idx[key]; if(c == null) return ''; const v = (r[c] == null ? '' : String(r[c])).trim(); return v === '-' ? '' : v; };
+  const incoming = [];
+  for(let i = map.dataStart; i < rows.length; i++){
+    const r = rows[i]; if(!r) continue;
+    const name = cell(r, 'name'); if(!name) continue;
+    const corpNo = cell(r, 'corpNo');
+    const typeText = cell(r, 'type');
+    incoming.push({
+      seq: cell(r, 'seq'), name, ceo: cell(r, 'ceo'), biz: cell(r, 'biz'), corpNo,
+      openDate: cell(r, 'openDate'), fee: cell(r, 'fee'),
+      type: typeText ? (typeText.includes('법인') ? '법인' : '개인') : (corpNo ? '법인' : '개인'),
     });
   }
-  if(!imported.length) throw new Error(`"${found.title}" 탭에서 거래처를 한 건도 읽지 못했어요.`);
-  // 마스터에서 온 거래처 + 예시 거래처(가나상사 등, 출처 없는 기본값)는 교체하고, 직접 추가한 거래처는 유지
+  if(!incoming.length) throw new Error(`"${found}" 탭에서 거래처를 한 건도 읽지 못했어요.`);
+
+  // 기존 거래처와 사업자번호(없으면 상호)로 짝지어서, 직접 수정한 칸은 유지하고 이력도 이어감
+  const oldMaster = clients.filter(c => c.source === 'master');
+  const keyOf = c => (c.biz || '').replace(/\D/g, '') || ('N:' + c.name);
+  const oldByKey = {}; oldMaster.forEach(c => { oldByKey[keyOf(c)] = c; });
+  const nowIso = new Date().toISOString();
+  const merged = incoming.map(n => {
+    const old = oldByKey[keyOf(n)];
+    const base = old ? { ...old } : { id: nextClientId++, source: 'master', history: [{ at: nowIso, kind: '가져옴', changes: [] }] };
+    const overrides = base.overrides || {};
+    const changes = [];
+    CLIENT_FIELDS.forEach(f => {
+      if(overrides[f.key]) return;                       // 직접 수정한 칸은 마스터 값으로 덮지 않음
+      const from = old ? (old[f.key] || '') : ''; const to = n[f.key] || '';
+      if(old && from !== to) changes.push({ field: f.key, label: f.label, from, to });
+      base[f.key] = to;
+    });
+    if(old && changes.length) base.history = (base.history || []).concat([{ at: nowIso, kind: '마스터 반영', changes }]);
+    return base;
+  });
   const isSample = c => !c.source && typeof c.id === 'number' && c.id <= 8 && /^(110-81|220-11)-\d{5}$/.test(c.biz || '');
-  clients = clients.filter(c => c.source !== 'master' && !isSample(c)).concat(imported);
-  lastMasterClientTab = found.title;
-  return imported.length;
+  clients = clients.filter(c => c.source !== 'master' && !isSample(c)).concat(merged);
+  lastMasterClientTab = found;
+  lastMasterClientMap = CLIENT_FIELDS.map(f => `${f.label}: ${map.idx[f.key] != null ? `"${String((rows[map.idxRow[f.key]] || [])[map.idx[f.key]] || '').trim()}" 열` : '못 찾음'}`).join('\n');
+  return merged.length;
 }
 
 // "Work List" 형식 탭은 이름이 아니라 A1 셀 내용("Work List")으로 찾는다. 실제 마스터 시트는
@@ -2589,7 +2721,7 @@ async function importClientsOnlyFromMaster(){
     const clientCount = await importClientsFromMaster();
     const t = new Date();
     setMasterSyncStatus(`${pad2(t.getHours())}:${pad2(t.getMinutes())} 기준 · 거래처 ${clientCount}건 가져옴`);
-    smAlert(`거래처 ${clientCount}건을 가져왔어요`, `"${lastMasterClientTab}" 탭에서 가져왔어요.`, { icon:'✓' });
+    smAlert(`거래처 ${clientCount}건을 가져왔어요`, `"${lastMasterClientTab}" 탭에서 가져왔어요.\n\n[읽은 열]\n${lastMasterClientMap}`, { icon:'✓' });
   } catch(e){
     console.error(e);
     const msg = (e && e.result && e.result.error && e.result.error.message) || e.message || '알 수 없는 오류';
@@ -2617,7 +2749,7 @@ async function importFromMasterSheet(){
   if(clientErr || wlErr){
     smAlert('일부를 가져오지 못했어요', [clientErr && `거래처: ${clientErr}`, wlErr && `할 일: ${wlErr}`].filter(Boolean).join('\n'), { tone:'danger' });
   } else {
-    smAlert('가져오기 완료', `거래처 ${clientCount}건, 할 일 ${wl.taskCount}건을 가져왔어요.`, { icon:'✓' });
+    smAlert('가져오기 완료', `거래처 ${clientCount}건, 할 일 ${wl.taskCount}건을 가져왔어요.\n\n[거래처에서 읽은 열]\n${lastMasterClientMap}`, { icon:'✓' });
   }
   renderAll();
 }
@@ -2959,13 +3091,14 @@ function smDialog(opts){
     wrap.className = 'sm-modal-backdrop';
     const esc = v => String(v == null ? '' : v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
     wrap.innerHTML = `
-      <div class="sm-modal ${o.tone}" role="dialog" aria-modal="true">
+      <div class="sm-modal ${o.tone} ${o.wide ? 'wide' : ''}" role="dialog" aria-modal="true">
         <div class="sm-modal-ic">${esc(o.icon)}</div>
         ${o.title ? `<div class="sm-modal-title">${esc(o.title)}</div>` : ''}
-        ${o.message ? `<div class="sm-modal-msg">${esc(o.message).replace(/\n/g,'<br>')}</div>` : ''}
+        ${o.html ? `<div class="sm-modal-msg sm-modal-html">${o.html}</div>` : (o.message ? `<div class="sm-modal-msg">${esc(o.message).replace(/\n/g,'<br>')}</div>` : '')}
         ${o.fields ? `<div class="sm-modal-fields">${o.fields.map((f,i) => `
           <label class="sm-modal-field"><span>${esc(f.label)}</span>
-            <input type="${f.type || 'text'}" data-i="${i}" value="${esc(f.value)}" placeholder="${esc(f.placeholder)}"></label>`).join('')}</div>` : ''}
+            ${f.options ? `<select data-i="${i}">${f.options.map(op => `<option ${op === f.value ? 'selected' : ''}>${esc(op)}</option>`).join('')}</select>`
+              : `<input type="${f.type || 'text'}" data-i="${i}" value="${esc(f.value)}" placeholder="${esc(f.placeholder)}">`}</label>`).join('')}</div>` : ''}
         <div class="sm-modal-btns">
           ${o.cancelText ? `<button type="button" class="sm-modal-cancel">${esc(o.cancelText)}</button>` : ''}
           <button type="button" class="sm-modal-ok">${esc(o.okText)}</button>
@@ -2973,7 +3106,7 @@ function smDialog(opts){
       </div>`;
     document.body.appendChild(wrap);
     requestAnimationFrame(() => wrap.classList.add('show'));
-    const inputs = Array.from(wrap.querySelectorAll('input'));
+    const inputs = Array.from(wrap.querySelectorAll('input, select'));
     const done = ok => {
       document.removeEventListener('keydown', onKey, true);
       wrap.classList.remove('show');
