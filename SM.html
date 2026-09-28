@@ -583,6 +583,35 @@
   .wl-navbtn:hover{ background:var(--primary-soft); border-color:var(--primary); }
   .wl-daynav-label{ font-size:16px; color:var(--slate); }
 
+  /* 홈 달력: 월 이동 + 연·월 선택 */
+  .cal-head{ gap:12px; position:relative; }
+  .cal-ym-wrap{ position:relative; }
+  .cal-ym{
+    font-family:inherit; font-size:19px; font-weight:800; color:var(--text);
+    background:transparent; border:1px solid transparent; border-radius:12px; padding:6px 12px; cursor:pointer;
+  }
+  .cal-ym:hover{ background:var(--primary-soft); border-color:var(--border); }
+  .cal-ym-caret{ font-size:12px; color:var(--primary); margin-left:2px; }
+  .cal-today-btn{
+    font-family:inherit; font-size:12.5px; font-weight:700; cursor:pointer;
+    padding:6px 12px; border-radius:999px; border:1px solid var(--border); background:#fff; color:var(--primary-dark);
+  }
+  .cal-today-btn:hover{ background:var(--primary-soft); }
+  .cal-picker{
+    position:absolute; top:calc(100% + 8px); left:50%; transform:translateX(-50%); z-index:30;
+    width:280px; background:#fff; border:1px solid var(--border); border-radius:16px;
+    box-shadow:var(--shadow-md); padding:14px;
+  }
+  .cal-picker-year{ display:flex; align-items:center; justify-content:space-between; font-size:16px; font-weight:800; margin-bottom:12px; }
+  .cal-picker-months{ display:grid; grid-template-columns:repeat(4,1fr); gap:6px; }
+  .cal-pm{
+    font-family:inherit; font-size:13.5px; font-weight:700; padding:9px 0; border-radius:10px; cursor:pointer;
+    border:1px solid var(--border); background:#fff; color:var(--text);
+  }
+  .cal-pm:hover{ background:var(--primary-soft); }
+  .cal-pm.now{ border-color:var(--primary); color:var(--primary-dark); }
+  .cal-pm.on{ background:var(--primary); border-color:var(--primary); color:#fff; }
+
 </style>
 </head>
 <body>
@@ -1486,8 +1515,23 @@ function deleteTask(id){ tasks = tasks.filter(x => x.id !== id); renderAll(); }
 
 function pad2(n){ return String(n).padStart(2,'0'); }
 
-function calPrev(){ calMonth--; if(calMonth < 0){ calMonth = 11; calYear--; } renderHome(); }
-function calNext(){ calMonth++; if(calMonth > 11){ calMonth = 0; calYear++; } renderHome(); }
+function calPrev(){ calPickerOpen = false; calMonth--; if(calMonth < 0){ calMonth = 11; calYear--; } renderHome(); }
+function calNext(){ calPickerOpen = false; calMonth++; if(calMonth > 11){ calMonth = 0; calYear++; } renderHome(); }
+let calPickerOpen = false;
+let calPickerYear = null;
+function toggleCalPicker(e){
+  if(e) e.stopPropagation();
+  calPickerOpen = !calPickerOpen;
+  calPickerYear = calYear;
+  renderHome();
+}
+function calPickMonth(i){
+  calYear = calPickerYear; calMonth = i;
+  calPickerOpen = false;
+  renderHome();
+}
+document.addEventListener('click', () => { if(calPickerOpen){ calPickerOpen = false; if(typeof renderHome === 'function') renderHome(); } });
+document.addEventListener('keydown', e => { if(e.key === 'Escape' && calPickerOpen){ calPickerOpen = false; renderHome(); } });
 function calToday(){
   const t = new Date(todayStr());
   calYear = t.getFullYear(); calMonth = t.getMonth();
@@ -1569,10 +1613,28 @@ function renderCalendar(){
 
   return `
     <div class="cal-head">
-      <button class="btn ghost xs" onclick="calPrev()">이전</button>
-      <div class="month-label">${calYear}년 ${calMonth+1}월</div>
-      <button class="btn ghost xs" onclick="calToday()">오늘</button>
-      <button class="btn ghost xs" onclick="calNext()">다음</button>
+      <button class="wl-navbtn" onclick="calPrev()" title="이전 달" aria-label="이전 달">‹</button>
+      <div class="cal-ym-wrap">
+        <button class="cal-ym" onclick="toggleCalPicker(event)" title="눌러서 연·월 선택">${calYear}년 ${calMonth+1}월 <span class="cal-ym-caret">▾</span></button>
+        ${calPickerOpen ? `
+        <div class="cal-picker" onclick="event.stopPropagation()">
+          <div class="cal-picker-year">
+            <button class="wl-navbtn" onclick="calPickerYear += -1; renderHome();" aria-label="이전 해">‹</button>
+            <span>${calPickerYear}년</span>
+            <button class="wl-navbtn" onclick="calPickerYear += 1; renderHome();" aria-label="다음 해">›</button>
+          </div>
+          <div class="cal-picker-months">
+            ${Array.from({length:12}, (_, i) => {
+              const isSel = calPickerYear === calYear && i === calMonth;
+              const t = new Date();
+              const isNow = calPickerYear === t.getFullYear() && i === t.getMonth();
+              return `<button class="cal-pm ${isSel ? 'on' : ''} ${isNow ? 'now' : ''}" onclick="calPickMonth(${i})">${i+1}월</button>`;
+            }).join('')}
+          </div>
+        </div>` : ''}
+      </div>
+      <button class="wl-navbtn" onclick="calNext()" title="다음 달" aria-label="다음 달">›</button>
+      <button class="cal-today-btn" onclick="calToday()">이번 달</button>
     </div>
     <div class="cal-grid">
       ${dow.map(x => `<div class="cal-dow">${x}</div>`).join('')}
