@@ -811,6 +811,41 @@
   .ev-actions .btn{ display:inline-flex; align-items:center; gap:6px; }
   .ev-actions .btn.danger{ color:#e2445c; }
 
+  /* 홈 요약 */
+  .home-summary{ display:grid; grid-template-columns:repeat(3, 1fr) 2fr; gap:12px; margin-bottom:16px; }
+  .hs-tile{ background:#fff; border:1px solid var(--border); border-radius:16px; padding:14px 18px; box-shadow:var(--shadow-sm); cursor:pointer; }
+  .hs-tile:hover{ border-color:var(--primary); }
+  .hs-tile.hs-wide{ cursor:default; }
+  .hs-tile.hs-wide:hover{ border-color:var(--border); }
+  .hs-n{ font-size:26px; font-weight:800; color:var(--primary-dark); line-height:1.1; }
+  .hs-n span{ font-size:15px; color:var(--muted); font-weight:700; margin-left:2px; }
+  .hs-tile.warn .hs-n{ color:#d97706; }
+  .hs-l{ font-size:13px; color:var(--muted); font-weight:700; margin-top:4px; }
+  .hs-dl{ display:flex; gap:10px; align-items:center; font-size:13.5px; padding:3px 0; }
+  .hs-dl b{ min-width:52px; font-size:12px; color:var(--muted); background:#f7f1f4; border-radius:999px; text-align:center; padding:2px 8px; }
+  .hs-dl b.soon{ color:#fff; background:var(--primary); }
+  .hs-dl span{ flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .hs-dl em{ font-style:normal; color:var(--muted); font-size:12.5px; }
+  @media (max-width:900px){ .home-summary{ grid-template-columns:repeat(3, 1fr); } .hs-wide{ grid-column:1/-1; } }
+  /* 거래처 모아보기 */
+  .cl-name{ cursor:pointer; }
+  .cl-name:hover{ color:var(--primary-dark); text-decoration:underline; }
+  .cd-grid, .cd-tax{ display:grid; grid-template-columns:1fr 1fr; gap:8px 16px; }
+  .cd-tax{ grid-template-columns:repeat(3, 1fr); }
+  .cd-grid div, .cd-tax div{ display:flex; flex-direction:column; font-size:13.5px; }
+  .cd-grid span, .cd-tax span{ font-size:12px; color:var(--muted); }
+  .cd-sec{ font-size:13px; font-weight:800; color:var(--primary-dark); margin:14px 0 6px; padding-top:10px; border-top:1px solid var(--border); }
+  .cd-sec small{ font-weight:500; color:var(--muted); }
+  .cd-task{ font-size:13.5px; padding:4px 0; display:flex; gap:8px; }
+  .cd-task em{ font-style:normal; color:var(--muted); min-width:38px; }
+  .cd-task.done{ color:var(--muted); text-decoration:line-through; }
+  .cd-empty{ font-size:13px; color:var(--muted); }
+  .sm-modal.wide{ max-width:520px; }
+  /* 반복 할 일 */
+  .rec-row{ display:flex; align-items:center; gap:10px; padding:6px 0; border-bottom:1px solid var(--border); font-size:14px; }
+  .rec-row b{ min-width:72px; color:var(--primary-dark); }
+  .rec-row span:not(.row-actions){ flex:1; }
+
 </style>
 </head>
 <body>
@@ -1116,6 +1151,8 @@ const NAV_SUBMENUS = {
     {anchor:'settings-google',  label:'Google 연동'},
     {anchor:'settings-master',  label:'마스터 시트 가져오기'},
     {anchor:'settings-deploy',  label:'GitHub 배포'},
+    {anchor:'settings-recurring', label:'반복 할 일'},
+    {anchor:'settings-backup',  label:'자동 백업'},
     {anchor:'settings-reset',   label:'데이터 초기화'},
   ],
 };
@@ -1454,10 +1491,93 @@ function renderCalendar(){
   `;
 }
 
+// 반복 할 일: settings.recurring = [{id, day, text}] → 이번 달·다음 달 해당 날짜에 할 일을 자동 생성
+function generateRecurringTasks(){
+  const rules = settings.recurring || [];
+  if(!rules.length || !sheetLoadedOnce) return;
+  const made = new Set(settings.recurringMade || []);
+  const now = new Date();
+  let added = false;
+  [0, 1].forEach(off => {
+    const y = now.getFullYear(), m = now.getMonth() + off;
+    const first = new Date(y, m, 1), last = new Date(y, m + 1, 0).getDate();
+    const ym = `${first.getFullYear()}-${pad2(first.getMonth() + 1)}`;
+    rules.forEach(r => {
+      const key = `${r.id}|${ym}`;
+      if(made.has(key)) return;
+      const date = `${ym}-${pad2(Math.min(r.day, last))}`;
+      if(date < todayStr() && !(r.since && r.since <= date)){ made.add(key); return; }   // 등록하기 전에 지나간 날짜는 만들지 않음
+      const t = { id: nextTaskId++, date, text: r.text, done:false, recurring: r.id };
+      pushHist(t, '반복 할 일로 자동 추가');
+      tasks.push(t); made.add(key); added = true;
+    });
+  });
+  if(added){ settings.recurringMade = [...made]; scheduleGoogleSave(); }
+}
+async function addRecurringRule(){
+  const r = await smForm('반복 할 일 추가', [
+    { label:'매월 며칠', type:'number', value:'10', placeholder:'1~31' },
+    { label:'할 일', placeholder:'예: 원천세 신고' },
+  ], { okText:'추가', icon:'↻', wide:true });
+  if(!r) return;
+  const day = Math.max(1, Math.min(31, parseInt(r[0], 10) || 1)), text = (r[1] || '').trim();
+  if(!text) return;
+  settings.recurring = (settings.recurring || []).concat([{ id: Date.now(), day, text, since: todayStr() }]);
+  renderAll();
+}
+async function deleteRecurringRule(id){
+  const rule = (settings.recurring || []).find(x => x.id === id);
+  if(!rule || !(await smConfirm('반복 할 일을 삭제할까요?', `매월 ${rule.day}일 · ${rule.text}\n이미 만들어진 할 일은 그대로 남아요.`, { tone:'danger', icon:'!', okText:'삭제' }))) return;
+  settings.recurring = settings.recurring.filter(x => x.id !== id);
+  renderAll();
+}
+async function editRecurringRule(id){
+  const rule = (settings.recurring || []).find(x => x.id === id);
+  if(!rule) return;
+  const r = await smForm('반복 할 일 수정', [
+    { label:'매월 며칠', type:'number', value:String(rule.day) }, { label:'할 일', value:rule.text },
+  ], { okText:'저장', icon:'✎', wide:true });
+  if(!r) return;
+  rule.day = Math.max(1, Math.min(31, parseInt(r[0], 10) || rule.day));
+  rule.text = (r[1] || '').trim() || rule.text;
+  renderAll();
+}
+
+function daysBetween(a, b){ return Math.round((new Date(b) - new Date(a)) / 86400000); }
+function renderHomeSummary(){
+  const T = todayStr();
+  const weekEnd = addDaysStr(T, 6 - new Date().getDay());          // 이번 주 토요일까지
+  const todayTasks = tasks.filter(t => t.date === T);
+  const todayLeft = todayTasks.filter(t => !t.done).length;
+  const weekLeft = tasks.filter(t => !t.done && t.date > T && t.date <= weekEnd).length;
+  const overdue = carryCandidates().length;
+  const upcoming = calendarDeadlines().filter(d => d.date >= T).sort((a, b) => a.date.localeCompare(b.date)).slice(0, 3);
+  const evSoon = events.filter(e => e.date >= T && e.date <= addDaysStr(T, 7)).sort((a, b) => a.date.localeCompare(b.date));
+  const dd = d => { const n = daysBetween(T, d); return n === 0 ? 'D-DAY' : `D-${n}`; };
+  return `
+    <div class="home-summary">
+      <div class="hs-tile" onclick="switchTab('worklist')">
+        <div class="hs-n">${todayLeft}<span>/${todayTasks.length}</span></div><div class="hs-l">오늘 남은 할 일</div>
+      </div>
+      <div class="hs-tile" onclick="switchTab('worklist')">
+        <div class="hs-n">${weekLeft}</div><div class="hs-l">이번 주 남은 할 일</div>
+      </div>
+      <div class="hs-tile ${overdue ? 'warn' : ''}" onclick="switchTab('worklist')">
+        <div class="hs-n">${overdue}</div><div class="hs-l">지난 2주 못한 일</div>
+      </div>
+      <div class="hs-tile hs-wide">
+        <div class="hs-l" style="margin-bottom:6px;">다가오는 신고기한 · 일정</div>
+        ${upcoming.concat(evSoon.map(e => ({ date:e.date, label:'★ ' + e.text }))).sort((a, b) => a.date.localeCompare(b.date)).slice(0, 4)
+          .map(d => `<div class="hs-dl"><b class="${daysBetween(T, d.date) <= (settings.soonDays || 7) ? 'soon' : ''}">${dd(d.date)}</b><span>${d.label}</span><em>${shortDate(d.date)}</em></div>`).join('')
+          || '<div class="hs-dl"><span>예정된 기한이 없어요</span></div>'}
+      </div>
+    </div>`;
+}
 function renderHome(){
   const el = document.getElementById('tab-home');
 
   el.innerHTML = `
+    ${renderHomeSummary()}
     <div class="card" style="position:relative;">
       <button class="btn primary xs cal-add-btn" onclick="addScheduleQuick()">+ 일정 추가</button>
       ${renderCalendar()}
@@ -1826,11 +1946,45 @@ function bindWorklistSwipe(){
    부가가치세
    ========================================================= */
 
+// 거래처 목록 기준으로 각 신고 탭의 줄을 자동으로 맞춤 (새 거래처는 자동 추가, 기존 입력값은 유지)
+function ensureTaxRows(){
+  const def = {
+    vat: () => ({target:true, office:'', sales:0, purchase:0, filedDate:'', paidDate:'', note:''}),
+    pay: () => ({salaryType:'근로', payday:'', closed:false, filedDate:'', paidSlipDate:'', note:''}),
+    corp: () => ({steps:Object.fromEntries(corpSteps.map(s=>[s,''])), note:''}),
+    indiv: () => ({honest:false, steps:Object.fromEntries(indivSteps.map(s=>[s,''])), note:''}),
+  };
+  const fill = (store, key, list, mk) => { store[key] = store[key] || {}; list.forEach(c => { if(!store[key][c.id]) store[key][c.id] = mk(); }); };
+  // 한 번만: 예전 예시 데이터(없어진 거래처 번호) 정리
+  if(sheetLoadedOnce && clients.length && !settings.taxCleanV1){
+    const ids = new Set(clients.map(c => String(c.id)));
+    [vatData, payData, corpData, indivData].forEach(store => Object.values(store).forEach(per => {
+      Object.keys(per || {}).forEach(id => { if(!ids.has(String(id))) delete per[id]; });
+    }));
+    settings.taxCleanV1 = true;
+  }
+  if(currentVatPeriod) fill(vatData, currentVatPeriod, clients, def.vat);
+  if(currentPayMonth) fill(payData, currentPayMonth, clients, def.pay);
+  if(typeof currentCorpYear !== 'undefined' && currentCorpYear) fill(corpData, currentCorpYear, corpClients(), def.corp);
+  if(typeof currentIndivYear !== 'undefined' && currentIndivYear) fill(indivData, currentIndivYear, indivClients(), def.indiv);
+}
+// 원천세: 이번 달·다음 달이 목록에 없으면 자동 추가 (신고기한 = 다음 달 10일)
+function ensurePayMonths(){
+  const now = new Date();
+  [0, -1].forEach(off => {
+    const d = new Date(now.getFullYear(), now.getMonth() + off, 1);
+    const key = `${d.getMonth() + 1}월`;
+    if(!payMonths.includes(key)){
+      payMonths.push(key);
+      const due = new Date(d.getFullYear(), d.getMonth() + 1, 10);
+      payDue[key] = `${due.getFullYear()}-${pad2(due.getMonth()+1)}-${pad2(due.getDate())}`;
+    }
+  });
+}
 function vatSummary(){
-  const rows = Object.entries(vatData[currentVatPeriod] || {});
-  const targets = rows.filter(([,r]) => r.target);
-  const filed = targets.filter(([,r]) => r.filedDate);
-  return {total: targets.length, filed: filed.length};
+  const d = vatData[currentVatPeriod] || {};
+  const targets = clients.filter(c => d[c.id] && d[c.id].target);
+  return {total: targets.length, filed: targets.filter(c => d[c.id].filedDate).length};
 }
 
 async function addVatPeriod(){
@@ -1850,9 +2004,10 @@ async function addVatPeriod(){
 }
 
 function updateVat(id, field, value){
+  ensureTaxRows();
   const row = vatData[currentVatPeriod][id];
   row[field] = (field === 'sales' || field === 'purchase') ? (Number(value) || 0) : value;
-  renderVat();
+  renderAll();
 }
 
 function renderVat(){
@@ -1920,10 +2075,10 @@ function renderVat(){
    ========================================================= */
 
 function paySummary(){
-  const rows = Object.values(payData[currentPayMonth] || {});
-  return {total: rows.length, filed: rows.filter(r => r.filedDate).length};
+  const d = payData[currentPayMonth] || {};
+  return {total: clients.length, filed: clients.filter(c => d[c.id] && d[c.id].filedDate).length};
 }
-function updatePay(id, field, value){ payData[currentPayMonth][id][field] = value; renderPay(); }
+function updatePay(id, field, value){ ensureTaxRows(); payData[currentPayMonth][id][field] = value; renderAll(); }
 
 function renderPay(){
   const el = document.getElementById('tab-pay');
@@ -1991,11 +2146,12 @@ function renderPay(){
 
 function corpClients(){ return clients.filter(c => c.type === '법인'); }
 function toggleCorpStep(id, step){
+  ensureTaxRows();
   const s = corpData[currentCorpYear][id].steps;
   s[step] = s[step] ? '' : todayStr();
-  renderCorp();
+  renderAll();
 }
-function updateCorpNote(id, value){ corpData[currentCorpYear][id].note = value; }
+function updateCorpNote(id, value){ ensureTaxRows(); corpData[currentCorpYear][id].note = value; scheduleGoogleSave(); }
 
 function renderCorp(){
   const el = document.getElementById('tab-corp');
@@ -2051,12 +2207,13 @@ function renderCorp(){
 
 function indivClients(){ return clients.filter(c => c.type === '개인'); }
 function toggleIndivStep(id, step){
+  ensureTaxRows();
   const s = indivData[currentIndivYear][id].steps;
   s[step] = s[step] ? '' : todayStr();
-  renderIndiv();
+  renderAll();
 }
-function toggleIndivHonest(id){ indivData[currentIndivYear][id].honest = !indivData[currentIndivYear][id].honest; renderIndiv(); }
-function updateIndivNote(id, value){ indivData[currentIndivYear][id].note = value; }
+function toggleIndivHonest(id){ ensureTaxRows(); indivData[currentIndivYear][id].honest = !indivData[currentIndivYear][id].honest; renderAll(); }
+function updateIndivNote(id, value){ ensureTaxRows(); indivData[currentIndivYear][id].note = value; scheduleGoogleSave(); }
 
 function renderIndiv(){
   const el = document.getElementById('tab-indiv');
@@ -2114,6 +2271,45 @@ function renderIndiv(){
 const ICON_EDIT = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>';
 const ICON_HISTORY = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/></svg>';
 const ICON_TRASH = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/></svg>';
+
+// 할 일 내용에서 거래처 찾기용 짧은 이름 ("주식회사 나우이엔지" → "나우이엔지", "나우")
+function clientKeywords(c){
+  const base = String(c.name || '').replace(/주식회사|\(주\)|주\)|㈜|유한회사|협동조합|사무소|\s+/g, '').trim();
+  const words = new Set([base]);
+  if(base.length >= 4) words.add(base.slice(0, 2));
+  return [...words].filter(w => w.length >= 2);
+}
+function openClientDetail(id){
+  const c = clients.find(x => x.id === id);
+  if(!c) return;
+  const esc = v => String(v == null ? '' : v).replace(/&/g,'&amp;').replace(/</g,'&lt;');
+  const kws = clientKeywords(c);
+  const related = tasks.filter(t => kws.some(k => (t.text || '').includes(k))).sort((a, b) => b.date.localeCompare(a.date));
+  const open = related.filter(t => !t.done), doneList = related.filter(t => t.done).slice(0, 5);
+  const v = (vatData[currentVatPeriod] || {})[c.id], p = (payData[currentPayMonth] || {})[c.id];
+  const co = (corpData[currentCorpYear] || {})[c.id], iv = (indivData[currentIndivYear] || {})[c.id];
+  const stepText = (st, steps) => { if(!st) return '-'; const last = steps.filter(x => st.steps && st.steps[x]).pop(); return last ? `${last} 완료` : '시작 전'; };
+  const html = `
+    <div class="cd-grid">
+      <div><span>구분</span><b>${esc(c.type)}</b></div><div><span>대표자</span><b>${esc(c.ceo || '-')}</b></div>
+      <div><span>사업자번호</span><b>${esc(c.biz || '-')}</b></div><div><span>법인등록번호</span><b>${esc(c.corpNo || '-')}</b></div>
+      <div><span>개업일</span><b>${esc(c.openDate || '-')}</b></div><div><span>수임료</span><b>${esc(c.fee || '-')}</b></div>
+    </div>
+    <div class="cd-sec">신고 현황</div>
+    <div class="cd-tax">
+      <div><span>부가세 ${esc(currentVatPeriod)}</span><b>${v ? (v.target ? (v.filedDate ? '신고 완료' : '미신고') : '대상 아님') : '-'}</b></div>
+      <div><span>원천세 ${esc(currentPayMonth)}</span><b>${p ? (p.filedDate ? '신고 완료' : '미신고') : '-'}</b></div>
+      ${c.type === '법인' ? `<div><span>법인세 ${esc(currentCorpYear)}</span><b>${stepText(co, corpSteps)}</b></div>` : `<div><span>종소세 ${esc(currentIndivYear)}</span><b>${stepText(iv, indivSteps)}</b></div>`}
+    </div>
+    <div class="cd-sec">남은 할 일 ${open.length}건 <small>(할 일 내용에 "${esc(kws.join('", "'))}"가 들어간 것)</small></div>
+    ${open.length ? open.slice(0, 10).map(t => `<div class="cd-task"><em>${shortDate(t.date)}</em>${esc(t.text)}</div>`).join('') : '<div class="cd-empty">없어요</div>'}
+    ${doneList.length ? `<div class="cd-sec">최근 끝낸 일</div>${doneList.map(t => `<div class="cd-task done"><em>${shortDate(t.date)}</em>${esc(t.text)}</div>`).join('')}` : ''}
+    <div class="ev-actions" style="margin-top:14px;">
+      <button class="btn" onclick="document.querySelector('.sm-modal-ok').click(); setTimeout(() => editClient(${c.id}), 180);">${ICON_EDIT} 수정</button>
+      <button class="btn" onclick="document.querySelector('.sm-modal-ok').click(); setTimeout(() => showClientHistory(${c.id}), 180);">${ICON_HISTORY} 이력</button>
+    </div>`;
+  smDialog({ title: c.name, html, icon:'🏢', cancelText:null, okText:'닫기', wide:true });
+}
 
 function sortedClients(){
   const n = v => { const x = parseInt(String(v || '').replace(/\D/g, ''), 10); return isNaN(x) ? Infinity : x; };
@@ -2216,7 +2412,7 @@ function renderClients(){
             <tr>
               <td>${cellV('seq', c.seq)}</td>
               <td><span class="tag ${c.type==='법인'?'tag-corp-type':'tag-indiv-type'}">${c.type}</span></td>
-              <td>${cellV('name', c.name)}</td>
+              <td><a class="cl-name" onclick="openClientDetail(${c.id})" title="거래처 모아보기">${cellV('name', c.name)}</a></td>
               <td>${cellV('biz', c.biz)}</td>
               <td>${cellV('corpNo', c.corpNo)}</td>
               <td>${cellV('ceo', c.ceo)}</td>
@@ -2483,6 +2679,53 @@ async function readRemoteVersion(){
   const v = await gapi.client.sheets.spreadsheets.values.get({ spreadsheetId: googleSpreadsheetId, range: `data!B${idx + 2}` });
   return ((v.result.values || [])[0] || [])[0] || null;
 }
+// ── 자동 백업: 하루 한 번, SM_data 안에 "backup_YYYY-MM-DD" 탭으로 저장 (최근 14개만 유지)
+const BACKUP_KEEP = 14;
+let backupDoneToday = null;
+async function listBackupSheets(){
+  const res = await gapi.client.sheets.spreadsheets.get({ spreadsheetId: googleSpreadsheetId, fields: 'sheets.properties(sheetId,title)' });
+  return (res.result.sheets || []).map(s => s.properties).filter(p => /^backup_\d{4}-\d{2}-\d{2}$/.test(p.title)).sort((a, b) => a.title.localeCompare(b.title));
+}
+async function dailyBackupIfNeeded(rows){
+  const T = todayStr();
+  if(backupDoneToday === T) return;
+  const list = await listBackupSheets();
+  const title = 'backup_' + T;
+  backupDoneToday = T;
+  if(list.some(p => p.title === title)) return;
+  await gapi.client.sheets.spreadsheets.batchUpdate({ spreadsheetId: googleSpreadsheetId, resource: { requests: [{ addSheet: { properties: { title } } }] } });
+  await gapi.client.sheets.spreadsheets.values.update({ spreadsheetId: googleSpreadsheetId, range: `'${title}'!A1`, valueInputOption: 'RAW', resource: { values: [['key','json']].concat(rows) } });
+  const old = list.slice(0, Math.max(0, list.length + 1 - BACKUP_KEEP));
+  if(old.length) await gapi.client.sheets.spreadsheets.batchUpdate({ spreadsheetId: googleSpreadsheetId, resource: { requests: old.map(p => ({ deleteSheet: { sheetId: p.sheetId } })) } });
+}
+function rowsToSnapshot(rows){
+  const map = {}, parts = {};
+  rows.forEach(r => {
+    if(!r[0] || r[1] == null || r[0] === 'key') return;
+    const m = /^(.*)__(\d+)$/.exec(r[0]);
+    if(m){ (parts[m[1]] = parts[m[1]] || [])[+m[2]] = r[1]; } else map[r[0]] = r[1];
+  });
+  Object.keys(parts).forEach(k => { if(map[k] != null) map[k] += parts[k].slice(2).join(''); });
+  const o = {};
+  Object.keys(map).forEach(k => { if(k !== '__version'){ try{ o[k] = JSON.parse(map[k]); }catch(e){} } });
+  return o;
+}
+async function showBackups(){
+  if(!googleAccessToken || !googleSpreadsheetId){ smAlert('먼저 Google 로그인을 해주세요'); return; }
+  const list = (await listBackupSheets()).reverse();
+  const html = list.length ? list.map(p => `<div class="cl-hist-item"><div class="cl-hist-head"><b>${p.title.replace('backup_','')}</b>
+      <button class="btn xs" onclick="document.querySelector('.sm-modal-ok').click(); setTimeout(() => restoreBackup('${p.title}'), 180);">이 날짜로 되돌리기</button></div></div>`).join('')
+    : '<div class="cl-hist-empty">아직 백업이 없어요. 오늘 첫 저장 때 만들어져요.</div>';
+  smDialog({ title:'백업 목록', html:`<div class="cl-hist"><div class="cl-hist-meta">하루 한 번 자동 저장 · 최근 ${BACKUP_KEEP}일치 보관</div>${html}</div>`, icon:'⟲', cancelText:null, okText:'닫기', wide:true });
+}
+async function restoreBackup(title){
+  if(!(await smConfirm(`${title.replace('backup_','')} 백업으로 되돌릴까요?`, '지금 데이터는 그 날짜 상태로 바뀌어요. (지금 상태도 오늘 백업에 남아 있어요)', { tone:'danger', icon:'!', okText:'되돌리기' }))) return;
+  const res = await gapi.client.sheets.spreadsheets.values.get({ spreadsheetId: googleSpreadsheetId, range: `'${title}'!A1:B1000` });
+  applySnapshot(rowsToSnapshot(res.result.values || []));
+  renderAll();
+  smAlert('되돌렸어요', `${title.replace('backup_','')} 백업 내용으로 바꿨어요.`, { icon:'✓' });
+}
+
 async function saveToGoogleSheet(){
   saveTimer = null;
   if(!googleAccessToken || !googleSpreadsheetId || !sheetLoadedOnce) return;
@@ -2531,6 +2774,7 @@ async function saveToGoogleSheet(){
     });
     lastSyncedVersion = newVersion;
     lastSyncedContent = snapStr;
+    dailyBackupIfNeeded(rows).catch(e => console.warn('백업 실패', e));
     // 저장하는 동안 또 바뀐 게 없으면 보관본 삭제
     if(JSON.stringify(collectGoogleSnapshot()) === snapStr) clearPendingChanges();
     const t = new Date();
@@ -3129,6 +3373,30 @@ function renderSettings(){
         <div class="hint" id="smDeployMsg" style="margin-top:6px;">${smDeployMsgText}</div>
       </div>
 
+      <div class="settings-block" id="settings-recurring">
+        <div style="flex:1;">
+          <h3>반복 할 일</h3>
+          <div class="hint">매월 같은 날 할 일을 자동으로 만들어요. (이번 달·다음 달분)</div>
+          <div style="margin-top:10px;">
+            ${(settings.recurring || []).length ? settings.recurring.slice().sort((a, b) => a.day - b.day).map(r => `
+              <div class="rec-row"><b>매월 ${r.day}일</b><span>${r.text}</span>
+                <span class="row-actions">
+                  <button class="icon-btn" onclick="editRecurringRule(${r.id})" title="수정">${ICON_EDIT}</button>
+                  <button class="icon-btn danger" onclick="deleteRecurringRule(${r.id})" title="삭제">${ICON_TRASH}</button>
+                </span></div>`).join('') : '<div class="hint">등록된 반복 할 일이 없어요.</div>'}
+          </div>
+        </div>
+        <button class="btn primary xs" onclick="addRecurringRule()">+ 추가</button>
+      </div>
+
+      <div class="settings-block" id="settings-backup">
+        <div>
+          <h3>자동 백업</h3>
+          <div class="hint">하루 한 번 SM_data 안에 백업 탭을 만들어요. 최근 14일치를 보관하고, 원하는 날짜로 되돌릴 수 있어요.</div>
+        </div>
+        <button class="btn xs" onclick="showBackups()">백업 목록</button>
+      </div>
+
       <div class="settings-block" id="settings-reset">
         <div class="row">
           <div>
@@ -3161,6 +3429,7 @@ function renderSettings(){
    ========================================================= */
 
 function renderAllNoSave(){
+  try{ ensurePayMonths(); ensureTaxRows(); generateRecurringTasks(); }catch(e){ console.warn(e); }
   renderHome(); renderWorklist(); renderVat(); renderPay(); renderCorp(); renderIndiv(); renderClients(); renderSettings();
 }
 function renderAll(){
@@ -3212,6 +3481,7 @@ function startAppAfterAuth(){
   document.getElementById('todayPill').textContent = todayStr().replaceAll('-','.');
   setTimeout(updateConnectBanner, 0);
   renderNav();
+  try{ ensurePayMonths(); const cm = `${new Date().getMonth() + 1}월`; if(payMonths.includes(cm)) currentPayMonth = cm; }catch(e){}
   let last = 'home';
   try{ last = localStorage.getItem('sm_last_tab') || 'home'; }catch(e){}
   switchTab(TABS.some(t => t.id === last) ? last : 'home');
