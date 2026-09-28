@@ -719,6 +719,9 @@
   .sm-modal.danger .sm-modal-ok{ background:#e2445c; }
   .sm-modal.danger .sm-modal-ok:hover{ background:#c7334a; }
 
+  .cal-add-btn{ position:absolute; top:26px; right:24px; }
+  .page-head .subtitle:empty{ display:none; }
+
 </style>
 </head>
 <body>
@@ -1605,10 +1608,8 @@ function renderNav(){
     `;
   }).join('');
 
-  if(activeTab === 'home'){
-    document.getElementById('pageHead').innerHTML = '';
-  } else {
-    const [title, subtitle] = TAB_TITLES[activeTab];
+  {
+    const [title, subtitle] = activeTab === 'home' ? ['이달의 일정', ''] : TAB_TITLES[activeTab];
     document.getElementById('pageHead').innerHTML = `
       <div class="underline-bar"></div>
       <h1>${title}</h1>
@@ -1804,12 +1805,8 @@ function renderHome(){
   const el = document.getElementById('tab-home');
 
   el.innerHTML = `
-    <div class="card">
-      <div class="cal-title-row">
-        <span></span>
-        <h2 class="cal-title">일정</h2>
-        <button class="btn primary xs" onclick="addScheduleQuick()">+ 추가</button>
-      </div>
+    <div class="card" style="position:relative;">
+      <button class="btn primary xs cal-add-btn" onclick="addScheduleQuick()">+ 일정 추가</button>
       ${renderCalendar()}
     </div>
 
