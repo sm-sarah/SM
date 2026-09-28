@@ -634,6 +634,40 @@
   .cal-pm:disabled{ opacity:.35; cursor:default; background:#fff; }
   .notice-mtag{ display:inline-block; font-size:11px; font-weight:800; color:#8a5a00; background:#fff3d6; border-radius:999px; padding:1px 7px; margin-right:6px; }
 
+  /* Google 미연결 안내 */
+  .connect-banner{
+    display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;
+    background:#fff; border:1px solid var(--border); border-left:4px solid var(--primary);
+    border-radius:14px; padding:12px 16px; margin-bottom:18px; font-size:14px; box-shadow:var(--shadow-sm);
+  }
+
+  /* ===== 대메뉴: 플로팅 독(D) ===== */
+  aside.sidebar{
+    width:auto; margin:24px 0 0 16px; padding:10px 8px; gap:4px;
+    background:#fff; border:1px solid var(--border); border-radius:26px;
+    box-shadow:0 10px 24px -12px rgba(150,50,90,.35);
+    top:16px;
+  }
+  .nav-item{
+    width:64px; padding:8px 0 7px; gap:4px; border:none; border-radius:18px;
+    background:transparent; box-shadow:none; color:var(--muted);
+  }
+  .nav-item .nav-ic{
+    width:38px; height:38px; border-radius:50%;
+    display:flex; align-items:center; justify-content:center;
+    transition:background .15s, color .15s, transform .15s;
+  }
+  .nav-item svg{ width:20px; height:20px; }
+  .nav-item .tiny{ font-size:11.5px; }
+  .nav-item:hover{ transform:none; box-shadow:none; color:var(--primary-dark); }
+  .nav-item:hover .nav-ic{ background:var(--primary-soft); }
+  .nav-item.active{ background:transparent; box-shadow:none; color:var(--primary-dark); border:none; }
+  .nav-item.active .nav-ic{
+    background:linear-gradient(135deg,#f5a3c2 0%,#f7c46e 100%); color:#fff;
+    box-shadow:0 4px 10px -3px rgba(236,123,166,.6);
+  }
+  .nav-gutter{ width:150px; }
+
 </style>
 </head>
 <body>
@@ -654,7 +688,7 @@
   <span></span>
   <span class="wordmark">Sunmin's Works</span>
   <span style="justify-self:end; display:flex; align-items:center; gap:8px;">
-    <span class="pill warn" id="syncWarningBadge" style="display:none; cursor:pointer;" onclick="goToSettingsSection('settings-google')" title="눌러서 다시 연결하기">⚠ 연동 끊김 · 다시 로그인</span>
+    <span class="pill warn" id="syncWarningBadge" style="display:none; cursor:pointer;" onclick="handleGoogleSignIn()" title="눌러서 다시 연결하기">⚠ 연동 끊김 · 다시 로그인</span>
     <button class="btn xs primary" id="installAppBtn" style="display:none;" onclick="installApp()" title="이 컴퓨터에 앱으로 설치">⬇ 앱 설치</button>
     <span class="today-pill" id="todayPill"></span>
   </span>
@@ -665,6 +699,10 @@
   <div class="nav-gutter"></div>
 
   <main>
+    <div class="connect-banner" id="connectBanner" style="display:none;">
+      <span>이 기기에서는 아직 Google에 연결되지 않아 <b>저장된 데이터가 아닌 기본 화면</b>이 보이고 있어요.</span>
+      <button class="btn primary xs" onclick="handleGoogleSignIn()">Google 연결하고 불러오기</button>
+    </div>
     <div class="page-head" id="pageHead"></div>
 
     <div id="tab-home" class="tab"></div>
@@ -1305,7 +1343,7 @@ let calMonth = _todayForCal.getMonth(); // 0-indexed
 
 let settings = {
   soonDays: 7,          // 마감 임박(주의) 기준 일수
-  displayName: '김세인', // 대시보드 상단 표시용 이름 (예시)
+  displayName: (function(){ try{ return localStorage.getItem('sm_display_name') || ''; }catch(e){ return ''; } })(), // 표시 이름 (이 기기에도 기억)
   sheetsConnected: false,
 };
 
@@ -1469,7 +1507,7 @@ function renderNav(){
     const btn = `
       <button class="nav-item ${t.id===activeTab?'active':''}"
               title="${t.label}" onclick="switchTab('${t.id}')">
-        <svg viewBox="0 0 24 24">${ICONS[t.id]}</svg>
+        <span class="nav-ic"><svg viewBox="0 0 24 24">${ICONS[t.id]}</svg></span>
         <span class="tiny">${t.label}</span>
       </button>
     `;
@@ -2414,10 +2452,12 @@ function handleGoogleSignOut(){
   setSyncStatus('');
   clearSyncWarningBadge();
   renderSettings();
+  updateConnectBanner();
 }
 
 async function afterGoogleSignIn(){
   clearSyncWarningBadge();
+  updateConnectBanner();
   setSyncStatus('연결하는 중...');
   renderSettings();
   try {
@@ -2498,6 +2538,7 @@ async function loadFromGoogleSheet(){
     if(map.corpData)     corpData     = JSON.parse(map.corpData);
     if(map.indivData)    indivData    = JSON.parse(map.indivData);
     if(map.settings)     settings     = Object.assign(settings, JSON.parse(map.settings));
+    try{ if(settings.displayName) localStorage.setItem('sm_display_name', settings.displayName); }catch(e){}
     if(map.vatPeriods)   vatPeriods   = JSON.parse(map.vatPeriods);
     if(map.payMonths)    payMonths    = JSON.parse(map.payMonths);
     if(map.corpYears)    corpYears    = JSON.parse(map.corpYears);
@@ -2534,6 +2575,7 @@ function handleGoogleTokenExpired(){
   const badge = document.getElementById('syncWarningBadge');
   if(badge) badge.style.display = '';
   if(activeTab === 'settings') renderSettings();
+  updateConnectBanner();
 }
 
 function clearSyncWarningBadge(){
@@ -2924,6 +2966,7 @@ function updateSoonDays(v){
 }
 function updateDisplayName(v){
   settings.displayName = v.trim() || settings.displayName;
+  try{ localStorage.setItem('sm_display_name', settings.displayName); }catch(e){}
   renderSettings();
 }
 function resetAllData(){
@@ -2967,7 +3010,7 @@ function renderSettings(){
             <div class="hint">헤더·인사말 등에 쓰이는 이름입니다. 혼자 쓰는 화면이라 실제 계정 정보와는 무관합니다.</div>
           </div>
           <div class="ctrl">
-            <input type="text" value="${settings.displayName}" style="width:140px" onchange="updateDisplayName(this.value)">
+            <input type="text" value="${settings.displayName}" placeholder="이름 입력" style="width:140px" onchange="updateDisplayName(this.value)">
           </div>
         </div>
       </div>
@@ -3096,8 +3139,13 @@ document.addEventListener('visibilitychange', () => {
   if(document.visibilityState === 'visible') pollGoogleSheetForUpdates();
 });
 
+function updateConnectBanner(){
+  const b = document.getElementById('connectBanner');
+  if(b) b.style.display = googleAccessToken ? 'none' : '';
+}
 function startAppAfterAuth(){
   document.getElementById('todayPill').textContent = todayStr().replaceAll('-','.');
+  setTimeout(updateConnectBanner, 0);
   renderNav();
   switchTab('home');
 }
