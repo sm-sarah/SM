@@ -769,8 +769,8 @@
   .notice-sched-chip{ background:#f7f1f4; color:var(--text); border:1px solid var(--border); }
 
   /* 홈 달력: 스크롤 없이 한 화면에 들어오도록 화면 높이에 맞춤 (칸 최소 90px) */
-  .cal-grid{ grid-auto-rows:minmax(max(90px, calc((100vh - 360px) / 6)), auto); }
-  .cal-day{ min-height:max(90px, calc((100vh - 360px) / 6)); }
+  .cal-grid{ grid-auto-rows:minmax(116px, auto); gap:8px; }
+  .cal-day{ min-height:116px; }
 
   /* 거래처 관리 아이콘 */
   .cl-actions{ text-align:center; white-space:nowrap; }
@@ -790,8 +790,8 @@
   .cl-hist-chg s{ color:var(--muted); }
   .cl-hist-empty{ color:var(--muted); font-size:13.5px; padding:8px 0; }
 
-  /* 본문 가로폭 제한: 큰 모니터에서도 가운데 1200px 안에서만 보이게 */
-  main .page-head, main .tab, main .connect-banner{ max-width:1200px; margin-left:auto; margin-right:auto; }
+  /* 본문 가로폭 제한: 큰 모니터에서도 가운데 1460px 안에서만 보이게 (Tax.J 비율) */
+  main .page-head, main .tab, main .connect-banner{ max-width:1460px; margin-left:auto; margin-right:auto; }
 
   /* 행 관리 아이콘 공통 */
   .row-actions{ display:inline-flex; gap:2px; flex:none; margin-left:auto; }
