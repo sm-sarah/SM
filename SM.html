@@ -796,7 +796,9 @@
   /* 행 관리 아이콘 공통 */
   .row-actions{ display:inline-flex; gap:2px; flex:none; margin-left:auto; }
   .row-actions .icon-btn{ width:28px; height:28px; }
-  .task-list li .row-actions{ opacity:.55; transition:opacity .12s; }
+  .task-list li .row-actions{ opacity:0; transition:opacity .12s; }
+  .task-list li:focus-within .row-actions{ opacity:1; }
+  @media (hover:none){ .task-list li .row-actions, .notice-item .row-actions{ opacity:.7; } }   /* 휴대폰(마우스 없음)에서는 항상 보이게 */
   .task-list li:hover .row-actions{ opacity:1; }
   .notice-item{ align-items:center; cursor:default; }
   .notice-text{ flex:1; cursor:pointer; }
@@ -845,6 +847,10 @@
   .rec-row{ display:flex; align-items:center; gap:10px; padding:6px 0; border-bottom:1px solid var(--border); font-size:14px; }
   .rec-row b{ min-width:72px; color:var(--primary-dark); }
   .rec-row span:not(.row-actions){ flex:1; }
+
+  /* 분홍 버튼 글씨 가독성: 조금 더 진한 분홍 바탕 + 글씨 굵기 완화 */
+  button.btn.primary{ background:var(--primary-dark); border-color:var(--primary-dark); font-weight:600; letter-spacing:.1px; }
+  button.btn.primary:hover{ background:#b04571; border-color:#b04571; }
 
 </style>
 </head>
