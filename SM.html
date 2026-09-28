@@ -463,6 +463,116 @@
     display:none;
   }
   #authGate .gate-error.show{ display:block; }
+  /* ===== 가독성 보정 (2026-09-28): 글자·테두리 대비를 높이고 작은 글씨를 키움 ===== */
+  :root{
+    --bg:#f5edf1;
+    --border:#ead6df;
+    --text:#2a1d26;
+    --muted:#6d5a66;
+    --muted-soft:#8f7b87;
+    /* 메인 컬러: 분홍 */
+    --primary:#e0467f;
+    --primary-dark:#b82f63;
+    --primary-soft:#fce3ed;
+    --shadow-sm: 0 1px 3px rgba(33,31,61,.10);
+    --shadow-md: 0 2px 4px rgba(33,31,61,.08), 0 10px 24px -8px rgba(33,31,61,.18);
+  }
+  body{ font-size:15px; }
+  header{ box-shadow:0 1px 0 var(--border); }
+  header .today-pill{ font-size:13.5px; font-weight:700; color:var(--text); background:var(--primary-soft); }
+
+  .nav-item{ border:1px solid var(--border); color:var(--slate); }
+  .nav-item .tiny{ font-size:12px; }
+  .nav-item.active{ background:var(--primary); color:#fff; border-color:var(--primary); }
+
+  .card{ border-color:var(--border); box-shadow:var(--shadow-md); }
+  .card h2{ font-size:17px; }
+  .card .desc{ font-size:13.5px; color:var(--muted); }
+  .page-head .subtitle{ font-size:14px; }
+
+  select, input[type=text], input[type=date], input[type=number]{ font-size:14px; border:1px solid var(--border); background:#fff; color:var(--text); }
+  button.btn{ font-size:13.5px; border:1px solid var(--border); color:var(--text); }
+  button.btn.xs{ font-size:12.5px; padding:6px 11px; }
+  button.btn.ghost{ color:var(--slate); }
+  button.btn.primary{ color:#fff; }
+
+  th{ color:var(--muted); font-size:12.5px; }
+  table{ font-size:14px; }
+  .tag, .pill, .type-tag{ font-size:12.5px; }
+  .task-list .task-date{ font-size:13px; color:var(--slate); }
+  .empty{ font-size:14px; }
+  .stat .label, .hero-tile .label{ font-size:13px; }
+
+  /* 달력: 요일 줄 빈 공간 제거, 칸을 흰색+테두리로 구분 */
+  .cal-head .month-label{ font-size:18px; }
+  .cal-grid{ grid-template-rows:auto; grid-auto-rows:minmax(108px, auto); gap:6px; }
+  .cal-dow{ font-size:13.5px; color:var(--slate); padding:4px 0 6px; }
+  .cal-dow:nth-child(1){ color:#e11d48; }
+  .cal-dow:nth-child(7){ color:#2563eb; }
+  .cal-day{ background:#fff; border:1px solid var(--border); height:auto; min-height:108px; }
+  .cal-day.other{ opacity:1; background:#f7f1f4; }
+  .cal-day.other .cal-daynum{ color:#c3b2bc; }
+  .cal-day.today{ border:2px solid var(--primary); background:#fff4f8; }
+  .cal-daynum{ font-size:13.5px; color:var(--text); }
+  .cal-grid > .cal-day:nth-child(7n+1) .cal-daynum{ color:#e11d48; }
+  .cal-grid > .cal-day:nth-child(7n) .cal-daynum{ color:#2563eb; }
+  .cal-day.today .cal-daynum{ color:var(--primary-dark); }
+  .cal-grid > .cal-day.other .cal-daynum{ color:#c3b2bc; }
+  .cal-tasks{ max-height:none; }
+  .cal-task{ font-size:12px; padding:4px 7px; }
+  .cal-task.cd-vat{ background:#d1fae5; color:#065f46; }
+  .cal-task.cd-pay{ background:#dbeafe; color:#1e40af; }
+  .cal-task.cd-corp{ background:#ffe4e6; color:#9f1239; }
+  .cal-task.cd-indiv{ background:#ede9fe; color:#5b21b6; }
+  .cal-task.cd-etc{ background:#fef3c7; color:#92400e; }
+
+  /* To do */
+  .wl-agenda{ background:#fff; }
+  .wl-day-head{ background:#fff; font-size:13.5px; color:var(--slate); }
+  .wl-daynav-label{ font-size:18px; }
+  .wl-rel{ font-size:12px; }
+  .wl-moved{ font-size:11.5px; }
+  .task-list li{ border-bottom-color:var(--border); }
+
+  /* ===== To do 상단 체크리스트: 공지 카드 스타일 ===== */
+  .notice-card{
+    max-width:760px; margin:0 auto 22px;
+    background:linear-gradient(180deg,#fffaf0 0%,#ffffff 70%);
+    border:1px solid #f3e3c3; border-top:5px solid #f5b544;
+    border-radius:var(--radius-lg);
+    padding:22px 28px 20px;
+    box-shadow:var(--shadow-md);
+  }
+  .notice-title{ text-align:center; font-size:22px; font-weight:800; letter-spacing:-.3px; color:var(--text); }
+  .notice-months{ display:flex; justify-content:center; align-items:center; gap:6px; margin:10px 0 12px; flex-wrap:wrap; }
+  .notice-month{
+    font-family:inherit; font-size:13px; font-weight:700; cursor:pointer;
+    padding:5px 14px; border-radius:999px; border:1px solid #efd9ad; background:#fff; color:#8a5a00;
+  }
+  .notice-month.on{ background:#f5b544; border-color:#f5b544; color:#fff; }
+  .notice-arrow{ border:none; background:transparent; color:#b7862b; cursor:pointer; font-size:12px; padding:4px 6px; }
+  .notice-arrow:disabled{ opacity:.3; cursor:default; }
+  .notice-progress{ height:6px; border-radius:999px; background:#f6ead2; overflow:hidden; max-width:320px; margin:0 auto; }
+  .notice-progress span{ display:block; height:100%; background:#f5b544; border-radius:999px; transition:width .2s; }
+  .notice-count{ text-align:center; font-size:12.5px; color:#8a5a00; font-weight:700; margin:6px 0 14px; }
+  .notice-items{ display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:8px 10px; }
+  .notice-item{
+    display:flex; align-items:flex-start; gap:9px; cursor:pointer;
+    background:#fff; border:1px solid #f1e4c8; border-radius:12px;
+    padding:10px 12px; font-size:14px; line-height:1.4;
+  }
+  .notice-item:hover{ border-color:#f5b544; }
+  .notice-item input{ margin-top:2px; accent-color:#f5b544; width:16px; height:16px; flex:none; }
+  .notice-item.done{ background:#faf7f0; }
+  .notice-item.done span{ text-decoration:line-through; color:var(--muted-soft); }
+  .notice-sched{ margin-top:16px; padding-top:14px; border-top:1px dashed #efd9ad; display:flex; flex-wrap:wrap; gap:6px; align-items:center; }
+  .notice-sched-label{ font-size:12.5px; font-weight:800; color:#8a5a00; margin-right:4px; }
+  .notice-sched-chip{ font-size:12.5px; background:#fff3d6; color:#6b4500; padding:4px 10px; border-radius:999px; }
+  @media (max-width:640px){ .notice-items{ grid-template-columns:1fr; } .notice-card{ padding:18px 16px; } }
+
+  input[type=checkbox]{ accent-color:var(--primary); }
+  .notice-item input{ accent-color:#f5b544; }
+
 </style>
 </head>
 <body>
@@ -1535,31 +1645,34 @@ function renderWorklist(){
   }
   const selIdx = months.indexOf(worklistSelMonth);
 
-  const refSections = months.length ? [worklistSelMonth].map(m => `
-    <div class="card">
-      <div class="toolbar" style="justify-content:space-between; align-items:center;">
-        <h2 style="margin:0;">${m} 체크리스트</h2>
-        <div style="display:flex; gap:6px; flex-wrap:wrap; align-items:center;">
-          <button class="btn ghost xs" ${selIdx <= 0 ? 'disabled' : ''} onclick="selectWorklistMonth('${months[selIdx - 1] || ''}')">◀</button>
-          ${months.map(mm => `<button class="btn xs ${mm === m ? 'primary' : ''}" onclick="selectWorklistMonth('${mm}')">${mm}</button>`).join('')}
-          <button class="btn ghost xs" ${selIdx >= months.length - 1 ? 'disabled' : ''} onclick="selectWorklistMonth('${months[selIdx + 1] || ''}')">▶</button>
-        </div>
+  const refSections = months.length ? [worklistSelMonth].map(m => {
+    const items = worklistChecklist[m] || [];
+    const doneN = items.filter(x => x.done).length;
+    const sched = worklistSchedule[m] || [];
+    return `
+    <div class="notice-card">
+      <div class="notice-title">체크리스트</div>
+      <div class="notice-months">
+        <button class="notice-arrow" ${selIdx <= 0 ? 'disabled' : ''} onclick="selectWorklistMonth('${months[selIdx - 1] || ''}')">◀</button>
+        ${months.map(mm => `<button class="notice-month ${mm === m ? 'on' : ''}" onclick="selectWorklistMonth('${mm}')">${mm}</button>`).join('')}
+        <button class="notice-arrow" ${selIdx >= months.length - 1 ? 'disabled' : ''} onclick="selectWorklistMonth('${months[selIdx + 1] || ''}')">▶</button>
       </div>
-      <div class="desc">그 달에 반복적으로 챙겨야 하는 항목이에요. 특정 날짜에 매이지 않아요.</div>
-      <ul class="task-list">
-        ${(worklistChecklist[m] || []).map((item, idx) => `
-          <li class="${item.done ? 'done' : ''}">
+      ${items.length ? `<div class="notice-progress"><span style="width:${Math.round(doneN / items.length * 100)}%"></span></div>
+      <div class="notice-count">${doneN} / ${items.length} 완료</div>` : ''}
+      <div class="notice-items">
+        ${items.map((item, idx) => `
+          <label class="notice-item ${item.done ? 'done' : ''}">
             <input type="checkbox" ${item.done ? 'checked' : ''} onchange="toggleWorklistCheck('${m}', ${idx})">
-            <span class="task-text">${item.text}</span>
-          </li>`).join('')}
-      </ul>
-      ${(worklistSchedule[m] || []).length ? `
-        <div class="desc" style="margin-top:14px; margin-bottom:6px;">주요 세무일정 (참고용)</div>
-        <ul class="deadline-list">
-          ${(worklistSchedule[m] || []).map(s => `<li><span class="left">${s}</span></li>`).join('')}
-        </ul>` : ''}
-    </div>
-  `).join('') : '';
+            <span>${item.text}</span>
+          </label>`).join('') || '<div class="empty" style="padding:10px 0;">이 달의 체크리스트가 없어요.</div>'}
+      </div>
+      ${sched.length ? `
+        <div class="notice-sched">
+          <div class="notice-sched-label">주요 세무일정</div>
+          ${sched.map(x => `<span class="notice-sched-chip">${x}</span>`).join('')}
+        </div>` : ''}
+    </div>`;
+  }).join('') : '';
 
   const todayS = todayStr();
   if(!worklistViewDate) worklistViewDate = todayS;
