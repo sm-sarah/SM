@@ -352,6 +352,14 @@
   }
   .wl-day-head.today{ color:var(--primary-dark); }
   .wl-day .task-list{ margin:0; }
+  .wl-daynav{ display:flex; align-items:center; justify-content:center; gap:14px; margin:14px 0 10px; }
+  .wl-daynav-label{ font-size:16px; font-weight:800; min-width:190px; text-align:center; }
+  .wl-rel{ display:inline-block; margin-left:6px; padding:2px 9px; border-radius:999px; font-size:11px; background:var(--slate-soft); color:var(--muted); vertical-align:middle; }
+  .wl-rel.today{ background:var(--primary-soft); color:var(--primary-dark); }
+  .wl-carry{ border:1px solid var(--amber-soft); background:#fffaf0; border-radius:14px; padding:10px 14px; margin-bottom:12px; }
+  .wl-carry-head{ display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; font-size:13px; }
+  .wl-carry .task-list li{ padding:8px 0; }
+  .wl-moved{ display:inline-block; margin-left:6px; padding:1px 7px; border-radius:999px; font-size:10.5px; font-weight:700; background:var(--amber-soft); color:#b45309; }
   .wl-day .task-list li{ padding:8px 0; }
 
   .deadline-list{ list-style:none; margin:0; padding:0; }
@@ -1215,7 +1223,7 @@ let indivData = {
    ========================================================= */
 
 function clientById(id){ return clients.find(c => c.id === id); }
-function todayStr(){ return new Date().toISOString().slice(0,10); }
+function todayStr(){ const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
 
 function dueClass(dateStr){
   const today = new Date(todayStr());
@@ -1494,6 +1502,7 @@ function toggleWorklistCheck(month, idx){
 }
 
 function scrollToWorklistDate(dateStr){
+  if(dateStr){ setWorklistDay(dateStr); return; }
   const container = document.getElementById('worklistAgenda');
   if(!container || !dateStr) return;
   let target = document.getElementById('wl-day-' + dateStr);
@@ -1552,46 +1561,180 @@ function renderWorklist(){
     </div>
   `).join('') : '';
 
-  const sorted = [...tasks].sort((a, b) => a.date.localeCompare(b.date));
-  const byDate = {};
-  sorted.forEach(t => { (byDate[t.date] = byDate[t.date] || []).push(t); });
-  const dateKeys = Object.keys(byDate).sort();
   const todayS = todayStr();
-
-  const agenda = dateKeys.map(date => `
-    <div class="wl-day" id="wl-day-${date}">
-      <div class="wl-day-head ${date === todayS ? 'today' : ''}">${worklistDayLabel(date)}</div>
-      <ul class="task-list">
-        ${byDate[date].map(t => `
-          <li class="${t.done ? 'done' : ''}">
-            <input type="checkbox" ${t.done ? 'checked' : ''} onchange="toggleTask(${t.id})">
-            <span class="task-text">${t.text}</span>
-            <button class="btn ghost xs" onclick="deleteTask(${t.id})">삭제</button>
-          </li>`).join('')}
-      </ul>
-    </div>
-  `).join('');
+  if(!worklistViewDate) worklistViewDate = todayS;
 
   el.innerHTML = `
     ${refSections}
     <div class="card">
       <h2>날짜별 할 일</h2>
-      <div class="desc">스크롤로 날짜를 계속 이어서 볼 수 있고, 특정 날짜로 바로 이동할 수도 있어요.</div>
-      <div class="toolbar">
-        <input type="date" id="newTaskDate" value="${todayS}">
-        <input type="text" id="newTaskText" placeholder="할 일을 입력하세요" style="flex:1; min-width:200px;">
+      <div class="desc">◀ ▶ 버튼(또는 키보드 ← →, 휴대폰은 좌우로 밀기)으로 하루씩 넘겨볼 수 있어요.</div>
+      <div class="wl-daynav">
+        <button class="btn" onclick="shiftWorklistDay(-1)" title="이전 날">◀</button>
+        <div class="wl-daynav-label" id="wlDayLabel"></div>
+        <button class="btn" onclick="shiftWorklistDay(1)" title="다음 날">▶</button>
+      </div>
+      <div class="toolbar" style="justify-content:center;">
+        <input type="date" id="worklistJumpDate" value="${worklistViewDate}" onchange="setWorklistDay(this.value)">
+        <button class="btn ghost" onclick="setWorklistDay(todayStr())">오늘</button>
+        <input type="text" id="worklistSearch" placeholder="할 일 검색 (전체 날짜)" value="${escapeAttr(worklistSearch)}" oninput="onWorklistSearch(this.value)" style="flex:1; min-width:180px;">
+      </div>
+      <div id="worklistCarry"></div>
+      <div class="wl-agenda" id="worklistAgenda"></div>
+      <div class="toolbar" style="margin-top:12px;">
+        <input type="date" id="newTaskDate" value="${worklistViewDate}">
+        <input type="text" id="newTaskText" placeholder="할 일을 입력하세요 (Enter로 추가)" style="flex:1; min-width:200px;" onkeydown="if(event.key==='Enter' && !event.isComposing) addTask()">
         <button class="btn primary" onclick="addTask()">추가</button>
-      </div>
-      <div class="toolbar">
-        <input type="date" id="worklistJumpDate" value="${todayS}">
-        <button class="btn" onclick="jumpToWorklistDate()">이 날짜로 이동</button>
-        <button class="btn ghost" onclick="jumpToWorklistToday()">오늘로 이동</button>
-      </div>
-      <div class="wl-agenda" id="worklistAgenda">
-        ${dateKeys.length ? agenda : `<div class="empty">등록된 할 일이 없습니다.</div>`}
       </div>
     </div>
   `;
+  renderWorklistBody();
+  bindWorklistSwipe();
+}
+
+/* ----- 날짜별 할 일: 하루씩 보기 / 검색 / 미완료 넘기기 ----- */
+let worklistViewDate = null;
+let worklistSearch = '';
+let worklistCarryOpen = false;
+const WL_CARRY_DAYS = 14;   // 오늘 기준 최근 며칠까지의 못한 일을 '넘기기' 대상으로 보여줄지
+
+function escapeAttr(v){ return String(v || '').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
+function addDaysStr(dateStr, n){
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const dt = new Date(y, m - 1, d + n);
+  return `${dt.getFullYear()}-${pad2(dt.getMonth()+1)}-${pad2(dt.getDate())}`;
+}
+function shortDate(dateStr){ const [, m, d] = dateStr.split('-'); return `${parseInt(m,10)}/${parseInt(d,10)}`; }
+
+function setWorklistDay(dateStr){
+  if(!dateStr) return;
+  worklistViewDate = dateStr;
+  worklistSearch = '';
+  const s = document.getElementById('worklistSearch'); if(s) s.value = '';
+  const j = document.getElementById('worklistJumpDate'); if(j) j.value = dateStr;
+  const n = document.getElementById('newTaskDate'); if(n) n.value = dateStr;
+  renderWorklistBody();
+}
+function shiftWorklistDay(n){ setWorklistDay(addDaysStr(worklistViewDate || todayStr(), n)); }
+function onWorklistSearch(v){ worklistSearch = v; renderWorklistBody(); }
+
+function carryCandidates(){
+  const todayS = todayStr();
+  const from = addDaysStr(todayS, -WL_CARRY_DAYS);
+  // 같은 내용이 오늘 이후 날짜에 이미 있으면(직접 다시 적어둔 경우) 제외
+  const ahead = new Set(tasks.filter(t => t.date >= todayS).map(t => (t.text || '').trim()));
+  const seen = new Set();
+  return tasks.filter(t => !t.done && t.date < todayS && t.date >= from)
+              .sort((a, b) => b.date.localeCompare(a.date))
+              .filter(t => { const k = (t.text || '').trim(); if(ahead.has(k) || seen.has(k)) return false; seen.add(k); return true; })
+              .sort((a, b) => a.date.localeCompare(b.date));
+}
+// 못한 일을 오늘로 옮김. 원래 날짜는 movedFrom 에 남겨 '9/23에서 넘어옴' 으로 표시.
+function carryTaskToToday(id){
+  const t = tasks.find(x => x.id === id);
+  if(!t) return;
+  if(!t.movedFrom) t.movedFrom = t.date;
+  if(t.source === 'master') t.source = 'moved';   // 마스터 시트 다시 불러와도 지워지지 않도록
+  t.date = todayStr();
+  renderAll();
+}
+function carryAllToToday(){
+  const list = carryCandidates();
+  if(!list.length) return;
+  if(!confirm(`최근 ${WL_CARRY_DAYS}일 동안 못한 일 ${list.length}건을 오늘로 넘길까요?`)) return;
+  const todayS = todayStr();
+  list.forEach(t => {
+    if(!t.movedFrom) t.movedFrom = t.date;
+    if(t.source === 'master') t.source = 'moved';
+    t.date = todayS;
+  });
+  renderAll();
+}
+function toggleCarryList(){ worklistCarryOpen = !worklistCarryOpen; renderWorklistBody(); }
+
+function wlTaskItem(t, opts = {}){
+  const todayS = todayStr();
+  const canCarry = !t.done && t.date < todayS;
+  return `
+    <li class="${t.done ? 'done' : ''}">
+      <input type="checkbox" ${t.done ? 'checked' : ''} onchange="toggleTask(${t.id})">
+      ${opts.showDate ? `<span class="task-date" style="cursor:pointer;" onclick="setWorklistDay('${t.date}')" title="이 날짜로 이동">${shortDate(t.date)}</span>` : ''}
+      <span class="task-text">${t.text}${t.movedFrom ? ` <span class="wl-moved">${shortDate(t.movedFrom)}에서 넘어옴</span>` : ''}</span>
+      ${canCarry ? `<button class="btn xs" onclick="carryTaskToToday(${t.id})" title="오늘 할 일로 옮기기">오늘로 →</button>` : ''}
+      <button class="btn ghost xs" onclick="deleteTask(${t.id})">삭제</button>
+    </li>`;
+}
+
+function renderWorklistBody(){
+  const body = document.getElementById('worklistAgenda');
+  if(!body) return;
+  const todayS = todayStr();
+  const date = worklistViewDate || todayS;
+
+  const label = document.getElementById('wlDayLabel');
+  if(label){
+    const rel = date === todayS ? '오늘' : date === addDaysStr(todayS, -1) ? '어제' : date === addDaysStr(todayS, 1) ? '내일' : '';
+    label.innerHTML = `${worklistDayLabel(date)}${rel ? ` <span class="wl-rel ${rel === '오늘' ? 'today' : ''}">${rel}</span>` : ''}`;
+  }
+
+  // 미완료 넘기기 배너: 오늘 화면에서만
+  const carryEl = document.getElementById('worklistCarry');
+  if(carryEl){
+    const cands = (date === todayS && !worklistSearch.trim()) ? carryCandidates() : [];
+    carryEl.innerHTML = cands.length ? `
+      <div class="wl-carry">
+        <div class="wl-carry-head">
+          <span>지난 ${WL_CARRY_DAYS}일 동안 못한 일 <b>${cands.length}건</b></span>
+          <span style="display:flex; gap:6px;">
+            <button class="btn ghost xs" onclick="toggleCarryList()">${worklistCarryOpen ? '접기' : '골라서 넘기기'}</button>
+            <button class="btn primary xs" onclick="carryAllToToday()">모두 오늘로</button>
+          </span>
+        </div>
+        ${worklistCarryOpen ? `<ul class="task-list">${cands.map(t => wlTaskItem(t, {showDate:true})).join('')}</ul>` : ''}
+      </div>` : '';
+  }
+
+  const q = worklistSearch.trim().toLowerCase();
+  if(q){
+    const hits = tasks.filter(t => (t.text || '').toLowerCase().includes(q))
+                      .sort((a, b) => b.date.localeCompare(a.date));
+    body.innerHTML = hits.length ? `
+      <div class="wl-day-head">검색 결과 ${hits.length}건 · 날짜를 누르면 그 날로 이동해요</div>
+      <ul class="task-list">${hits.map(t => wlTaskItem(t, {showDate:true})).join('')}</ul>`
+      : `<div class="empty">"${escapeAttr(worklistSearch)}" 검색 결과가 없습니다.</div>`;
+    return;
+  }
+
+  const dayTasks = tasks.filter(t => t.date === date);
+  const left = dayTasks.filter(t => !t.done).length;
+  body.innerHTML = dayTasks.length ? `
+      <div class="wl-day-head">${dayTasks.length}건 · 남은 일 ${left}건</div>
+      <ul class="task-list">${dayTasks.map(t => wlTaskItem(t)).join('')}</ul>`
+    : `<div class="empty">이 날은 등록된 할 일이 없어요.</div>`;
+}
+
+let wlSwipeBound = false;
+function bindWorklistSwipe(){
+  const el = document.getElementById('worklistAgenda');
+  if(!el) return;
+  let sx = null, sy = null;
+  el.addEventListener('touchstart', e => { sx = e.touches[0].clientX; sy = e.touches[0].clientY; }, {passive:true});
+  el.addEventListener('touchend', e => {
+    if(sx === null) return;
+    const dx = e.changedTouches[0].clientX - sx, dy = e.changedTouches[0].clientY - sy;
+    sx = null;
+    if(Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5 && !worklistSearch.trim()) shiftWorklistDay(dx < 0 ? 1 : -1);
+  }, {passive:true});
+  if(!wlSwipeBound){
+    wlSwipeBound = true;
+    document.addEventListener('keydown', e => {
+      if(typeof activeTab === 'undefined' || activeTab !== 'worklist') return;
+      const tag = (e.target.tagName || '').toLowerCase();
+      if(tag === 'input' || tag === 'textarea' || tag === 'select' || e.target.isContentEditable) return;
+      if(e.key === 'ArrowLeft'){ shiftWorklistDay(-1); e.preventDefault(); }
+      if(e.key === 'ArrowRight'){ shiftWorklistDay(1); e.preventDefault(); }
+    });
+  }
 }
 
 /* =========================================================
@@ -2370,7 +2513,9 @@ async function importWorklistFromMaster(){
     dayTasks.forEach(t => importedTasks.push({ id: nextTaskId++, date: t.date, text: t.text, done: t.done, source: 'master' }));
   }
 
-  tasks = tasks.filter(t => t.source !== 'master').concat(importedTasks);
+  // 오늘로 넘긴 할 일은 원래 날짜에 다시 생기지 않도록 제외
+  const movedKeys = new Set(tasks.filter(t => t.movedFrom).map(t => t.movedFrom + '|' + t.text));
+  tasks = tasks.filter(t => t.source !== 'master').concat(importedTasks.filter(t => !movedKeys.has(t.date + '|' + t.text)));
   worklistChecklist = Object.assign({}, worklistChecklist, newChecklist);
   worklistSchedule = Object.assign({}, worklistSchedule, newSchedule);
 
