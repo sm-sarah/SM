@@ -2565,6 +2565,7 @@ async function afterGoogleSignIn(){
     const found = await findGoogleDataSheet();
     googleSpreadsheetId = found || await createGoogleDataSheet();
     await loadFromGoogleSheet();
+    sheetLoadedOnce = true;
     settings.sheetsConnected = true;
     setSyncStatus('연동됨 · 방금 불러왔습니다');
     startGooglePolling();
@@ -2621,6 +2622,8 @@ function collectGoogleSnapshot(){
   };
 }
 
+let needsResaveAfterLoad = false;
+let sheetLoadedOnce = false;
 async function loadFromGoogleSheet(){
   const res = await gapi.client.sheets.spreadsheets.values.get({
     spreadsheetId: googleSpreadsheetId,
@@ -2628,8 +2631,26 @@ async function loadFromGoogleSheet(){
   });
   const rows = res.result.values || [];
   const map = {};
-  rows.forEach(r => { if(r[0] && r[1]) map[r[0]] = r[1]; });
+  // 셀 하나에 5만 자까지만 들어가서, 긴 값은 "tasks", "tasks__2", "tasks__3"… 여러 줄로 나눠 저장함 → 다시 이어붙임
+  const parts = {};
+  rows.forEach(r => {
+    if(!r[0] || r[1] == null) return;
+    const m = /^(.*)__(\d+)$/.exec(r[0]);
+    if(m){ (parts[m[1]] = parts[m[1]] || [])[+m[2]] = r[1]; }
+    else map[r[0]] = r[1];
+  });
+  Object.keys(parts).forEach(k => { if(map[k] != null) map[k] += parts[k].slice(2).join(''); });
   if(!Object.keys(map).length) return;
+
+  // 보호장치: 시트의 할 일이 비어 있는데(예전 저장 실패 등) 이 파일에 할 일이 들어 있으면 지우지 않고 유지 후 다시 저장
+  try {
+    const sheetTasks = map.tasks ? JSON.parse(map.tasks) : null;
+    const sheetNext = map.nextTaskId ? JSON.parse(map.nextTaskId) : 0;
+    if(Array.isArray(sheetTasks) && sheetTasks.length === 0 && tasks.length > 0 && sheetNext < nextTaskId){
+      delete map.tasks; delete map.nextTaskId;
+      needsResaveAfterLoad = true;
+    }
+  } catch(e){}
 
   try {
     if(map.clients)     clients     = JSON.parse(map.clients);
@@ -2688,16 +2709,23 @@ function clearSyncWarningBadge(){
 async function saveToGoogleSheet(){
   if(!googleAccessToken || !googleSpreadsheetId) return;
   const snap = collectGoogleSnapshot();
-  const rows = GOOGLE_DATA_KEYS.map(k => [k, JSON.stringify(snap[k])]);
+  const CHUNK = 45000;
+  const rows = [];
+  GOOGLE_DATA_KEYS.forEach(k => {
+    const str = JSON.stringify(snap[k]);
+    rows.push([k, str.slice(0, CHUNK)]);
+    for(let i = CHUNK, n = 2; i < str.length; i += CHUNK, n++) rows.push([`${k}__${n}`, str.slice(i, i + CHUNK)]);
+  });
   setSyncStatus('저장 중...');
   try {
-    await gapi.client.sheets.spreadsheets.values.clear({
-      spreadsheetId: googleSpreadsheetId, range: 'data!A2:B1000',
-    });
+    // 먼저 새 내용으로 덮어쓰고(실패하면 기존 데이터가 그대로 남음), 성공한 뒤에 남는 아래쪽 줄만 지움
     await gapi.client.sheets.spreadsheets.values.update({
       spreadsheetId: googleSpreadsheetId, range: 'data!A2',
       valueInputOption: 'RAW',
       resource: { values: rows },
+    });
+    await gapi.client.sheets.spreadsheets.values.clear({
+      spreadsheetId: googleSpreadsheetId, range: `data!A${rows.length + 2}:B1000`,
     });
     const t = new Date();
     clearSyncWarningBadge();
@@ -2713,7 +2741,7 @@ async function saveToGoogleSheet(){
 }
 
 function scheduleGoogleSave(){
-  if(!googleAccessToken || !googleSpreadsheetId) return;
+  if(!googleAccessToken || !googleSpreadsheetId || !sheetLoadedOnce) return;
   clearTimeout(saveTimer);
   saveTimer = setTimeout(saveToGoogleSheet, 900);
 }
