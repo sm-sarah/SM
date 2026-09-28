@@ -1713,10 +1713,16 @@ function calendarDeadlines(){
     seen.add(key);
     list.push({date, domain, label});
   };
-  Object.entries(vatDue || {}).forEach(([k, d]) => push(d, '부가가치세', `부가세 ${k} 신고기한`));
-  Object.entries(payDue || {}).forEach(([k, d]) => push(d, '원천세·급여', `원천세 ${k}분 신고기한`));
-  Object.entries(corpDue || {}).forEach(([k, d]) => push(d, '법인세', `법인세 ${k}년 귀속 신고기한`));
-  Object.entries(indivDue || {}).forEach(([k, d]) => push(d, '종합소득세', `종소세 ${k}년 귀속 신고기한`));
+  Object.entries(vatDue || {}).forEach(([k, d]) => push(d, '부가가치세', `${k} 부가세 신고기한`));
+  Object.entries(payDue || {}).forEach(([k, d]) => {
+    // "8월" + 기한 2026-09-10 → 2026년 8월 귀속 (12월분처럼 기한이 다음 해면 한 해 앞)
+    const mo = parseInt(k, 10);
+    let yr = d ? parseInt(d.slice(0, 4), 10) : new Date().getFullYear();
+    if(d && !isNaN(mo) && mo > parseInt(d.slice(5, 7), 10)) yr -= 1;
+    push(d, '원천세·급여', isNaN(mo) ? `${k} 원천세 신고기한` : `${yr}년 ${mo}월 귀속 원천세 신고기한`);
+  });
+  Object.entries(corpDue || {}).forEach(([k, d]) => push(d, '법인세', `${k}년 귀속 법인세 신고기한`));
+  Object.entries(indivDue || {}).forEach(([k, d]) => push(d, '종합소득세', `${k}년 귀속 종소세 신고기한`));
   // 주요 세무일정: "7/27 부가가치세 확정신고" 처럼 앞에 월/일이 있는 것만
   const baseYear = calYear;
   Object.values(worklistSchedule || {}).forEach(arr => (arr || []).forEach(txt => {
