@@ -724,6 +724,50 @@
 
   .nav-item svg{ overflow:visible; }
 
+  /* Today: 왼쪽 위 '오늘' 버튼 */
+  .notice-top > #wlTodayBtnSlot{ justify-self:start; }
+  .wl-today-btn{
+    font-family:inherit; font-size:13px; font-weight:700; cursor:pointer;
+    padding:7px 14px; border-radius:999px; border:1px solid var(--border); background:#fff; color:var(--primary-dark);
+  }
+  .wl-today-btn:hover{ background:var(--primary-soft); }
+  .wl-today-btn.on{ background:var(--primary-soft); border-color:var(--primary-soft); cursor:default; }
+
+  /* ===== 체크리스트 리디자인: 앱 테마(흰색+분홍)에 맞춘 깔끔한 목록형 ===== */
+  .notice-card{
+    background:#fff; border:1px solid var(--border); border-top:1px solid var(--border);
+    border-radius:var(--radius-lg); box-shadow:var(--shadow-md); padding:22px 28px 20px;
+  }
+  .notice-title{ font-size:20px; }
+  .notice-ym{ color:var(--primary-dark); font-size:15px; }
+  .notice-ym:hover{ background:var(--primary-soft); border-color:var(--border); }
+  .notice-months{ margin:6px 0 10px; }
+  .notice-months .cal-pm.on{ background:var(--primary); border-color:var(--primary); }
+  .notice-progress{ height:5px; background:var(--primary-soft); max-width:260px; }
+  .notice-progress span{ background:linear-gradient(90deg,#f5a3c2,var(--primary)); }
+  .notice-count{ color:var(--muted); font-weight:600; font-size:12.5px; margin:6px 0 12px; }
+  .notice-items{ gap:0 28px; border-top:1px solid var(--border); }
+  .notice-item{
+    background:transparent; border:none; border-bottom:1px solid var(--border); border-radius:0;
+    padding:11px 4px; font-size:14px; align-items:center;
+  }
+  .notice-item:hover{ background:#fdf7fa; border-color:var(--border); }
+  .notice-item input{
+    appearance:none; -webkit-appearance:none; margin:0; width:18px; height:18px; flex:none;
+    border:1.8px solid #e3c3d2; border-radius:50%; background:#fff; cursor:pointer; position:relative;
+  }
+  .notice-item input:checked{ background:var(--primary); border-color:var(--primary); }
+  .notice-item input:checked::after{
+    content:''; position:absolute; left:5px; top:1.5px; width:4px; height:8px;
+    border:solid #fff; border-width:0 2px 2px 0; transform:rotate(45deg);
+  }
+  .notice-item.done{ background:transparent; }
+  .notice-item.done span{ color:#b9a9b2; }
+  .notice-mtag{ background:var(--primary-soft); color:var(--primary-dark); }
+  .notice-sched{ border-top:none; margin-top:14px; padding-top:0; }
+  .notice-sched-label{ color:var(--muted); }
+  .notice-sched-chip{ background:#f7f1f4; color:var(--text); border:1px solid var(--border); }
+
 </style>
 </head>
 <body>
@@ -1789,7 +1833,6 @@ function renderCalendar(){
         </div>` : ''}
       </div>
       <button class="wl-navbtn" onclick="calNext()" title="다음 달" aria-label="다음 달">›</button>
-      <button class="cal-today-btn" onclick="calToday()">이번 달</button>
     </div>
     <div class="cal-grid">
       ${dow.map(x => `<div class="cal-dow">${x}</div>`).join('')}
@@ -1959,7 +2002,7 @@ function renderWorklist(){
     ${refSections}
     <div class="card">
       <div class="notice-top">
-        <span></span>
+        <span id="wlTodayBtnSlot"></span>
         <div class="today-title">Today</div>
         <div class="search-wrap open">
           <input type="text" id="worklistSearch" class="search-input" placeholder="할 일 검색" value="${escapeAttr(worklistSearch)}" oninput="onWorklistSearch(this.value)" onkeydown="if(event.key==='Escape'){ this.value=''; onWorklistSearch(''); }">
@@ -1974,7 +2017,6 @@ function renderWorklist(){
         </div>
         <button class="wl-navbtn" onclick="shiftWorklistDay(1)" title="다음 날 (키보드 →)" aria-label="다음 날">›</button>
       </div>
-      <div id="wlBackToday" style="text-align:center; margin:-6px 0 12px;"></div>
       <div id="worklistCarry"></div>
       <div class="wl-agenda" id="worklistAgenda"></div>
       <div class="toolbar" style="margin-top:12px;">
@@ -2075,10 +2117,10 @@ function renderWorklistBody(){
   const label = document.getElementById('wlDayLabel');
   if(label){
     const rel = date === todayS ? '오늘' : date === addDaysStr(todayS, -1) ? '어제' : date === addDaysStr(todayS, 1) ? '내일' : '';
-    label.innerHTML = `${worklistDayLabel(date)}${rel ? ` <span class="wl-rel ${rel === '오늘' ? 'today' : ''}">${rel}</span>` : ''}`;
+    label.innerHTML = `${worklistDayLabel(date)}${rel && rel !== '오늘' ? ` <span class="wl-rel">${rel}</span>` : ''}`;
   }
-  const back = document.getElementById('wlBackToday');
-  if(back) back.innerHTML = date === todayS ? '' : `<button class="cal-today-btn" onclick="setWorklistDay(todayStr())">오늘로</button>`;
+  const slot = document.getElementById('wlTodayBtnSlot');
+  if(slot) slot.innerHTML = `<button class="wl-today-btn ${date === todayS ? 'on' : ''}" onclick="setWorklistDay(todayStr())" title="오늘로 이동">오늘</button>`;
 
   // 미완료 넘기기 배너: 오늘 화면에서만
   const carryEl = document.getElementById('worklistCarry');
