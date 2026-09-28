@@ -666,7 +666,8 @@
     background:linear-gradient(135deg,#f5a3c2 0%,#f7c46e 100%); color:#fff;
     box-shadow:0 4px 10px -3px rgba(236,123,166,.6);
   }
-  .nav-gutter{ width:150px; }
+  .nav-gutter{ width:210px; }
+  .nav-flyout{ left:calc(100% + 12px); }
 
   .wl-date-pick{ position:relative; }
   .wl-daynav-label.cal-ym{ font-size:17px; min-width:0; }
@@ -1479,7 +1480,7 @@ const TAB_TITLES = {
   corp:['법인세','법인 거래처의 결산~신고 단계를 추적합니다.'],
   indiv:['종합소득세','개인사업자 거래처의 신고 단계를 추적합니다.'],
   clients:['거래처','모든 신고 탭이 참조하는 기준정보입니다.'],
-  settings:['설정','나만 쓰는 도구라 알림은 없고, 필요한 기본값만 여기서 관리합니다.'],
+  settings:['설정',''],
 };
 
 const NAV_SUBMENUS = {
@@ -2996,14 +2997,12 @@ function renderSettings(){
   const el = document.getElementById('tab-settings');
   el.innerHTML = `
     <div class="card settings-card">
-      <h2>기본 설정</h2>
-      <div class="desc">나만 쓰는 도구라 알림·권한 설정 없이, 화면에 필요한 기본값만 관리합니다.</div>
 
       <div class="settings-block" id="settings-basic">
         <div class="row">
           <div>
             <h3>마감 임박 기준</h3>
-            <div class="hint">신고기한·업무일정에서 "임박" 색상(<span class="due-soon">주황</span>)으로 표시할 남은 일수 기준입니다. 이 값보다 적게 남으면 임박, 지나면 <span class="due-overdue">지연</span>으로 표시됩니다.</div>
+            <div class="hint">남은 일수가 이보다 적으면 <span class="due-soon">임박</span>, 지나면 <span class="due-overdue">지연</span>으로 표시해요.</div>
           </div>
           <div class="ctrl">
             <input type="number" min="0" max="30" value="${settings.soonDays}" class="small-input" style="width:70px"
@@ -3017,7 +3016,7 @@ function renderSettings(){
         <div class="row">
           <div>
             <h3>표시 이름</h3>
-            <div class="hint">헤더·인사말 등에 쓰이는 이름입니다. 혼자 쓰는 화면이라 실제 계정 정보와는 무관합니다.</div>
+            <div class="hint">화면에 보일 이름이에요.</div>
           </div>
           <div class="ctrl">
             <input type="text" value="${settings.displayName}" placeholder="이름 입력" style="width:140px" onchange="updateDisplayName(this.value)">
@@ -3029,7 +3028,7 @@ function renderSettings(){
         <div class="row">
           <div>
             <h3>Google Sheets 연동</h3>
-            <div class="hint">내 Google 계정으로 로그인하면 이 화면의 모든 데이터가 내 드라이브의 "${GOOGLE_SHEET_NAME}" 시트에 자동 저장되고, 다음에 열 때 그대로 불러와집니다.</div>
+            <div class="hint">데이터를 내 드라이브 "${GOOGLE_SHEET_NAME}" 시트에 자동 저장해요.</div>
           </div>
           <div class="ctrl">
             ${googleAccessToken
@@ -3045,7 +3044,7 @@ function renderSettings(){
         <div class="row">
           <div>
             <h3>업무용 마스터 시트에서 가져오기</h3>
-            <div class="hint">"★Tax_2026" 시트의 "기장현황" 탭에서 거래처 기본정보(순번·구분·수임·상호·법인번호·사업자번호·개업일·대표)를, Work List 탭에서 할 일을 가져옵니다. 읽기 전용이라 마스터 시트는 전혀 건드리지 않고, ID/PW·주민번호 등 민감정보는 가져오지 않습니다. 부가세·원천세·법인세·종소세 연동은 다음 단계에서 따로 진행해요.</div>
+            <div class="hint">"★Tax_2026"에서 거래처·할 일을 가져와요.</div>
           </div>
           <div class="ctrl" style="display:flex; gap:6px;">
             <button class="btn ghost xs" onclick="importClientsOnlyFromMaster()" ${googleAccessToken ? '' : 'disabled'}>거래처만 가져오기</button>
@@ -3059,7 +3058,7 @@ function renderSettings(){
         <div class="row">
           <div>
             <h3>GitHub 배포</h3>
-            <div class="hint">수정된 SM.html 파일을 고르면, GitHub 업로드 화면에 직접 들어가지 않아도 이 저장소(${GITHUB_DEPLOY_REPO_OWNER}/${GITHUB_DEPLOY_REPO_NAME})의 ${GITHUB_DEPLOY_FILE_PATH}에 바로 반영돼요. 저장소에 쓰기 권한이 있는 <a href="https://github.com/settings/tokens" target="_blank" rel="noopener">개인 액세스 토큰(PAT)</a>이 한 번 필요해요. 토큰은 이 기기의 브라우저에만 저장돼요.</div>
+            <div class="hint">SM.html을 골라 바로 올려요. <a href="https://github.com/settings/tokens" target="_blank" rel="noopener">토큰</a>은 이 기기에만 저장돼요.</div>
           </div>
         </div>
         <div style="display:flex; gap:6px; margin-top:10px; max-width:420px;">
@@ -3079,7 +3078,7 @@ function renderSettings(){
         <div class="row">
           <div>
             <h3>계정</h3>
-            <div class="hint">이 브라우저에 저장된 로그인 상태를 지우고, 다시 로그인 화면으로 돌아갑니다.</div>
+            <div class="hint">로그인 화면으로 돌아가요.</div>
           </div>
           <div class="ctrl">
             <button class="btn ghost" onclick="lockApp()">로그아웃</button>
@@ -3091,7 +3090,7 @@ function renderSettings(){
         <div class="row">
           <div>
             <h3>데이터 초기화</h3>
-            <div class="hint">거래처·신고 기록·할 일을 모두 지우고 빈 화면으로 되돌립니다. 되돌릴 수 없으니 주의하세요.</div>
+            <div class="hint">모든 데이터를 지워요. 되돌릴 수 없어요.</div>
           </div>
           <div class="ctrl">
             <button class="btn danger ghost" onclick="resetAllData()">전체 초기화</button>
