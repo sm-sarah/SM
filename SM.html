@@ -852,6 +852,11 @@
   button.btn.primary{ background:var(--primary-dark); border-color:var(--primary-dark); font-weight:600; letter-spacing:.1px; }
   button.btn.primary:hover{ background:#b04571; border-color:#b04571; }
 
+  /* 신고 탭: 거래처 목록과 같은 앞 3열 */
+  .tx-seq{ width:56px; color:var(--muted); }
+  .tx-type{ width:70px; }
+  .tx-name{ min-width:160px; font-weight:600; }
+
 </style>
 </head>
 <body>
@@ -2045,15 +2050,17 @@ function renderVat(){
       <div class="table-scroll" style="margin-top:16px;">
       <table>
         <thead><tr>
-          <th>거래처</th><th>예정고지 대상</th><th>관할세무서/담당자</th>
+          <th class="tx-seq">순번</th><th class="tx-type">구분</th><th>상호명</th><th>예정고지 대상</th><th>관할세무서/담당자</th>
           <th>매출집계</th><th>매입집계</th><th>신고일</th><th>납부일</th><th>비고</th>
         </tr></thead>
         <tbody>
-          ${clients.map(c => {
+          ${sortedClients().map(c => {
             const r = data[c.id] || {target:false,office:'',sales:0,purchase:0,filedDate:'',paidDate:'',note:''};
             return `
             <tr>
-              <td>${c.name} <span class="type-tag">${c.type}</span></td>
+              <td class="tx-seq">${c.seq || '-'}</td>
+              <td class="tx-type"><span class="tag ${c.type==='법인'?'tag-corp-type':'tag-indiv-type'}">${c.type}</span></td>
+              <td class="tx-name"><a class="cl-name" onclick="openClientDetail(${c.id})">${c.name}</a></td>
               <td><input type="checkbox" ${r.target?'checked':''} onchange="updateVat(${c.id},'target',this.checked)"></td>
               <td><input type="text" class="small-input" value="${r.office}" onchange="updateVat(${c.id},'office',this.value)"></td>
               <td><input type="number" class="small-input" value="${r.sales}" onchange="updateVat(${c.id},'sales',this.value)"></td>
@@ -2113,14 +2120,16 @@ function renderPay(){
       <div class="table-scroll" style="margin-top:16px;">
       <table>
         <thead><tr>
-          <th>거래처</th><th>급여유형</th><th>지급일</th><th>급여마감</th><th>원천세 신고일</th><th>납부서 발송일</th><th>비고</th>
+          <th class="tx-seq">순번</th><th class="tx-type">구분</th><th>상호명</th><th>급여유형</th><th>지급일</th><th>급여마감</th><th>원천세 신고일</th><th>납부서 발송일</th><th>비고</th>
         </tr></thead>
         <tbody>
-          ${clients.map(c => {
+          ${sortedClients().map(c => {
             const r = data[c.id] || {salaryType:'근로',payday:'',closed:false,filedDate:'',paidSlipDate:'',note:''};
             return `
             <tr>
-              <td>${c.name}</td>
+              <td class="tx-seq">${c.seq || '-'}</td>
+              <td class="tx-type"><span class="tag ${c.type==='법인'?'tag-corp-type':'tag-indiv-type'}">${c.type}</span></td>
+              <td class="tx-name"><a class="cl-name" onclick="openClientDetail(${c.id})">${c.name}</a></td>
               <td>
                 <select onchange="updatePay(${c.id},'salaryType',this.value)">
                   ${['근로','사업','일용','기타'].map(t => `<option ${t===r.salaryType?'selected':''}>${t}</option>`).join('')}
@@ -2183,13 +2192,15 @@ function renderCorp(){
       </div>
       <div class="table-scroll" style="margin-top:16px;">
       <table>
-        <thead><tr><th>거래처</th><th>진행 단계</th><th>비고</th></tr></thead>
+        <thead><tr><th class="tx-seq">순번</th><th class="tx-type">구분</th><th>상호명</th><th>진행 단계</th><th>비고</th></tr></thead>
         <tbody>
-          ${rows.map(c => {
+          ${sortedClients().filter(x => rows.includes(x)).map(c => {
             const r = data[c.id] || {steps:Object.fromEntries(corpSteps.map(s=>[s,''])), note:''};
             return `
             <tr>
-              <td>${c.name}</td>
+              <td class="tx-seq">${c.seq || '-'}</td>
+              <td class="tx-type"><span class="tag ${c.type==='법인'?'tag-corp-type':'tag-indiv-type'}">${c.type}</span></td>
+              <td class="tx-name"><a class="cl-name" onclick="openClientDetail(${c.id})">${c.name}</a></td>
               <td>
                 <div class="steps">
                   ${corpSteps.map(s => `
@@ -2245,13 +2256,15 @@ function renderIndiv(){
       </div>
       <div class="table-scroll" style="margin-top:16px;">
       <table>
-        <thead><tr><th>거래처</th><th>성실신고</th><th>진행 단계</th><th>비고</th></tr></thead>
+        <thead><tr><th class="tx-seq">순번</th><th class="tx-type">구분</th><th>상호명</th><th>성실신고</th><th>진행 단계</th><th>비고</th></tr></thead>
         <tbody>
-          ${rows.map(c => {
+          ${sortedClients().filter(x => rows.includes(x)).map(c => {
             const r = data[c.id] || {honest:false, steps:Object.fromEntries(indivSteps.map(s=>[s,''])), note:''};
             return `
             <tr>
-              <td>${c.name}</td>
+              <td class="tx-seq">${c.seq || '-'}</td>
+              <td class="tx-type"><span class="tag ${c.type==='법인'?'tag-corp-type':'tag-indiv-type'}">${c.type}</span></td>
+              <td class="tx-name"><a class="cl-name" onclick="openClientDetail(${c.id})">${c.name}</a></td>
               <td><input type="checkbox" ${r.honest?'checked':''} onchange="toggleIndivHonest(${c.id})"></td>
               <td>
                 <div class="steps">
