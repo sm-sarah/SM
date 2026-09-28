@@ -573,6 +573,16 @@
   input[type=checkbox]{ accent-color:var(--primary); }
   .notice-item input{ accent-color:#f5b544; }
 
+  /* To do: Today 헤더 */
+  .today-title{ text-align:center; font-size:22px; font-weight:800; letter-spacing:-.3px; color:var(--text); margin-top:2px; }
+  .wl-daynav{ margin:8px 0 14px; gap:10px; }
+  .wl-navbtn{
+    width:34px; height:34px; border-radius:50%; border:1px solid var(--border); background:#fff;
+    color:var(--primary-dark); font-size:22px; line-height:1; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; padding:0 0 3px;
+  }
+  .wl-navbtn:hover{ background:var(--primary-soft); border-color:var(--primary); }
+  .wl-daynav-label{ font-size:16px; color:var(--slate); }
+
 </style>
 </head>
 <body>
@@ -1680,12 +1690,11 @@ function renderWorklist(){
   el.innerHTML = `
     ${refSections}
     <div class="card">
-      <h2>날짜별 할 일</h2>
-      <div class="desc">◀ ▶ 버튼(또는 키보드 ← →, 휴대폰은 좌우로 밀기)으로 하루씩 넘겨볼 수 있어요.</div>
+      <div class="today-title">Today</div>
       <div class="wl-daynav">
-        <button class="btn" onclick="shiftWorklistDay(-1)" title="이전 날">◀</button>
+        <button class="wl-navbtn" onclick="shiftWorklistDay(-1)" title="이전 날 (키보드 ←)" aria-label="이전 날">‹</button>
         <div class="wl-daynav-label" id="wlDayLabel"></div>
-        <button class="btn" onclick="shiftWorklistDay(1)" title="다음 날">▶</button>
+        <button class="wl-navbtn" onclick="shiftWorklistDay(1)" title="다음 날 (키보드 →)" aria-label="다음 날">›</button>
       </div>
       <div class="toolbar" style="justify-content:center;">
         <input type="date" id="worklistJumpDate" value="${worklistViewDate}" onchange="setWorklistDay(this.value)">
