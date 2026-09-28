@@ -793,6 +793,24 @@
   /* 본문 가로폭 제한: 큰 모니터에서도 가운데 1200px 안에서만 보이게 */
   main .page-head, main .tab, main .connect-banner{ max-width:1200px; margin-left:auto; margin-right:auto; }
 
+  /* 행 관리 아이콘 공통 */
+  .row-actions{ display:inline-flex; gap:2px; flex:none; margin-left:auto; }
+  .row-actions .icon-btn{ width:28px; height:28px; }
+  .task-list li .row-actions{ opacity:.55; transition:opacity .12s; }
+  .task-list li:hover .row-actions{ opacity:1; }
+  .notice-item{ align-items:center; cursor:default; }
+  .notice-text{ flex:1; cursor:pointer; }
+  .notice-item .row-actions{ opacity:0; transition:opacity .12s; }
+  .notice-item:hover .row-actions{ opacity:1; }
+  .notice-item .row-actions .icon-btn{ width:24px; height:24px; }
+  .notice-item .row-actions svg{ width:14px; height:14px; }
+  .notice-add{ margin-top:10px; font-family:inherit; font-size:13px; font-weight:700; color:var(--primary-dark);
+    background:transparent; border:1px dashed var(--border); border-radius:10px; padding:8px 14px; cursor:pointer; width:100%; }
+  .notice-add:hover{ background:var(--primary-soft); }
+  .ev-actions{ display:flex; gap:8px; justify-content:center; margin-top:6px; }
+  .ev-actions .btn{ display:inline-flex; align-items:center; gap:6px; }
+  .ev-actions .btn.danger{ color:#e2445c; }
+
 </style>
 </head>
 <body>
@@ -1177,14 +1195,81 @@ function addTask(){
   const dateEl = document.getElementById('newTaskDate');
   const textEl = document.getElementById('newTaskText');
   if(!textEl.value.trim()) return;
-  tasks.push({id: nextTaskId++, date: dateEl.value || todayStr(), text: textEl.value.trim(), done:false});
+  const nt = {id: nextTaskId++, date: dateEl.value || todayStr(), text: textEl.value.trim(), done:false};
+  pushHist(nt, '추가');
+  tasks.push(nt);
   textEl.value = '';
   renderAll();
 }
-function toggleTask(id){ const t = tasks.find(x => x.id === id); if(t) t.done = !t.done; renderAll(); }
-function deleteTask(id){ tasks = tasks.filter(x => x.id !== id); renderAll(); }
+function toggleTask(id){
+  const t = tasks.find(x => x.id === id);
+  if(t){ t.done = !t.done; pushHist(t, t.done ? '완료' : '완료 취소'); }
+  renderAll();
+}
+async function deleteTask(id){
+  const t = tasks.find(x => x.id === id);
+  if(!t) return;
+  if(!(await smConfirm('이 할 일을 삭제할까요?', t.text, { tone:'danger', icon:'!', okText:'삭제' }))) return;
+  if(t.source === 'master' || t.origKey) hideMasterKey('hiddenMasterTasks', t.origKey || (t.date + '|' + t.text));
+  tasks = tasks.filter(x => x.id !== id);
+  renderAll();
+}
+async function editTask(id){
+  const t = tasks.find(x => x.id === id);
+  if(!t) return;
+  const r = await smForm('할 일 수정', [
+    { label:'날짜', type:'date', value:t.date },
+    { label:'내용', value:t.text },
+  ], { okText:'저장', icon:'✎', wide:true });
+  if(!r) return;
+  const [date, text] = [r[0] || t.date, (r[1] || '').trim()];
+  if(!text) return;
+  const changes = [];
+  if(date !== t.date) changes.push({ label:'날짜', from:t.date, to:date });
+  if(text !== t.text) changes.push({ label:'내용', from:t.text, to:text });
+  if(!changes.length) return;
+  if(t.source === 'master'){ t.origKey = t.date + '|' + t.text; t.source = 'edited'; hideMasterKey('hiddenMasterTasks', t.origKey); }
+  t.date = date; t.text = text;
+  pushHist(t, '수정', changes);
+  renderAll();
+}
+function showTaskHistory(id){
+  const t = tasks.find(x => x.id === id);
+  if(!t) return;
+  showHistoryModal('할 일 이력', t.history, `${t.text} · ${t.source === 'master' || t.origKey ? '마스터 시트에서 가져온 항목' : '직접 추가한 항목'}`);
+}
 
 function pad2(n){ return String(n).padStart(2,'0'); }
+
+/* ----- 공통: 수정·이력·삭제 ----- */
+function pushHist(obj, kind, changes){
+  obj.history = (obj.history || []).concat([{ at: new Date().toISOString(), kind, changes: changes || [] }]);
+}
+function actionIcons(editJs, histJs, delJs){
+  return `<span class="row-actions">
+    <button class="icon-btn" onclick="${editJs}" title="수정" aria-label="수정">${ICON_EDIT}</button>
+    <button class="icon-btn" onclick="${histJs}" title="이력" aria-label="이력">${ICON_HISTORY}</button>
+    <button class="icon-btn danger" onclick="${delJs}" title="삭제" aria-label="삭제">${ICON_TRASH}</button>
+  </span>`;
+}
+function showHistoryModal(title, hist, meta){
+  const esc = v => String(v == null ? '' : v).replace(/&/g,'&amp;').replace(/</g,'&lt;');
+  const fmt = iso => { const d = new Date(iso); return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`; };
+  const list = (hist || []).slice().reverse();
+  const html = `<div class="cl-hist">
+    ${meta ? `<div class="cl-hist-meta">${esc(meta)}</div>` : ''}
+    ${list.length ? list.map(h => `
+      <div class="cl-hist-item">
+        <div class="cl-hist-head"><b>${esc(h.kind)}</b><span>${fmt(h.at)}</span></div>
+        ${(h.changes || []).map(x => `<div class="cl-hist-chg">${esc(x.label)}: <s>${esc(x.from || '(빈칸)')}</s> → <b>${esc(x.to || '(빈칸)')}</b></div>`).join('')}
+      </div>`).join('') : '<div class="cl-hist-empty">아직 기록된 이력이 없어요. (이 기능이 생긴 뒤부터 기록돼요)</div>'}
+  </div>`;
+  smDialog({ title, html, icon:'⟲', cancelText:null, okText:'닫기', wide:true });
+}
+// 마스터에서 온 항목을 지우거나 고쳤을 때, 다시 가져와도 되살아나지 않도록 원래 키를 기억
+function hideMasterKey(listName, key){
+  settings[listName] = Array.from(new Set([...(settings[listName] || []), key]));
+}
 
 function calPrev(){ calPickerOpen = false; calMonth--; if(calMonth < 0){ calMonth = 11; calYear--; } renderHome(); }
 function calNext(){ calPickerOpen = false; calMonth++; if(calMonth > 11){ calMonth = 0; calYear++; } renderHome(); }
@@ -1217,8 +1302,44 @@ async function addScheduleQuick(){
   if(!r) return;
   const [dateStr, text] = r;
   if(!dateStr || !text || !text.trim()) return;
-  events.push({id: nextEventId++, date: dateStr.trim(), text: text.trim()});
+  const ne = {id: nextEventId++, date: dateStr.trim(), text: text.trim()};
+  pushHist(ne, '추가');
+  events.push(ne);
   renderAll();
+}
+function openEvent(id){
+  const ev = events.find(x => x.id === id);
+  if(!ev) return;
+  const [y, m, d] = ev.date.split('-');
+  smDialog({
+    icon:'★', title: ev.text, message: `${y}년 ${parseInt(m,10)}월 ${parseInt(d,10)}일`,
+    html: `<div class="cl-hist-meta" style="text-align:center;">${y}년 ${parseInt(m,10)}월 ${parseInt(d,10)}일</div>
+      <div class="ev-actions">
+        <button class="btn" onclick="document.querySelector('.sm-modal-ok').click(); setTimeout(() => editEvent(${id}), 180);">${ICON_EDIT} 수정</button>
+        <button class="btn" onclick="document.querySelector('.sm-modal-ok').click(); setTimeout(() => showEventHistory(${id}), 180);">${ICON_HISTORY} 이력</button>
+        <button class="btn danger" onclick="document.querySelector('.sm-modal-ok').click(); setTimeout(() => deleteEvent(${id}), 180);">${ICON_TRASH} 삭제</button>
+      </div>`,
+    cancelText:null, okText:'닫기',
+  });
+}
+async function editEvent(id){
+  const ev = events.find(x => x.id === id);
+  if(!ev) return;
+  const r = await smForm('일정 수정', [{ label:'날짜', type:'date', value:ev.date }, { label:'내용', value:ev.text }], { okText:'저장', icon:'✎', wide:true });
+  if(!r) return;
+  const date = r[0] || ev.date, text = (r[1] || '').trim();
+  if(!text) return;
+  const changes = [];
+  if(date !== ev.date) changes.push({ label:'날짜', from:ev.date, to:date });
+  if(text !== ev.text) changes.push({ label:'내용', from:ev.text, to:text });
+  if(!changes.length) return;
+  ev.date = date; ev.text = text;
+  pushHist(ev, '수정', changes);
+  renderAll();
+}
+function showEventHistory(id){
+  const ev = events.find(x => x.id === id);
+  if(ev) showHistoryModal('일정 이력', ev.history, ev.text);
 }
 async function deleteEvent(id){
   const ev = events.find(x => x.id === id);
@@ -1325,7 +1446,7 @@ function renderCalendar(){
           <div class="cal-daynum">${c.d}</div>
           <div class="cal-tasks">
             ${dayDeadlines.map(x => `<div class="cal-task cal-deadline ${CAL_DEADLINE_CLASS[x.domain] || ''}" title="${x.label}">${x.label}</div>`).join('')}
-            ${dayEvents.map(ev => `<div class="cal-task cal-event" onclick="deleteEvent(${ev.id})" title="${ev.text} (눌러서 삭제)">★ ${ev.text}</div>`).join('')}
+            ${dayEvents.map(ev => `<div class="cal-task cal-event" onclick="openEvent(${ev.id})" title="${ev.text} (눌러서 수정·이력·삭제)">★ ${ev.text}</div>`).join('')}
           </div>
         </div>`;
       }).join('')}
@@ -1383,16 +1504,50 @@ function checklistSearchHtml(){
   }));
   if(!out.length) return `<div class="empty" style="grid-column:1/-1; padding:10px 0;">"${escapeAttr(checklistSearch)}" 검색 결과가 없어요.</div>`;
   return out.map(({mm, idx, item}) => `
-    <label class="notice-item ${item.done ? 'done' : ''}">
+    <div class="notice-item ${item.done ? 'done' : ''}">
       <input type="checkbox" ${item.done ? 'checked' : ''} onchange="toggleWorklistCheck('${mm}', ${idx})">
-      <span><b class="notice-mtag">${mm}</b>${item.text}</span>
-    </label>`).join('');
+      <span class="notice-text"><b class="notice-mtag">${mm}</b>${item.text}</span>
+      ${actionIcons(`editChecklistItem('${mm}', ${idx})`, `showChecklistHistory('${mm}', ${idx})`, `deleteChecklistItem('${mm}', ${idx})`)}
+    </div>`).join('');
 }
 
 function toggleWorklistCheck(month, idx){
   const item = worklistChecklist[month] && worklistChecklist[month][idx];
-  if(item) item.done = !item.done;
-  renderWorklist();
+  if(item){ item.done = !item.done; pushHist(item, item.done ? '완료' : '완료 취소'); }
+  renderAll();
+}
+async function editChecklistItem(month, idx){
+  const item = worklistChecklist[month] && worklistChecklist[month][idx];
+  if(!item) return;
+  const r = await smForm('체크리스트 수정', [{ label:`${month} 항목`, value:item.text }], { okText:'저장', icon:'✎', wide:true });
+  if(!r) return;
+  const text = (r[0] || '').trim();
+  if(!text || text === item.text) return;
+  if(!item.origText && item.source !== 'user'){ item.origText = item.text; hideMasterKey('hiddenMasterChecklist', month + '|' + item.text); }
+  pushHist(item, '수정', [{ label:'내용', from:item.text, to:text }]);
+  item.text = text;
+  renderAll();
+}
+function showChecklistHistory(month, idx){
+  const item = worklistChecklist[month] && worklistChecklist[month][idx];
+  if(!item) return;
+  showHistoryModal('체크리스트 이력', item.history, `${month} · ${item.text}`);
+}
+async function deleteChecklistItem(month, idx){
+  const item = worklistChecklist[month] && worklistChecklist[month][idx];
+  if(!item) return;
+  if(!(await smConfirm('이 항목을 삭제할까요?', item.text, { tone:'danger', icon:'!', okText:'삭제' }))) return;
+  if(item.source !== 'user') hideMasterKey('hiddenMasterChecklist', month + '|' + (item.origText || item.text));
+  worklistChecklist[month].splice(idx, 1);
+  renderAll();
+}
+async function addChecklistItem(month){
+  const r = await smForm(`${month} 체크리스트 추가`, [{ label:'항목', placeholder:'예: 부가세 안내문 발송' }], { okText:'추가', wide:true });
+  if(!r || !(r[0] || '').trim()) return;
+  const item = { text: r[0].trim(), done:false, source:'user' };
+  pushHist(item, '추가');
+  (worklistChecklist[month] = worklistChecklist[month] || []).push(item);
+  renderAll();
 }
 
 function scrollToWorklistDate(dateStr){
@@ -1463,11 +1618,13 @@ function renderWorklist(){
       <div class="notice-count">${doneN} / ${items.length} 완료</div>` : ''}
       <div class="notice-items" id="noticeItems">
         ${checklistSearch.trim() ? checklistSearchHtml() : items.map((item, idx) => `
-          <label class="notice-item ${item.done ? 'done' : ''}">
+          <div class="notice-item ${item.done ? 'done' : ''}">
             <input type="checkbox" ${item.done ? 'checked' : ''} onchange="toggleWorklistCheck('${m}', ${idx})">
-            <span>${item.text}</span>
-          </label>`).join('') || '<div class="empty" style="padding:10px 0;">이 달의 체크리스트가 없어요.</div>'}
+            <span class="notice-text" onclick="toggleWorklistCheck('${m}', ${idx})">${item.text}</span>
+            ${actionIcons(`editChecklistItem('${m}', ${idx})`, `showChecklistHistory('${m}', ${idx})`, `deleteChecklistItem('${m}', ${idx})`)}
+          </div>`).join('') || '<div class="empty" style="padding:10px 0;">이 달의 체크리스트가 없어요.</div>'}
       </div>
+      ${checklistSearch.trim() ? '' : `<button class="notice-add" onclick="addChecklistItem('${m}')">+ 항목 추가</button>`}
       ${sched.length ? `
         <div class="notice-sched">
           <div class="notice-sched-label">주요 세무일정</div>
@@ -1559,6 +1716,7 @@ function carryTaskToToday(id){
   if(!t) return;
   if(!t.movedFrom) t.movedFrom = t.date;
   if(t.source === 'master') t.source = 'moved';   // 마스터 시트 다시 불러와도 지워지지 않도록
+  pushHist(t, '오늘로 넘김', [{ label:'날짜', from:t.date, to:todayStr() }]);
   t.date = todayStr();
   renderAll();
 }
@@ -1570,6 +1728,7 @@ async function carryAllToToday(){
   list.forEach(t => {
     if(!t.movedFrom) t.movedFrom = t.date;
     if(t.source === 'master') t.source = 'moved';
+    pushHist(t, '오늘로 넘김', [{ label:'날짜', from:t.date, to:todayS }]);
     t.date = todayS;
   });
   renderAll();
@@ -1585,7 +1744,7 @@ function wlTaskItem(t, opts = {}){
       ${opts.showDate ? `<span class="task-date" style="cursor:pointer;" onclick="setWorklistDay('${t.date}')" title="이 날짜로 이동">${shortDate(t.date)}</span>` : ''}
       <span class="task-text">${t.text}${t.movedFrom ? ` <span class="wl-moved">${shortDate(t.movedFrom)}에서 넘어옴</span>` : ''}</span>
       ${canCarry ? `<button class="btn xs" onclick="carryTaskToToday(${t.id})" title="오늘 할 일로 옮기기">오늘로 →</button>` : ''}
-      <button class="btn ghost xs" onclick="deleteTask(${t.id})">삭제</button>
+      ${actionIcons(`editTask(${t.id})`, `showTaskHistory(${t.id})`, `deleteTask(${t.id})`)}
     </li>`;
 }
 
@@ -2707,9 +2866,19 @@ async function importWorklistFromMaster(){
   }
 
   // 오늘로 넘긴 할 일은 원래 날짜에 다시 생기지 않도록 제외
-  const movedKeys = new Set(tasks.filter(t => t.movedFrom).map(t => t.movedFrom + '|' + t.text));
+  const movedKeys = new Set(tasks.filter(t => t.movedFrom).map(t => t.movedFrom + '|' + t.text).concat(settings.hiddenMasterTasks || []));
   tasks = tasks.filter(t => t.source !== 'master').concat(importedTasks.filter(t => !movedKeys.has(t.date + '|' + t.text)));
-  worklistChecklist = Object.assign({}, worklistChecklist, newChecklist);
+  // 체크리스트는 달별로 합치기: 체크 상태·이력 유지, 직접 추가한 항목 유지, 지우거나 고친 마스터 항목은 되살리지 않음
+  const hiddenCL = new Set(settings.hiddenMasterChecklist || []);
+  Object.keys(newChecklist).forEach(mo => {
+    const old = worklistChecklist[mo] || [];
+    const byText = {}; old.forEach(it => { byText[it.origText || it.text] = it; });
+    const fromMaster = newChecklist[mo]
+      .filter(it => !hiddenCL.has(mo + '|' + it.text) || byText[it.text])
+      .map(it => byText[it.text] || it);
+    const kept = old.filter(it => it.source === 'user' || (it.origText && !fromMaster.includes(it)));
+    worklistChecklist[mo] = fromMaster.concat(kept.filter(it => !fromMaster.includes(it)));
+  });
   worklistSchedule = Object.assign({}, worklistSchedule, newSchedule);
 
   return { taskCount: importedTasks.length, checklistMonths: Object.keys(newChecklist).length };
