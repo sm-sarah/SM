@@ -668,6 +668,13 @@
   }
   .nav-gutter{ width:150px; }
 
+  .wl-date-pick{ position:relative; }
+  .wl-daynav-label.cal-ym{ font-size:17px; min-width:0; }
+  .wl-hidden-date{ position:absolute; left:50%; bottom:0; width:1px; height:1px; opacity:0; pointer-events:none; border:0; padding:0; }
+  .wl-daynav{ position:relative; }
+  #wlBackToday:empty{ display:none; }
+  @media (max-width:760px){ #wlBackToday{ position:static; } }
+
 </style>
 </head>
 <body>
@@ -803,13 +810,8 @@ function gateSignIn(){
 }
 
 function initAuthGate(){
-  try{
-    const saved = localStorage.getItem(AUTH_STORAGE_KEY);
-    if(saved && ALLOWED_EMAILS.includes(saved)){
-      unlockApp();
-      return;
-    }
-  }catch(e){}
+  // 열 때마다 로그인 화면에서 Google 로그인 → 신원 확인 + 시트 데이터 불러오기를 한 번에 처리.
+  // (예전처럼 저장된 이메일로 바로 통과시키면 데이터 연결 없이 기본 화면이 보이는 문제가 있었음)
   maybeEnableGateButton();
 }
 
@@ -1471,7 +1473,7 @@ const TABS = [
 ];
 const TAB_TITLES = {
   home:['홈','오늘 기준으로 챙겨야 할 신고 기한과 현황을 한눈에 봅니다.'],
-  worklist:['To do','날짜별로 자유롭게 할 일과 메모를 남겨두세요.'],
+  worklist:['To do',''],
   vat:['부가가치세','기간별 신고 현황을 관리합니다.'],
   pay:['원천세·급여','월별 급여·원천세 처리 현황입니다.'],
   corp:['법인세','법인 거래처의 결산~신고 단계를 추적합니다.'],
@@ -1675,7 +1677,7 @@ function renderCalendar(){
     <div class="cal-head">
       <button class="wl-navbtn" onclick="calPrev()" title="이전 달" aria-label="이전 달">‹</button>
       <div class="cal-ym-wrap">
-        <button class="cal-ym" onclick="toggleCalPicker(event)" title="눌러서 연·월 선택">${calYear}년 ${calMonth+1}월 <span class="cal-ym-caret">▾</span></button>
+        <button class="cal-ym" onclick="toggleCalPicker(event)" title="눌러서 연·월 선택">${calYear}년 ${calMonth+1}월</button>
         ${calPickerOpen ? `
         <div class="cal-picker" onclick="event.stopPropagation()">
           <div class="cal-picker-year">
@@ -1830,7 +1832,7 @@ function renderWorklist(){
       </div>
       <div class="notice-months">
         <div class="cal-ym-wrap">
-          <button class="cal-ym notice-ym" onclick="toggleChkPicker(event)" title="눌러서 다른 달 보기">${checklistYear()}년 ${m} <span class="cal-ym-caret">▾</span></button>
+          <button class="cal-ym notice-ym" onclick="toggleChkPicker(event)" title="눌러서 다른 달 보기">${checklistYear()}년 ${m}</button>
           ${chkPickerOpen ? `
           <div class="cal-picker" onclick="event.stopPropagation()">
             <div class="cal-picker-year" style="justify-content:center;"><span>${checklistYear()}년</span></div>
@@ -1867,22 +1869,23 @@ function renderWorklist(){
   el.innerHTML = `
     ${refSections}
     <div class="card">
-      <div class="today-title">Today</div>
-      <div class="wl-daynav">
-        <button class="wl-navbtn" onclick="shiftWorklistDay(-1)" title="이전 날 (키보드 ←)" aria-label="이전 날">‹</button>
-        <div class="wl-daynav-label" id="wlDayLabel"></div>
-        <button class="wl-navbtn" onclick="shiftWorklistDay(1)" title="다음 날 (키보드 →)" aria-label="다음 날">›</button>
-      </div>
-      <div class="toolbar" style="justify-content:space-between; align-items:center;">
-        <span style="display:flex; gap:8px; align-items:center;">
-          <input type="date" id="worklistJumpDate" value="${worklistViewDate}" onchange="setWorklistDay(this.value)">
-          <button class="btn ghost" onclick="setWorklistDay(todayStr())">오늘</button>
-        </span>
+      <div class="notice-top">
+        <span></span>
+        <div class="today-title">Today</div>
         <div class="search-wrap open">
           <input type="text" id="worklistSearch" class="search-input" placeholder="할 일 검색" value="${escapeAttr(worklistSearch)}" oninput="onWorklistSearch(this.value)" onkeydown="if(event.key==='Escape'){ this.value=''; onWorklistSearch(''); }">
           <span class="search-icon static" aria-hidden="true">${SEARCH_SVG}</span>
         </div>
       </div>
+      <div class="wl-daynav">
+        <button class="wl-navbtn" onclick="shiftWorklistDay(-1)" title="이전 날 (키보드 ←)" aria-label="이전 날">‹</button>
+        <div class="wl-date-pick">
+          <button class="wl-daynav-label cal-ym" id="wlDayLabel" onclick="openWorklistDatePicker()" title="눌러서 날짜 선택"></button>
+          <input type="date" id="worklistJumpDate" class="wl-hidden-date" value="${worklistViewDate}" onchange="setWorklistDay(this.value)" tabindex="-1" aria-hidden="true">
+        </div>
+        <button class="wl-navbtn" onclick="shiftWorklistDay(1)" title="다음 날 (키보드 →)" aria-label="다음 날">›</button>
+      </div>
+      <div id="wlBackToday" style="text-align:center; margin:-6px 0 12px;"></div>
       <div id="worklistCarry"></div>
       <div class="wl-agenda" id="worklistAgenda"></div>
       <div class="toolbar" style="margin-top:12px;">
@@ -1918,6 +1921,11 @@ function setWorklistDay(dateStr){
   const j = document.getElementById('worklistJumpDate'); if(j) j.value = dateStr;
   const n = document.getElementById('newTaskDate'); if(n) n.value = dateStr;
   renderWorklistBody();
+}
+function openWorklistDatePicker(){
+  const inp = document.getElementById('worklistJumpDate');
+  if(!inp) return;
+  try{ inp.showPicker(); }catch(e){ inp.focus(); inp.click(); }
 }
 function shiftWorklistDay(n){ setWorklistDay(addDaysStr(worklistViewDate || todayStr(), n)); }
 function onWorklistSearch(v){ worklistSearch = v; renderWorklistBody(); }
@@ -1980,6 +1988,8 @@ function renderWorklistBody(){
     const rel = date === todayS ? '오늘' : date === addDaysStr(todayS, -1) ? '어제' : date === addDaysStr(todayS, 1) ? '내일' : '';
     label.innerHTML = `${worklistDayLabel(date)}${rel ? ` <span class="wl-rel ${rel === '오늘' ? 'today' : ''}">${rel}</span>` : ''}`;
   }
+  const back = document.getElementById('wlBackToday');
+  if(back) back.innerHTML = date === todayS ? '' : `<button class="cal-today-btn" onclick="setWorklistDay(todayStr())">오늘로</button>`;
 
   // 미완료 넘기기 배너: 오늘 화면에서만
   const carryEl = document.getElementById('worklistCarry');
