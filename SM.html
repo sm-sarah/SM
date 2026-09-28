@@ -471,9 +471,9 @@
     --muted:#6d5a66;
     --muted-soft:#8f7b87;
     /* 메인 컬러: 분홍 */
-    --primary:#e0467f;
-    --primary-dark:#b82f63;
-    --primary-soft:#fce3ed;
+    --primary:#ec7ba6;
+    --primary-dark:#c7527f;
+    --primary-soft:#fdebf2;
     --shadow-sm: 0 1px 3px rgba(33,31,61,.10);
     --shadow-md: 0 2px 4px rgba(33,31,61,.08), 0 10px 24px -8px rgba(33,31,61,.18);
   }
@@ -611,6 +611,28 @@
   .cal-pm:hover{ background:var(--primary-soft); }
   .cal-pm.now{ border-color:var(--primary); color:var(--primary-dark); }
   .cal-pm.on{ background:var(--primary); border-color:var(--primary); color:#fff; }
+
+  /* 검색 아이콘 + 좁은 입력창 */
+  .search-wrap{ position:relative; display:flex; align-items:center; justify-content:flex-end; }
+  .search-wrap .search-input{ width:0; padding:0; border-width:0; opacity:0; transition:width .15s, opacity .15s; }
+  .search-wrap.open .search-input{ width:210px; padding:8px 36px 8px 12px; border-width:1px; opacity:1; border-radius:999px; }
+  .search-icon{
+    position:absolute; right:4px; width:30px; height:30px; border-radius:50%;
+    display:inline-flex; align-items:center; justify-content:center;
+    border:none; background:transparent; color:var(--primary-dark); cursor:pointer;
+  }
+  .search-wrap:not(.open) .search-icon{ position:static; border:1px solid var(--border); background:#fff; }
+  .search-icon:hover{ background:var(--primary-soft); }
+  .search-icon.static{ cursor:default; background:transparent !important; }
+  .notice-top{ display:grid; grid-template-columns:1fr auto 1fr; align-items:center; }
+  .notice-top .search-wrap{ justify-self:end; }
+  .notice-top .search-wrap.open .search-input{ width:170px; }
+  .notice-ym{ font-size:16px; color:#8a5a00; }
+  .notice-ym:hover{ background:#fff3d6; border-color:#efd9ad; }
+  .notice-ym .cal-ym-caret{ color:#f5b544; }
+  .notice-months .cal-pm.on{ background:#f5b544; border-color:#f5b544; }
+  .cal-pm:disabled{ opacity:.35; cursor:default; background:#fff; }
+  .notice-mtag{ display:inline-block; font-size:11px; font-weight:800; color:#8a5a00; background:#fff3d6; border-radius:999px; padding:1px 7px; margin-right:6px; }
 
 </style>
 </head>
@@ -1671,10 +1693,47 @@ function renderHome(){
 }
 
 let worklistSelMonth = null;
+let chkPickerOpen = false;
+let checklistSearch = '';
+let checklistSearchOpen = false;
+const SEARCH_SVG = '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>';
+function checklistYear(){ return new Date().getFullYear(); }
 function selectWorklistMonth(m){
   if(!m) return;
   worklistSelMonth = m;
+  chkPickerOpen = false;
   renderWorklist();
+}
+function toggleChkPicker(e){ if(e) e.stopPropagation(); chkPickerOpen = !chkPickerOpen; renderWorklist(); }
+document.addEventListener('click', () => { if(chkPickerOpen){ chkPickerOpen = false; renderWorklist(); } });
+
+function toggleChecklistSearch(){
+  if(checklistSearchOpen && checklistSearch){ closeChecklistSearch(); return; }
+  checklistSearchOpen = !checklistSearchOpen;
+  renderWorklist();
+  if(checklistSearchOpen){ const i = document.getElementById('checklistSearch'); if(i) i.focus(); }
+}
+function closeChecklistSearch(){ checklistSearch = ''; checklistSearchOpen = false; renderWorklist(); }
+function onChecklistSearch(v){
+  checklistSearch = v;
+  const box = document.getElementById('noticeItems');
+  if(!box) return;
+  if(v.trim()) box.innerHTML = checklistSearchHtml();
+  else renderWorklist(), (document.getElementById('checklistSearch') || {}).focus?.();
+}
+// 모든 달의 체크리스트에서 검색
+function checklistSearchHtml(){
+  const q = checklistSearch.trim().toLowerCase();
+  const out = [];
+  Object.keys(worklistChecklist).forEach(mm => (worklistChecklist[mm] || []).forEach((item, idx) => {
+    if((item.text || '').toLowerCase().includes(q)) out.push({mm, idx, item});
+  }));
+  if(!out.length) return `<div class="empty" style="grid-column:1/-1; padding:10px 0;">"${escapeAttr(checklistSearch)}" 검색 결과가 없어요.</div>`;
+  return out.map(({mm, idx, item}) => `
+    <label class="notice-item ${item.done ? 'done' : ''}">
+      <input type="checkbox" ${item.done ? 'checked' : ''} onchange="toggleWorklistCheck('${mm}', ${idx})">
+      <span><b class="notice-mtag">${mm}</b>${item.text}</span>
+    </label>`).join('');
 }
 
 function toggleWorklistCheck(month, idx){
@@ -1723,16 +1782,34 @@ function renderWorklist(){
     const sched = worklistSchedule[m] || [];
     return `
     <div class="notice-card">
-      <div class="notice-title">체크리스트</div>
+      <div class="notice-top">
+        <span></span>
+        <div class="notice-title">체크리스트</div>
+        <div class="search-wrap ${checklistSearchOpen || checklistSearch ? 'open' : ''}">
+          <input type="text" id="checklistSearch" class="search-input" placeholder="체크리스트 검색" value="${escapeAttr(checklistSearch)}" oninput="onChecklistSearch(this.value)" onkeydown="if(event.key==='Escape'){ closeChecklistSearch(); }">
+          <button class="search-icon" onclick="toggleChecklistSearch()" title="체크리스트 검색" aria-label="체크리스트 검색">${SEARCH_SVG}</button>
+        </div>
+      </div>
       <div class="notice-months">
-        <button class="notice-arrow" ${selIdx <= 0 ? 'disabled' : ''} onclick="selectWorklistMonth('${months[selIdx - 1] || ''}')">◀</button>
-        ${months.map(mm => `<button class="notice-month ${mm === m ? 'on' : ''}" onclick="selectWorklistMonth('${mm}')">${mm}</button>`).join('')}
-        <button class="notice-arrow" ${selIdx >= months.length - 1 ? 'disabled' : ''} onclick="selectWorklistMonth('${months[selIdx + 1] || ''}')">▶</button>
+        <div class="cal-ym-wrap">
+          <button class="cal-ym notice-ym" onclick="toggleChkPicker(event)" title="눌러서 다른 달 보기">${checklistYear()}년 ${m} <span class="cal-ym-caret">▾</span></button>
+          ${chkPickerOpen ? `
+          <div class="cal-picker" onclick="event.stopPropagation()">
+            <div class="cal-picker-year" style="justify-content:center;"><span>${checklistYear()}년</span></div>
+            <div class="cal-picker-months">
+              ${Array.from({length:12}, (_, i) => {
+                const key = `${i+1}월`;
+                const has = months.includes(key);
+                return `<button class="cal-pm ${key === m ? 'on' : ''}" ${has ? `onclick="selectWorklistMonth('${key}')"` : 'disabled'}>${i+1}월</button>`;
+              }).join('')}
+            </div>
+          </div>` : ''}
+        </div>
       </div>
       ${items.length ? `<div class="notice-progress"><span style="width:${Math.round(doneN / items.length * 100)}%"></span></div>
       <div class="notice-count">${doneN} / ${items.length} 완료</div>` : ''}
-      <div class="notice-items">
-        ${items.map((item, idx) => `
+      <div class="notice-items" id="noticeItems">
+        ${checklistSearch.trim() ? checklistSearchHtml() : items.map((item, idx) => `
           <label class="notice-item ${item.done ? 'done' : ''}">
             <input type="checkbox" ${item.done ? 'checked' : ''} onchange="toggleWorklistCheck('${m}', ${idx})">
             <span>${item.text}</span>
@@ -1758,10 +1835,15 @@ function renderWorklist(){
         <div class="wl-daynav-label" id="wlDayLabel"></div>
         <button class="wl-navbtn" onclick="shiftWorklistDay(1)" title="다음 날 (키보드 →)" aria-label="다음 날">›</button>
       </div>
-      <div class="toolbar" style="justify-content:center;">
-        <input type="date" id="worklistJumpDate" value="${worklistViewDate}" onchange="setWorklistDay(this.value)">
-        <button class="btn ghost" onclick="setWorklistDay(todayStr())">오늘</button>
-        <input type="text" id="worklistSearch" placeholder="할 일 검색 (전체 날짜)" value="${escapeAttr(worklistSearch)}" oninput="onWorklistSearch(this.value)" style="flex:1; min-width:180px;">
+      <div class="toolbar" style="justify-content:space-between; align-items:center;">
+        <span style="display:flex; gap:8px; align-items:center;">
+          <input type="date" id="worklistJumpDate" value="${worklistViewDate}" onchange="setWorklistDay(this.value)">
+          <button class="btn ghost" onclick="setWorklistDay(todayStr())">오늘</button>
+        </span>
+        <div class="search-wrap open">
+          <input type="text" id="worklistSearch" class="search-input" placeholder="할 일 검색" value="${escapeAttr(worklistSearch)}" oninput="onWorklistSearch(this.value)" onkeydown="if(event.key==='Escape'){ this.value=''; onWorklistSearch(''); }">
+          <span class="search-icon static" aria-hidden="true">${SEARCH_SVG}</span>
+        </div>
       </div>
       <div id="worklistCarry"></div>
       <div class="wl-agenda" id="worklistAgenda"></div>
