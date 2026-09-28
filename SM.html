@@ -2689,6 +2689,7 @@ async function loadFromGoogleSheet(){
   });
   Object.keys(parts).forEach(k => { if(map[k] != null) map[k] += parts[k].slice(2).join(''); });
   if(!Object.keys(map).length) return;
+  lastSyncedVersion = map.__version || null;
 
   // 보호장치: 시트의 할 일이 비어 있는데(예전 저장 실패 등) 이 파일에 할 일이 들어 있으면 지우지 않고 유지 후 다시 저장
   try {
@@ -2726,6 +2727,9 @@ async function loadFromGoogleSheet(){
   } catch(e){
     console.error('시트 데이터 파싱 실패', e);
   }
+  // 불러온 그대로의 상태를 기억 → 아무것도 안 바꿨으면 저장하지 않음(다른 창 덮어쓰기 방지)
+  lastSyncedContent = needsResaveAfterLoad ? null : JSON.stringify(collectGoogleSnapshot());
+  needsResaveAfterLoad = false;
 }
 
 // 로그인 만료(access token 만료/취소)를 감지해서 사용자가 알아챌 수 있게 만드는 부분.
@@ -2754,9 +2758,45 @@ function clearSyncWarningBadge(){
   if(badge) badge.style.display = 'none';
 }
 
+// 여러 창·여러 기기에서 동시에 열어도 서로 덮어쓰지 않도록, 저장할 때마다 "버전"을 남기고
+// 저장 직전에 시트의 버전이 내가 마지막으로 본 것과 같은지 확인한다.
+let lastSyncedVersion = null;
+let lastSyncedContent = null;
+let savingNow = false;
+async function readRemoteVersion(){
+  const res = await gapi.client.sheets.spreadsheets.values.get({ spreadsheetId: googleSpreadsheetId, range: 'data!A2:A1000' });
+  const col = (res.result.values || []).map(r => r[0]);
+  const idx = col.indexOf('__version');
+  if(idx < 0) return null;
+  const v = await gapi.client.sheets.spreadsheets.values.get({ spreadsheetId: googleSpreadsheetId, range: `data!B${idx + 2}` });
+  return ((v.result.values || [])[0] || [])[0] || null;
+}
 async function saveToGoogleSheet(){
-  if(!googleAccessToken || !googleSpreadsheetId) return;
+  saveTimer = null;
+  if(!googleAccessToken || !googleSpreadsheetId || !sheetLoadedOnce) return;
+  if(savingNow){ scheduleGoogleSave(); return; }
+  savingNow = true;
+  try {
+    const remote = await readRemoteVersion();
+    if(remote && remote !== lastSyncedVersion){
+      // 다른 창/기기에서 먼저 저장함 → 덮어쓰지 않고 최신 내용을 불러옴
+      await loadFromGoogleSheet();
+      renderAllNoSave();
+      setSyncStatus('다른 곳에서 바뀐 내용을 불러왔어요');
+      smAlert('최신 내용을 불러왔어요', '다른 창이나 기기에서 먼저 저장된 내용이 있어서, 덮어쓰지 않고 새로 불러왔어요. 방금 바꾼 내용이 안 보이면 한 번 더 해주세요.');
+      savingNow = false;
+      return;
+    }
+  } catch(e){
+    console.error(e);
+    savingNow = false;
+    if(isAuthError(e)) handleGoogleTokenExpired();
+    else setSyncStatus('저장 실패 (다음 변경 때 다시 시도합니다)');
+    return;
+  }
   const snap = collectGoogleSnapshot();
+  const snapStr = JSON.stringify(snap);
+  if(snapStr === lastSyncedContent){ savingNow = false; return; }   // 바뀐 게 없으면 저장 안 함
   const CHUNK = 45000;
   const rows = [];
   GOOGLE_DATA_KEYS.forEach(k => {
@@ -2764,6 +2804,8 @@ async function saveToGoogleSheet(){
     rows.push([k, str.slice(0, CHUNK)]);
     for(let i = CHUNK, n = 2; i < str.length; i += CHUNK, n++) rows.push([`${k}__${n}`, str.slice(i, i + CHUNK)]);
   });
+  const newVersion = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  rows.push(['__version', newVersion]);
   setSyncStatus('저장 중...');
   try {
     // 먼저 새 내용으로 덮어쓰고(실패하면 기존 데이터가 그대로 남음), 성공한 뒤에 남는 아래쪽 줄만 지움
@@ -2775,6 +2817,8 @@ async function saveToGoogleSheet(){
     await gapi.client.sheets.spreadsheets.values.clear({
       spreadsheetId: googleSpreadsheetId, range: `data!A${rows.length + 2}:B1000`,
     });
+    lastSyncedVersion = newVersion;
+    lastSyncedContent = snapStr;
     const t = new Date();
     clearSyncWarningBadge();
     setSyncStatus(`연동됨 · ${pad2(t.getHours())}:${pad2(t.getMinutes())} 저장됨`);
@@ -2786,6 +2830,7 @@ async function saveToGoogleSheet(){
       setSyncStatus('저장 실패 (다음 변경 때 다시 시도합니다)');
     }
   }
+  savingNow = false;
 }
 
 function scheduleGoogleSave(){
@@ -3292,7 +3337,7 @@ function isEditingNow(){
 
 async function pollGoogleSheetForUpdates(){
   if(!googleAccessToken || !googleSpreadsheetId) return;
-  if(saveTimer) return;
+  if(saveTimer || savingNow) return;
   if(isEditingNow()) return;
   try {
     await loadFromGoogleSheet();
