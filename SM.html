@@ -883,6 +883,25 @@
   #tab-vat .date-cell, #tab-pay .date-cell, #tab-corp .date-cell, #tab-indiv .date-cell{ justify-content:center; }
   #tab-vat .steps, #tab-pay .steps, #tab-corp .steps, #tab-indiv .steps{ justify-content:center; }
 
+  /* 우측 상단 단축 아이콘 (뒤로가기/홈/휴지통/퀵배포) */
+  .quick-bar{
+    position:fixed; top:78px; right:20px; z-index:70;
+    display:flex; align-items:center; gap:8px;
+    background:#fff; border:1px solid var(--border); border-radius:999px;
+    padding:6px; box-shadow:0 10px 24px -12px rgba(150,50,90,.35);
+  }
+  .quick-btn{
+    width:38px; height:38px; border-radius:50%; border:none; cursor:pointer;
+    display:flex; align-items:center; justify-content:center;
+    background:var(--bg); color:var(--muted); transition:background .15s, color .15s, transform .15s;
+  }
+  .quick-btn:hover{ background:var(--primary-soft); color:var(--primary-dark); transform:translateY(-1px); }
+  .quick-btn.accent{ background:linear-gradient(135deg,#f5a3c2 0%,#f7c46e 100%); color:#fff; }
+  .quick-btn.accent:hover{ filter:brightness(1.05); }
+  @media (max-width:760px){
+    .quick-bar{ top:auto; bottom:16px; right:16px; }
+  }
+
 </style>
 </head>
 <body>
@@ -908,6 +927,21 @@
     <span class="today-pill" id="todayPill"></span>
   </span>
 </header>
+
+<div class="quick-bar" id="quickBar">
+  <button class="quick-btn" onclick="goBackTab()" title="뒤로가기" aria-label="뒤로가기">
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/></svg>
+  </button>
+  <button class="quick-btn" onclick="switchTab('home')" title="홈" aria-label="홈">
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"/><path d="M5 10v10a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1V10"/></svg>
+  </button>
+  <button class="quick-btn" onclick="openTrashModal()" title="휴지통" aria-label="휴지통">
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/></svg>
+  </button>
+  <button class="quick-btn accent" onclick="quickDeploy()" title="퀵배포" aria-label="퀵배포">
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l7 4v6c0 5-3 8-7 10-4-2-7-5-7-10V6l7-4z"/><path d="M9 12l2 2 4-4"/></svg>
+  </button>
+</div>
 
 <div class="app-shell">
   <aside class="sidebar" id="sidebar"></aside>
@@ -1081,6 +1115,8 @@ let clientsTerminated = [];   // Tax.J 해지거래처 (보기 전용)
 let nextEventId = 1;
 let worklistChecklist = {};   // 실제 데이터는 Google 시트(SM_data)에서 불러옴
 let worklistSchedule = {};   // 실제 데이터는 Google 시트(SM_data)에서 불러옴
+let trashBin = [];   // 삭제한 거래처/할 일/체크리스트를 임시 보관 (복구 가능)
+let nextTrashId = 1;
 const _todayForCal = new Date(todayStr());
 let calYear = _todayForCal.getFullYear();
 let calMonth = _todayForCal.getMonth(); // 0-indexed
@@ -1242,13 +1278,101 @@ function renderNav(){
   }
 }
 
+let prevTab = null;
 function switchTab(id){
+  if(id !== activeTab) prevTab = activeTab;
   activeTab = id;
   try{ localStorage.setItem('sm_last_tab', id); }catch(e){}
   renderNav();
   document.querySelectorAll('.tab').forEach(el => el.classList.remove('active'));
   document.getElementById('tab-'+id).classList.add('active');
   renderAll();
+}
+function goBackTab(){
+  if(prevTab && prevTab !== activeTab){
+    const back = prevTab;
+    prevTab = null;
+    switchTab(back);
+  }
+}
+
+/* =========================================================
+   휴지통 — 삭제한 거래처/할 일/체크리스트를 복구할 수 있게 임시 보관
+   ========================================================= */
+
+function moveToTrash(kind, label, data, extra){
+  trashBin.unshift({ id: nextTrashId++, kind, label: label || '', data, extra: extra || {}, deletedAt: new Date().toISOString() });
+  scheduleGoogleSave();
+}
+function formatTrashDate(iso){
+  try{
+    const d = new Date(iso);
+    return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())} ${pad2(d.getHours())}:${pad2(d.getMinutes())} 삭제`;
+  }catch(e){ return ''; }
+}
+const TRASH_KIND_LABEL = { client:'거래처', task:'할 일', checklist:'체크리스트' };
+function trashListHtml(){
+  if(!trashBin.length) return '<div class="empty" style="padding:20px 0;">휴지통이 비어 있어요.</div>';
+  return `
+    <div class="cl-hist">
+      <div class="cl-hist-meta">총 ${trashBin.length}개 · <a href="#" onclick="event.preventDefault(); emptyTrash();">휴지통 비우기</a></div>
+      ${trashBin.map(item => `
+        <div class="cl-hist-item">
+          <div class="cl-hist-head">
+            <b>[${TRASH_KIND_LABEL[item.kind] || item.kind}] ${escapeAttr(item.label)}</b>
+            <span style="display:flex; gap:6px;">
+              <button class="btn xs" onclick="restoreFromTrash(${item.id})">복구</button>
+              <button class="btn ghost xs" onclick="purgeTrashItem(${item.id})">완전삭제</button>
+            </span>
+          </div>
+          <div class="cl-hist-meta">${formatTrashDate(item.deletedAt)}</div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+function refreshTrashModalIfOpen(){
+  const html = document.querySelector('.sm-modal-html');
+  if(html) html.innerHTML = trashListHtml();
+}
+function openTrashModal(){
+  smDialog({ title:'휴지통', html: trashListHtml(), icon:'🗑', cancelText:null, okText:'닫기', wide:true });
+}
+function restoreFromTrash(trashId){
+  const idx = trashBin.findIndex(x => x.id === trashId);
+  if(idx < 0) return;
+  const item = trashBin[idx];
+  if(item.kind === 'client'){
+    if(!clients.some(c => c.id === item.data.id)) clients.push(item.data);
+  } else if(item.kind === 'task'){
+    if(!tasks.some(t => t.id === item.data.id)) tasks.push(item.data);
+  } else if(item.kind === 'checklist'){
+    const m = item.extra && item.extra.month;
+    if(m){ worklistChecklist[m] = worklistChecklist[m] || []; worklistChecklist[m].push(item.data); }
+  }
+  trashBin.splice(idx, 1);
+  scheduleGoogleSave();
+  renderAll();
+  refreshTrashModalIfOpen();
+}
+async function purgeTrashItem(trashId){
+  if(!(await smConfirm('완전히 삭제할까요?', '복구할 수 없어요.', { tone:'danger', icon:'!', okText:'완전 삭제' }))) return;
+  trashBin = trashBin.filter(x => x.id !== trashId);
+  scheduleGoogleSave();
+  refreshTrashModalIfOpen();
+}
+async function emptyTrash(){
+  if(!trashBin.length) return;
+  if(!(await smConfirm('휴지통을 비울까요?', `${trashBin.length}개 항목이 모두 완전히 삭제돼요.`, { tone:'danger', icon:'!', okText:'비우기' }))) return;
+  trashBin = [];
+  scheduleGoogleSave();
+  refreshTrashModalIfOpen();
+}
+
+function quickDeploy(){
+  const token = (localStorage.getItem(GITHUB_DEPLOY_TOKEN_KEY) || '').trim();
+  if(token && smDeploySelectedFile){ runSmDeploy(); }
+  else { goToSettingsSection('settings-deploy'); }
 }
 
 /* =========================================================
@@ -1291,6 +1415,7 @@ async function deleteTask(id){
   if(!t) return;
   if(!(await smConfirm('이 할 일을 삭제할까요?', t.text, { tone:'danger', icon:'!', okText:'삭제' }))) return;
   if(t.source === 'master' || t.origKey) hideMasterKey('hiddenMasterTasks', t.origKey || (t.date + '|' + t.text));
+  moveToTrash('task', t.text, t);
   tasks = tasks.filter(x => x.id !== id);
   renderAll();
 }
@@ -1634,7 +1759,7 @@ let chkPickerOpen = false;
 let checklistSearch = '';
 let checklistSearchOpen = false;
 const SEARCH_SVG = '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>';
-const UPLOAD_XLSX_SVG = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4"/><path d="M7 9l5-5 5 5"/><path d="M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg>';
+const UPLOAD_XLSX_SVG = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v12"/><path d="M7 11l5 5 5-5"/><path d="M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg>';
 function checklistYear(){ return new Date().getFullYear(); }
 function selectWorklistMonth(m){
   if(!m) return;
@@ -1702,6 +1827,7 @@ async function deleteChecklistItem(month, idx){
   if(!item) return;
   if(!(await smConfirm('이 항목을 삭제할까요?', item.text, { tone:'danger', icon:'!', okText:'삭제' }))) return;
   if(item.source !== 'user') hideMasterKey('hiddenMasterChecklist', month + '|' + (item.origText || item.text));
+  moveToTrash('checklist', item.text, item, { month });
   worklistChecklist[month].splice(idx, 1);
   renderAll();
 }
@@ -2526,8 +2652,11 @@ function addClient(){
   renderAll();
 }
 async function deleteClient(id){
+  const c = clients.find(x => x.id === id);
+  if(!c) return;
   if(!(await smConfirm('이 거래처를 삭제할까요?', '각 신고 탭의 기록도 함께 지워져요.', { tone:'danger', icon:'!', okText:'삭제' }))) return;
-  clients = clients.filter(c => c.id !== id);
+  moveToTrash('client', c.name, c);
+  clients = clients.filter(x => x.id !== id);
   renderAll();
 }
 
@@ -2743,6 +2872,7 @@ const GOOGLE_DATA_KEYS = [
   'worklistChecklist','worklistSchedule',
   'events','nextEventId',
   'clientsOther','clientsTerminated',
+  'trashBin','nextTrashId',
 ];
 
 function collectGoogleSnapshot(){
@@ -2754,6 +2884,7 @@ function collectGoogleSnapshot(){
     worklistChecklist, worklistSchedule,
     events, nextEventId,
     clientsOther, clientsTerminated,
+    trashBin, nextTrashId,
   };
 }
 
@@ -3014,6 +3145,8 @@ function applySnapshot(o){
   if(o.clientsOther) clientsOther = o.clientsOther;
   if(o.clientsTerminated) clientsTerminated = o.clientsTerminated;
   if(o.nextEventId != null) nextEventId = o.nextEventId;
+  if(o.trashBin) trashBin = o.trashBin;
+  if(o.nextTrashId != null) nextTrashId = o.nextTrashId;
 }
 // 로그인·재연결 직후(시트를 불러온 다음) 호출
 function resolvePendingAfterLoad(){
