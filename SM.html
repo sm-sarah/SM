@@ -857,6 +857,19 @@
   .tx-type{ width:70px; }
   .tx-name{ min-width:160px; font-weight:600; }
 
+  /* 거래처 표: Tax.J 기장거래처 형식 */
+  .cl-head{ display:flex; justify-content:space-between; align-items:flex-start; gap:16px; margin-bottom:6px; }
+  .cl-count{ font-size:13px; font-weight:700; color:var(--primary-dark); background:var(--primary-soft); border-radius:999px; padding:2px 10px; margin-left:6px; vertical-align:middle; }
+  .cl-taxtype.kj{ color:#4547c9; font-weight:700; }
+  .cl-taxtype.sd{ color:#B45309; font-weight:700; }
+  td.num{ text-align:right; font-variant-numeric:tabular-nums; }
+
+  .cl-subtabs{ display:flex; gap:6px; margin-bottom:6px; flex-wrap:wrap; }
+  .cl-subtab{ font-family:inherit; font-size:15px; font-weight:800; border:none; background:transparent; color:var(--muted); padding:6px 12px; border-radius:10px; cursor:pointer; }
+  .cl-subtab span{ font-size:12px; font-weight:700; background:#f3eef1; color:var(--muted); border-radius:999px; padding:1px 8px; margin-left:4px; }
+  .cl-subtab.on{ color:var(--primary-dark); background:var(--primary-soft); }
+  .cl-subtab.on span{ background:#fff; color:var(--primary-dark); }
+
 </style>
 </head>
 <body>
@@ -1050,6 +1063,8 @@ let tasks = [];   // 실제 데이터는 Google 시트(SM_data)에서 불러옴
 let nextTaskId = 1;
 // 달력에 표시할 '중요 일정' (할 일과 별개)
 let events = [];
+let clientsOther = [];        // Tax.J 기타거래처 (보기 전용)
+let clientsTerminated = [];   // Tax.J 해지거래처 (보기 전용)
 let nextEventId = 1;
 let worklistChecklist = {};   // 실제 데이터는 Google 시트(SM_data)에서 불러옴
 let worklistSchedule = {};   // 실제 데이터는 Google 시트(SM_data)에서 불러옴
@@ -1157,6 +1172,11 @@ const TAB_TITLES = {
 };
 
 const NAV_SUBMENUS = {
+  clients: [
+    {js:"setClientsView('regular')",    label:'기장거래처'},
+    {js:"setClientsView('other')",      label:'기타거래처'},
+    {js:"setClientsView('terminated')", label:'해지거래처'},
+  ],
   settings: [
     {anchor:'settings-basic',   label:'기본 설정'},
     {anchor:'settings-google',  label:'Google 연동'},
@@ -1194,7 +1214,7 @@ function renderNav(){
       <div class="nav-wrap has-sub">
         ${btn}
         <div class="nav-flyout ${t.id===activeTab?'open':''}">
-          ${sub.map(s => `<button class="nav-flyout-item" onclick="goToSettingsSection('${s.anchor}')">${s.label}</button>`).join('')}
+          ${sub.map(s => `<button class="nav-flyout-item" onclick="${s.js || `goToSettingsSection('${s.anchor}')`}">${s.label}</button>`).join('')}
         </div>
       </div>
     `;
@@ -2330,6 +2350,90 @@ function openClientDetail(id){
   smDialog({ title: c.name, html, icon:'🏢', cancelText:null, okText:'닫기', wide:true });
 }
 
+/* ===== Tax.J "엑셀 일괄 다운로드" 파일에서 기장거래처 가져오기 =====
+   Tax.J 엑셀의 "기장거래처" 시트(없으면 첫 시트에서 구분="기장"인 줄)를 읽어 이 앱 거래처 목록을 Tax.J와 같게 맞춤.
+   개인정보 칸(주민번호·연락처 등)은 읽지 않음. */
+async function importTaxjExcel(input){
+  const file = input.files && input.files[0];
+  input.value = '';
+  if(!file) return;
+  try{
+    if(typeof XLSX === 'undefined'){
+      await new Promise((res, rej) => { const el = document.createElement('script'); el.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js'; el.onload = res; el.onerror = () => rej(new Error('엑셀 읽기 도구를 불러오지 못했어요')); document.head.appendChild(el); });
+    }
+    const wb = XLSX.read(await file.arrayBuffer(), { type:'array' });
+    const sheetName = wb.SheetNames.find(n => n.includes('기장거래처')) || wb.SheetNames[0];
+    const rows = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], { header:1, raw:false, defval:'' });
+    const head = (rows[0] || []).map(v => String(v).replace(/\s+/g, ''));
+    const col = (...names) => head.findIndex(h => names.includes(h));
+    const iSeq = col('#','순번'), iName = col('상호명','상호'), iGroup = col('구분'), iEntity = col('사업자유형','사업자구분'),
+          iTax = col('세목','수임구분'), iStatus = col('상태'), iBiz = col('사업자등록번호','사업자번호'), iCorp = col('법인등록번호'),
+          iOpen = col('개업일'), iCeo = col('대표자명','대표자');
+    // 수임료·계약일·수임시작일·해지 정보: 제목으로 찾고, 없으면 Tax.J 엑셀의 칸 위치(21~26번째)로
+    const byPos = (names, pos) => { const i = col(...names); return i >= 0 ? i : (head.length > pos ? pos : -1); };
+    const iFee = byPos(['수임료'], 20), iContract = byPos(['계약일'], 21), iStart = byPos(['수임시작일','시작일'], 22),
+          iTermReason = byPos(['해지사유'], 23), iTermDate = byPos(['해지일'], 24), iTermMonth = byPos(['종료월'], 25);
+    if(iName < 0) throw new Error(`"${sheetName}" 시트에서 "상호명" 제목을 찾지 못했어요. Tax.J 엑셀 일괄 다운로드 파일인지 확인해주세요.`);
+    const g = (r, i) => i >= 0 ? String(r[i] == null ? '' : r[i]).trim() : '';
+    const body = rows.slice(1).filter(r => g(r, iName));
+    const regular = body.filter(r => {
+      if(iGroup >= 0 && g(r, iGroup)) return g(r, iGroup) === '기장';
+      const t = g(r, iTax); return (t === '기장대행' || t === '신고대리') && g(r, iStatus) !== '해지';
+    });
+    if(!regular.length) throw new Error('기장거래처를 한 건도 찾지 못했어요.');
+    const digits = v => String(v || '').replace(/\D/g, '');
+    const byBiz = {}, byName = {};
+    clients.forEach(c => { if(digits(c.biz)) byBiz[digits(c.biz)] = c; byName[c.name] = c; });
+    const LABEL = { seq:'순번', taxType:'수임구분', type:'사업자구분', name:'상호명', biz:'사업자번호', corpNo:'법인등록번호', ceo:'대표자', fee:'수임료', contractDate:'계약일', start:'수임시작일', openDate:'개업일' };
+    const nowIso = new Date().toISOString(), used = new Set();
+    const merged = regular.map((r, idx) => {
+      const feeRaw = g(r, iFee).replace(/[^0-9]/g, '');
+      const incoming = {
+        seq: g(r, iSeq) || String(idx + 1), taxType: g(r, iTax).replace(/^기타\((.*)\)$/, '$1'),
+        type: g(r, iEntity).startsWith('법인') ? '법인' : '개인', name: g(r, iName), biz: g(r, iBiz), corpNo: g(r, iCorp),
+        ceo: g(r, iCeo), fee: feeRaw ? Number(feeRaw).toLocaleString() : '', contractDate: g(r, iContract), start: g(r, iStart), openDate: g(r, iOpen),
+      };
+      const old = byBiz[digits(incoming.biz)] || byName[incoming.name];
+      if(old) used.add(old);
+      const base = old ? { ...old } : { id: nextClientId++, history: [{ at: nowIso, kind:'Tax.J 엑셀에서 가져옴', changes: [] }] };
+      base.source = 'taxj';
+      const ov = base.overrides || {}, changes = [];
+      Object.keys(incoming).forEach(k => {
+        if(ov[k]) return;
+        const from = old ? (old[k] || '') : '';
+        if(old && from !== incoming[k] && k !== 'seq') changes.push({ label: LABEL[k], from, to: incoming[k] });
+        base[k] = incoming[k];
+      });
+      if(old && changes.length) base.history = (base.history || []).concat([{ at: nowIso, kind:'Tax.J 반영', changes }]);
+      return base;
+    });
+    const dropped = clients.filter(c => !used.has(c) && c.source);          // Tax.J 기장거래처에 없는 예전 가져온 거래처
+    const keepManual = clients.filter(c => !used.has(c) && !c.source && !(typeof c.id === 'number' && c.id <= 8 && /^(110-81|220-11)-\d{5}$/.test(c.biz || '')));
+    if(!(await smConfirm(`기장거래처 ${merged.length}건으로 맞출까요?`,
+      `"${sheetName}" 시트에서 읽었어요.${dropped.length ? `\nTax.J 기장거래처에 없는 ${dropped.length}건은 목록에서 빠져요.` : ''}\n여기서 직접 수정한 칸은 그대로 남아요.`, { icon:'↓', okText:'가져오기' }))) return;
+    clients = merged.concat(keepManual);
+    // 기타·해지 거래처: "전체거래처" 시트(없으면 같은 시트)에서 구분이 기타/해지인 줄 (읽기 전용 보기용)
+    const allName = wb.SheetNames.find(n => n.includes('전체거래처'));
+    const allRows = allName ? XLSX.utils.sheet_to_json(wb.Sheets[allName], { header:1, raw:false, defval:'' }).slice(1) : body;
+    const plain = (r, i) => {
+      const feeRaw = g(r, iFee).replace(/[^0-9]/g, '');
+      return { seq: String(i + 1), taxType: g(r, iTax).replace(/^기타\((.*)\)$/, '$1'), type: g(r, iEntity).startsWith('법인') ? '법인' : '개인',
+        name: g(r, iName), biz: g(r, iBiz), corpNo: g(r, iCorp), ceo: g(r, iCeo), fee: feeRaw ? Number(feeRaw).toLocaleString() : '',
+        contractDate: g(r, iContract), start: g(r, iStart), terminationDate: g(r, iTermDate), terminationMonth: g(r, iTermMonth), terminationReason: g(r, iTermReason) };
+    };
+    const groupOf = r => g(r, iGroup) || (g(r, iStatus) === '해지' ? '해지' : (['기장대행','신고대리'].includes(g(r, iTax)) ? '기장' : '기타'));
+    clientsOther = allRows.filter(r => g(r, iName) && groupOf(r) === '기타').map(plain);
+    clientsTerminated = allRows.filter(r => g(r, iName) && groupOf(r) === '해지').map(plain);
+    const d = new Date();
+    settings.taxjImportedAt = `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+    renderAll();
+    smAlert('Tax.J 거래처를 가져왔어요', `기장 ${merged.length}건 · 기타 ${clientsOther.length}건 · 해지 ${clientsTerminated.length}건\nTax.J와 같은 순서(법인 → 개인, 기장대행 → 신고대리)예요.`, { icon:'✓' });
+  }catch(e){
+    console.error(e);
+    smAlert('엑셀을 가져오지 못했어요', e.message || String(e), { tone:'danger' });
+  }
+}
+
 function sortedClients(){
   const n = v => { const x = parseInt(String(v || '').replace(/\D/g, ''), 10); return isNaN(x) ? Infinity : x; };
   return [...clients].sort((a, b) => n(a.seq) - n(b.seq) || String(a.name).localeCompare(String(b.name), 'ko'));
@@ -2340,13 +2444,15 @@ async function editClient(id){
   if(!c) return;
   const fields = [
     { key:'seq', label:'순번' },
-    { key:'type', label:'구분', options:['법인','개인'] },
+    { key:'taxType', label:'수임구분', options:['기장대행','신고대리','기타'] },
+    { key:'type', label:'사업자구분', options:['법인','개인'] },
     { key:'name', label:'상호명' },
     { key:'biz', label:'사업자번호', placeholder:'000-00-00000' },
     { key:'corpNo', label:'법인등록번호', placeholder:'000000-0000000' },
     { key:'ceo', label:'대표자' },
-    { key:'openDate', label:'개업일', placeholder:'예: 2020-01-01' },
     { key:'fee', label:'수임료' },
+    { key:'contractDate', label:'계약일', type:'date' },
+    { key:'start', label:'수임시작일', type:'date' },
   ];
   const r = await smForm(`${c.name} 수정`, fields.map(f => ({ ...f, value: c[f.key] || '' })), { okText:'저장', icon:'✎', wide:true });
   if(!r) return;
@@ -2405,12 +2511,43 @@ async function deleteClient(id){
   renderAll();
 }
 
+let clientsView = 'regular';
+function setClientsView(v){
+  clientsView = v;
+  if(activeTab !== 'clients') switchTab('clients'); else renderClients();
+}
+function renderReadonlyClientTable(list, terminated){
+  const e = v => String(v == null || v === '' ? '-' : v).replace(/&/g,'&amp;').replace(/</g,'&lt;');
+  if(!list.length) return '<div class="empty">아직 가져온 목록이 없어요. 위의 "Tax.J 엑셀 가져오기"로 전체거래처가 들어 있는 엑셀을 올려주세요.</div>';
+  return `<div class="table-scroll"><table>
+    <thead><tr><th>순번</th><th>수임구분</th><th>사업자구분</th><th>상호명</th><th>사업자번호</th><th>법인등록번호</th><th>대표자</th><th>수임료</th><th>계약일</th><th>수임시작일</th>${terminated ? '<th>해지일</th><th>종료월</th><th>해지사유</th>' : ''}</tr></thead>
+    <tbody>${list.map(c => `<tr>
+      <td>${e(c.seq)}</td><td>${e(c.taxType)}</td>
+      <td><span class="tag ${c.type === '법인' ? 'tag-corp-type' : 'tag-indiv-type'}">${e(c.type)}</span></td>
+      <td>${e(c.name)}</td><td>${e(c.biz)}</td><td>${e(c.corpNo)}</td><td>${e(c.ceo)}</td><td class="num">${e(c.fee)}</td>
+      <td>${e(c.contractDate)}</td><td>${e(c.start)}</td>
+      ${terminated ? `<td>${e(c.terminationDate)}</td><td>${e(c.terminationMonth)}</td><td>${e(c.terminationReason)}</td>` : ''}
+    </tr>`).join('')}</tbody></table></div>`;
+}
 function renderClients(){
   const el = document.getElementById('tab-clients');
   el.innerHTML = `
     <div class="card">
-      <h2>거래처 마스터</h2>
-      <div class="desc">모든 신고 탭이 이 목록을 기준정보로 참조합니다. 법인/개인 구분에 따라 법인세·종합소득세 탭에 자동으로 나뉘어 표시됩니다.</div>
+      <div class="cl-head">
+        <div>
+          <div class="cl-subtabs">
+            ${[['regular','기장거래처', clients.length], ['other','기타거래처', clientsOther.length], ['terminated','해지거래처', clientsTerminated.length]]
+              .map(([k, l, n]) => `<button class="cl-subtab ${clientsView === k ? 'on' : ''}" onclick="setClientsView('${k}')">${l} <span>${n}</span></button>`).join('')}
+          </div>
+          <div class="desc">${clientsView === 'regular' ? '모든 신고 탭이 기장거래처 목록을 기준으로 해요.' : 'Tax.J 엑셀에서 가져온 목록이에요. (보기 전용)'}</div>
+        </div>
+        <div style="text-align:right;">
+          <button class="btn primary xs" onclick="document.getElementById('taxjXlsxInput').click()">Tax.J 엑셀 가져오기</button>
+          <input type="file" id="taxjXlsxInput" accept=".xlsx,.xls" style="display:none;" onchange="importTaxjExcel(this)">
+          <div class="hint" style="margin-top:4px;">${settings.taxjImportedAt ? '마지막 가져오기: ' + settings.taxjImportedAt : 'Tax.J → 엑셀 일괄 다운로드 파일을 올려주세요'}</div>
+        </div>
+      </div>
+      ${clientsView !== 'regular' ? renderReadonlyClientTable(clientsView === 'other' ? clientsOther : clientsTerminated, clientsView === 'terminated') : `
       <div class="toolbar">
         <input type="text" id="newClientName" placeholder="거래처명">
         <select id="newClientType">
@@ -2422,7 +2559,7 @@ function renderClients(){
       </div>
       <div class="table-scroll">
       <table>
-        <thead><tr><th>순번</th><th>구분</th><th>상호명</th><th>사업자번호</th><th>법인등록번호</th><th>대표자</th><th>개업일</th><th>수임료</th><th style="text-align:center;">관리</th></tr></thead>
+        <thead><tr><th>순번</th><th>수임구분</th><th>사업자구분</th><th>상호명</th><th>사업자번호</th><th>법인등록번호</th><th>대표자</th><th>수임료</th><th>계약일</th><th>수임시작일</th><th style="text-align:center;">관리</th></tr></thead>
         <tbody>
           ${sortedClients().map(c => {
             const ov = c.overrides || {};
@@ -2430,13 +2567,15 @@ function renderClients(){
             return `
             <tr>
               <td>${cellV('seq', c.seq)}</td>
+              <td class="cl-taxtype ${c.taxType === '기장대행' ? 'kj' : c.taxType === '신고대리' ? 'sd' : ''}">${cellV('taxType', c.taxType)}</td>
               <td><span class="tag ${c.type==='법인'?'tag-corp-type':'tag-indiv-type'}">${c.type}</span></td>
               <td><a class="cl-name" onclick="openClientDetail(${c.id})" title="거래처 모아보기">${cellV('name', c.name)}</a></td>
               <td>${cellV('biz', c.biz)}</td>
               <td>${cellV('corpNo', c.corpNo)}</td>
               <td>${cellV('ceo', c.ceo)}</td>
-              <td>${cellV('openDate', c.openDate)}</td>
-              <td>${cellV('fee', c.fee)}</td>
+              <td class="num">${cellV('fee', c.fee)}</td>
+              <td>${cellV('contractDate', c.contractDate)}</td>
+              <td>${cellV('start', c.start)}</td>
               <td class="cl-actions">
                 <button class="icon-btn" onclick="editClient(${c.id})" title="수정" aria-label="수정">${ICON_EDIT}</button>
                 <button class="icon-btn" onclick="showClientHistory(${c.id})" title="이력" aria-label="이력">${ICON_HISTORY}</button>
@@ -2445,7 +2584,7 @@ function renderClients(){
             </tr>`; }).join('')}
         </tbody>
       </table>
-      </div>
+      </div>`}
     </div>
   `;
 }
@@ -2584,6 +2723,7 @@ const GOOGLE_DATA_KEYS = [
   'nextClientId','nextTaskId',
   'worklistChecklist','worklistSchedule',
   'events','nextEventId',
+  'clientsOther','clientsTerminated',
 ];
 
 function collectGoogleSnapshot(){
@@ -2594,6 +2734,7 @@ function collectGoogleSnapshot(){
     nextClientId, nextTaskId,
     worklistChecklist, worklistSchedule,
     events, nextEventId,
+    clientsOther, clientsTerminated,
   };
 }
 
@@ -2650,6 +2791,8 @@ async function loadFromGoogleSheet(){
     if(map.worklistChecklist) worklistChecklist = JSON.parse(map.worklistChecklist);
     if(map.worklistSchedule)  worklistSchedule  = JSON.parse(map.worklistSchedule);
     if(map.events)        events       = JSON.parse(map.events);
+    if(map.clientsOther)  clientsOther = JSON.parse(map.clientsOther);
+    if(map.clientsTerminated) clientsTerminated = JSON.parse(map.clientsTerminated);
     if(map.nextEventId)   nextEventId  = JSON.parse(map.nextEventId);
   } catch(e){
     console.error('시트 데이터 파싱 실패', e);
@@ -2849,6 +2992,8 @@ function applySnapshot(o){
   if(o.worklistChecklist) worklistChecklist = o.worklistChecklist;
   if(o.worklistSchedule) worklistSchedule = o.worklistSchedule;
   if(o.events) events = o.events;
+  if(o.clientsOther) clientsOther = o.clientsOther;
+  if(o.clientsTerminated) clientsTerminated = o.clientsTerminated;
   if(o.nextEventId != null) nextEventId = o.nextEventId;
 }
 // 로그인·재연결 직후(시트를 불러온 다음) 호출
@@ -3305,6 +3450,7 @@ async function resetAllData(){
   vatData = {}; payData = {}; corpData = {}; indivData = {};
   worklistChecklist = {}; worklistSchedule = {};
   events = [];
+  clientsOther = []; clientsTerminated = [];
   settings.displayName = '';
   settings.soonDays = 7;
   renderNav();
