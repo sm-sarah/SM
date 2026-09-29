@@ -1193,7 +1193,6 @@ const NAV_SUBMENUS = {
   settings: [
     {anchor:'settings-basic',   label:'기본 설정'},
     {anchor:'settings-google',  label:'Google 연동'},
-    {anchor:'settings-master',  label:'마스터 시트 가져오기'},
     {anchor:'settings-deploy',  label:'GitHub 배포'},
     {anchor:'settings-recurring', label:'반복 할 일'},
     {anchor:'settings-backup',  label:'자동 백업'},
@@ -1635,6 +1634,7 @@ let chkPickerOpen = false;
 let checklistSearch = '';
 let checklistSearchOpen = false;
 const SEARCH_SVG = '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>';
+const UPLOAD_XLSX_SVG = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4"/><path d="M7 9l5-5 5 5"/><path d="M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg>';
 function checklistYear(){ return new Date().getFullYear(); }
 function selectWorklistMonth(m){
   if(!m) return;
@@ -1757,9 +1757,12 @@ function renderWorklist(){
       <div class="notice-top">
         <span></span>
         <div class="notice-title">체크리스트</div>
-        <div class="search-wrap ${checklistSearchOpen || checklistSearch ? 'open' : ''}">
-          <input type="text" id="checklistSearch" class="search-input" placeholder="체크리스트 검색" value="${escapeAttr(checklistSearch)}" oninput="onChecklistSearch(this.value)" onkeydown="if(event.key==='Escape'){ closeChecklistSearch(); }">
-          <button class="search-icon" onclick="toggleChecklistSearch()" title="체크리스트 검색" aria-label="체크리스트 검색">${SEARCH_SVG}</button>
+        <div style="display:flex; align-items:center; gap:6px; justify-self:end;">
+          <button class="icon-btn" onclick="document.getElementById('worklistXlsxInput').click()" title="엑셀로 가져오기" aria-label="엑셀로 가져오기">${UPLOAD_XLSX_SVG}</button>
+          <div class="search-wrap ${checklistSearchOpen || checklistSearch ? 'open' : ''}">
+            <input type="text" id="checklistSearch" class="search-input" placeholder="체크리스트 검색" value="${escapeAttr(checklistSearch)}" oninput="onChecklistSearch(this.value)" onkeydown="if(event.key==='Escape'){ closeChecklistSearch(); }">
+            <button class="search-icon" onclick="toggleChecklistSearch()" title="체크리스트 검색" aria-label="체크리스트 검색">${SEARCH_SVG}</button>
+          </div>
         </div>
       </div>
       <div class="notice-months">
@@ -1806,11 +1809,15 @@ function renderWorklist(){
       <div class="notice-top">
         <span id="wlTodayBtnSlot"></span>
         <div class="today-title">Today</div>
-        <div class="search-wrap open">
-          <input type="text" id="worklistSearch" class="search-input" placeholder="할 일 검색" value="${escapeAttr(worklistSearch)}" oninput="onWorklistSearch(this.value)" onkeydown="if(event.key==='Escape'){ this.value=''; onWorklistSearch(''); }">
-          <span class="search-icon static" aria-hidden="true">${SEARCH_SVG}</span>
+        <div style="display:flex; align-items:center; gap:6px; justify-self:end;">
+          <button class="icon-btn" onclick="document.getElementById('worklistXlsxInput').click()" title="엑셀로 가져오기" aria-label="엑셀로 가져오기">${UPLOAD_XLSX_SVG}</button>
+          <div class="search-wrap open">
+            <input type="text" id="worklistSearch" class="search-input" placeholder="할 일 검색" value="${escapeAttr(worklistSearch)}" oninput="onWorklistSearch(this.value)" onkeydown="if(event.key==='Escape'){ this.value=''; onWorklistSearch(''); }">
+            <span class="search-icon static" aria-hidden="true">${SEARCH_SVG}</span>
+          </div>
         </div>
       </div>
+      <input type="file" id="worklistXlsxInput" accept=".xlsx,.xls" style="display:none;" onchange="importWorklistExcel(this)">
       <div class="wl-daynav">
         <button class="wl-navbtn" onclick="shiftWorklistDay(-1)" title="이전 날 (키보드 ←)" aria-label="이전 날">‹</button>
         <div class="wl-date-pick">
@@ -3304,6 +3311,129 @@ async function importWorklistFromMaster(){
   return { taskCount: importedTasks.length, checklistMonths: Object.keys(newChecklist).length };
 }
 
+/* ===== 엑셀 파일에서 체크리스트·할 일 가져오기 =====
+   "★Tax_2026" 마스터 시트를 엑셀로 내려받은 파일을 읽어요.
+   A1이 "Work List"인 시트(들)에서, B4:B12는 고정 체크리스트, E4:E12는 주요 세무일정,
+   A열에 "OO년 O월 O일"로 병합된 칸을 날짜 구간으로 보고 그 아래 A열(체크)·B열(내용)을 할 일로 읽어요. */
+function computeWorklistImportFromExcel(wb){
+  const dateRe = /(\d{2,4})년\s*(\d{1,2})월\s*(\d{1,2})일/;
+  const importedTasks = [];
+  const newChecklist = {};
+  const newSchedule = {};
+
+  const wlSheets = wb.SheetNames.filter(name => {
+    const ws = wb.Sheets[name];
+    const a1 = ws && ws['A1'] ? String(ws['A1'].v == null ? '' : ws['A1'].v).trim() : '';
+    return a1 === 'Work List';
+  });
+  const targetSheets = wlSheets.length ? wlSheets : wb.SheetNames;
+
+  targetSheets.forEach(title => {
+    const ws = wb.Sheets[title];
+    if(!ws) return;
+    const merges = ws['!merges'] || [];
+    const range = XLSX.utils.decode_range(ws['!ref'] || 'A1:A1');
+    const cellText = (ri, ci) => {
+      const cell = ws[XLSX.utils.encode_cell({ r: ri, c: ci })];
+      if(!cell) return '';
+      return String(cell.w != null ? cell.w : (cell.v == null ? '' : cell.v)).trim();
+    };
+
+    const checklist = [];
+    const schedule = [];
+    for(let ri = 3; ri <= 11; ri++){
+      const b = cellText(ri, 1);
+      const e = cellText(ri, 4);
+      if(b) checklist.push(b);
+      if(e) schedule.push(e);
+    }
+
+    const dateHeaders = merges
+      .filter(m => m.s.c === 0 && (m.e.c - m.s.c) >= 2)
+      .map(m => ({ merge: m, text: cellText(m.s.r, 0) }))
+      .filter(h => dateRe.test(h.text))
+      .sort((a, b) => a.merge.s.r - b.merge.s.r);
+
+    const dayTasks = [];
+    const monthCounts = {};
+    dateHeaders.forEach((h, idx) => {
+      const m = dateRe.exec(h.text);
+      let year = parseInt(m[1], 10);
+      if(year < 100) year += 2000;
+      const mo = parseInt(m[2], 10);
+      const mm = pad2(mo);
+      const dd = pad2(parseInt(m[3], 10));
+      const dateStr = `${year}-${mm}-${dd}`;
+      monthCounts[mo] = (monthCounts[mo] || 0) + 1;
+
+      const startRow = h.merge.e.r + 1;
+      const endRow = idx + 1 < dateHeaders.length ? dateHeaders[idx + 1].merge.s.r : (range.e.r + 1);
+      for(let ri = startRow; ri < endRow; ri++){
+        const check = cellText(ri, 0);
+        const text = cellText(ri, 1);
+        if(!text) continue;
+        if(check !== 'TRUE' && check !== 'FALSE') continue;
+        dayTasks.push({ date: dateStr, text, done: check === 'TRUE' });
+      }
+    });
+
+    let monthLabel = null, bestCount = -1;
+    Object.entries(monthCounts).forEach(([mo, cnt]) => {
+      if(cnt > bestCount){ bestCount = cnt; monthLabel = `${parseInt(mo, 10)}월`; }
+    });
+    if(!monthLabel) monthLabel = cellText(1, 0) || title;
+
+    if(checklist.length) newChecklist[monthLabel] = checklist.map(text => ({ text, done:false }));
+    if(schedule.length) newSchedule[monthLabel] = schedule;
+    dayTasks.forEach(t => importedTasks.push({ id: nextTaskId++, date: t.date, text: t.text, done: t.done, source:'master' }));
+  });
+
+  return { importedTasks, newChecklist, newSchedule };
+}
+
+function applyWorklistImport({ importedTasks, newChecklist, newSchedule }){
+  const movedKeys = new Set(tasks.filter(t => t.movedFrom).map(t => t.movedFrom + '|' + t.text).concat(settings.hiddenMasterTasks || []));
+  tasks = tasks.filter(t => t.source !== 'master').concat(importedTasks.filter(t => !movedKeys.has(t.date + '|' + t.text)));
+  const hiddenCL = new Set(settings.hiddenMasterChecklist || []);
+  Object.keys(newChecklist).forEach(mo => {
+    const old = worklistChecklist[mo] || [];
+    const byText = {}; old.forEach(it => { byText[it.origText || it.text] = it; });
+    const fromMaster = newChecklist[mo]
+      .filter(it => !hiddenCL.has(mo + '|' + it.text) || byText[it.text])
+      .map(it => byText[it.text] || it);
+    const kept = old.filter(it => it.source === 'user' || (it.origText && !fromMaster.includes(it)));
+    worklistChecklist[mo] = fromMaster.concat(kept.filter(it => !fromMaster.includes(it)));
+  });
+  worklistSchedule = Object.assign({}, worklistSchedule, newSchedule);
+}
+
+async function importWorklistExcel(input){
+  const file = input.files && input.files[0];
+  input.value = '';
+  if(!file) return;
+  try{
+    if(typeof XLSX === 'undefined'){
+      await new Promise((res, rej) => { const el = document.createElement('script'); el.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js'; el.onload = res; el.onerror = () => rej(new Error('엑셀 읽기 도구를 불러오지 못했어요')); document.head.appendChild(el); });
+    }
+    const wb = XLSX.read(await file.arrayBuffer(), { type:'array' });
+    const parsed = computeWorklistImportFromExcel(wb);
+    const checklistMonths = Object.keys(parsed.newChecklist).length;
+    if(!parsed.importedTasks.length && !checklistMonths){
+      smAlert('가져올 내용을 찾지 못했어요', '"Work List" 형식의 엑셀 파일인지 확인해주세요.', { tone:'danger' });
+      return;
+    }
+    if(!(await smConfirm(`할 일 ${parsed.importedTasks.length}건, 체크리스트 ${checklistMonths}개월분을 가져올까요?`,
+      '엑셀 파일의 최신 내용으로 맞춰요.\n직접 추가한 항목은 그대로 남아요.', { icon:'↓', okText:'가져오기' }))) return;
+    applyWorklistImport(parsed);
+    scheduleGoogleSave();
+    renderAll();
+    smAlert('가져왔어요', `할 일 ${parsed.importedTasks.length}건, 체크리스트 ${checklistMonths}개월분을 반영했어요.`, { icon:'✓' });
+  }catch(e){
+    console.error(e);
+    smAlert('가져오지 못했어요', e.message || '알 수 없는 오류', { tone:'danger' });
+  }
+}
+
 async function importClientsOnlyFromMaster(){
   if(!googleAccessToken){ smAlert('먼저 Google 로그인을 해주세요'); return; }
   const ok = await smConfirm('거래처 기본정보만 가져올까요?', '마스터 시트("기장현황")의 최신 내용으로 바뀌어요.\n직접 추가한 거래처는 그대로 남아요.', { icon:'↓', okText:'가져오기' });
@@ -3514,20 +3644,6 @@ function renderSettings(){
           </div>
         </div>
         <div class="hint" id="syncStatusLine" style="margin-top:10px;">${googleSyncStatus}</div>
-      </div>
-
-      <div class="settings-block" id="settings-master">
-        <div class="row">
-          <div>
-            <h3>업무용 마스터 시트에서 가져오기</h3>
-            <div class="hint">"★Tax_2026"에서 거래처·할 일을 가져와요.</div>
-          </div>
-          <div class="ctrl" style="display:flex; gap:6px;">
-            <button class="btn ghost xs" onclick="importClientsOnlyFromMaster()" ${googleAccessToken ? '' : 'disabled'}>거래처만 가져오기</button>
-            <button class="btn primary xs" onclick="importFromMasterSheet()" ${googleAccessToken ? '' : 'disabled'}>거래처+할 일 가져오기</button>
-          </div>
-        </div>
-        <div class="hint" id="masterSyncStatusLine" style="margin-top:10px;">${masterSyncStatus}</div>
       </div>
 
       <div class="settings-block" id="settings-deploy">
