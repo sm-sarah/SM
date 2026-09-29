@@ -870,6 +870,8 @@
   .cl-subtab.on{ color:var(--primary-dark); background:var(--primary-soft); }
   .cl-subtab.on span{ background:#fff; color:var(--primary-dark); }
 
+  #tab-clients .table-scroll th, #tab-clients .table-scroll td{ text-align:center; }
+
 </style>
 </head>
 <body>
@@ -2539,7 +2541,6 @@ function renderClients(){
             ${[['regular','기장거래처', clients.length], ['other','기타거래처', clientsOther.length], ['terminated','해지거래처', clientsTerminated.length]]
               .map(([k, l, n]) => `<button class="cl-subtab ${clientsView === k ? 'on' : ''}" onclick="setClientsView('${k}')">${l} <span>${n}</span></button>`).join('')}
           </div>
-          <div class="desc">${clientsView === 'regular' ? '모든 신고 탭이 기장거래처 목록을 기준으로 해요.' : 'Tax.J 엑셀에서 가져온 목록이에요. (보기 전용)'}</div>
         </div>
         <div style="text-align:right;">
           <button class="btn primary xs" onclick="document.getElementById('taxjXlsxInput').click()">Tax.J 엑셀 가져오기</button>
