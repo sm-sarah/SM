@@ -870,6 +870,38 @@
   .cl-subtab.on{ color:var(--primary-dark); background:var(--primary-soft); }
   .cl-subtab.on span{ background:#fff; color:var(--primary-dark); }
 
+  #tab-clients .table-scroll th, #tab-clients .table-scroll td{ text-align:center; }
+
+  #tab-vat .table-scroll th, #tab-vat .table-scroll td,
+  #tab-pay .table-scroll th, #tab-pay .table-scroll td,
+  #tab-corp .table-scroll th, #tab-corp .table-scroll td,
+  #tab-indiv .table-scroll th, #tab-indiv .table-scroll td{ text-align:center; }
+  #tab-vat .table-scroll td input, #tab-vat .table-scroll td select,
+  #tab-pay .table-scroll td input, #tab-pay .table-scroll td select,
+  #tab-corp .table-scroll td input, #tab-corp .table-scroll td select,
+  #tab-indiv .table-scroll td input, #tab-indiv .table-scroll td select{ text-align:center; }
+  #tab-vat .date-cell, #tab-pay .date-cell, #tab-corp .date-cell, #tab-indiv .date-cell{ justify-content:center; }
+  #tab-vat .steps, #tab-pay .steps, #tab-corp .steps, #tab-indiv .steps{ justify-content:center; }
+
+  /* 우측 상단 단축 아이콘 (뒤로가기/홈/휴지통/퀵배포) */
+  .quick-bar{
+    position:fixed; top:78px; right:20px; z-index:70;
+    display:flex; align-items:center; gap:8px;
+    background:#fff; border:1px solid var(--border); border-radius:999px;
+    padding:6px; box-shadow:0 10px 24px -12px rgba(150,50,90,.35);
+  }
+  .quick-btn{
+    width:38px; height:38px; border-radius:50%; border:none; cursor:pointer;
+    display:flex; align-items:center; justify-content:center;
+    background:var(--bg); color:var(--muted); transition:background .15s, color .15s, transform .15s;
+  }
+  .quick-btn:hover{ background:var(--primary-soft); color:var(--primary-dark); transform:translateY(-1px); }
+  .quick-btn.accent{ background:linear-gradient(135deg,#f5a3c2 0%,#f7c46e 100%); color:#fff; }
+  .quick-btn.accent:hover{ filter:brightness(1.05); }
+  @media (max-width:760px){
+    .quick-bar{ top:auto; bottom:16px; right:16px; }
+  }
+
   #connectingOverlay{ position:fixed; inset:0; z-index:1100; background:rgba(255,255,255,.55); display:flex; align-items:center; justify-content:center; }
   #connectingOverlay .co-box{ background:#fff; border:1px solid var(--border); border-radius:16px; padding:16px 22px; font-size:14px; font-weight:700; color:var(--primary-dark);
     box-shadow:var(--shadow-md); display:flex; gap:10px; align-items:center; }
@@ -901,6 +933,21 @@
     <span class="today-pill" id="todayPill"></span>
   </span>
 </header>
+
+<div class="quick-bar" id="quickBar">
+  <button class="quick-btn" onclick="goBackTab()" title="뒤로가기" aria-label="뒤로가기">
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/></svg>
+  </button>
+  <button class="quick-btn" onclick="switchTab('home')" title="홈" aria-label="홈">
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"/><path d="M5 10v10a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1V10"/></svg>
+  </button>
+  <button class="quick-btn" onclick="openTrashModal()" title="휴지통" aria-label="휴지통">
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/></svg>
+  </button>
+  <button class="quick-btn accent" onclick="quickDeploy()" title="퀵배포" aria-label="퀵배포">
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l7 4v6c0 5-3 8-7 10-4-2-7-5-7-10V6l7-4z"/><path d="M9 12l2 2 4-4"/></svg>
+  </button>
+</div>
 
 <div class="app-shell">
   <aside class="sidebar" id="sidebar"></aside>
@@ -1072,7 +1119,7 @@ function armAutoConnect(){
   autoConnectArmed = true;
   const onFirst = e => {
     if(googleAccessToken){ cleanup(); return; }
-    if(!googleTokenClient) return;             // 아직 준비 전이면 다음 클릭에서
+    if(!googleTokenClient) return;
     e.preventDefault(); e.stopPropagation();    // 연결 전에 눌린 동작은 막음(불러오기 전 데이터에 덮어쓰지 않도록)
     cleanup();
     showConnectingOverlay(true);
@@ -1121,6 +1168,8 @@ let clientsTerminated = [];   // Tax.J 해지거래처 (보기 전용)
 let nextEventId = 1;
 let worklistChecklist = {};   // 실제 데이터는 Google 시트(SM_data)에서 불러옴
 let worklistSchedule = {};   // 실제 데이터는 Google 시트(SM_data)에서 불러옴
+let trashBin = [];   // 삭제한 거래처/할 일/체크리스트를 임시 보관 (복구 가능)
+let nextTrashId = 1;
 const _todayForCal = new Date(todayStr());
 let calYear = _todayForCal.getFullYear();
 let calMonth = _todayForCal.getMonth(); // 0-indexed
@@ -1233,7 +1282,6 @@ const NAV_SUBMENUS = {
   settings: [
     {anchor:'settings-basic',   label:'기본 설정'},
     {anchor:'settings-google',  label:'Google 연동'},
-    {anchor:'settings-master',  label:'마스터 시트 가져오기'},
     {anchor:'settings-deploy',  label:'GitHub 배포'},
     {anchor:'settings-recurring', label:'반복 할 일'},
     {anchor:'settings-backup',  label:'자동 백업'},
@@ -1283,13 +1331,120 @@ function renderNav(){
   }
 }
 
+let prevTab = null;
 function switchTab(id){
+  if(id !== activeTab) prevTab = activeTab;
   activeTab = id;
   try{ localStorage.setItem('sm_last_tab', id); }catch(e){}
   renderNav();
   document.querySelectorAll('.tab').forEach(el => el.classList.remove('active'));
   document.getElementById('tab-'+id).classList.add('active');
   renderAll();
+}
+function goBackTab(){
+  if(prevTab && prevTab !== activeTab){
+    const back = prevTab;
+    prevTab = null;
+    switchTab(back);
+  }
+}
+
+/* =========================================================
+   휴지통 — 삭제한 거래처/할 일/체크리스트를 복구할 수 있게 임시 보관
+   ========================================================= */
+
+function moveToTrash(kind, label, data, extra){
+  trashBin.unshift({ id: nextTrashId++, kind, label: label || '', data, extra: extra || {}, deletedAt: new Date().toISOString() });
+  scheduleGoogleSave();
+}
+function formatTrashDate(iso){
+  try{
+    const d = new Date(iso);
+    return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())} ${pad2(d.getHours())}:${pad2(d.getMinutes())} 삭제`;
+  }catch(e){ return ''; }
+}
+const TRASH_KIND_LABEL = { client:'거래처', task:'할 일', checklist:'체크리스트' };
+function trashListHtml(){
+  if(!trashBin.length) return '<div class="empty" style="padding:20px 0;">휴지통이 비어 있어요.</div>';
+  return `
+    <div class="cl-hist">
+      <div class="cl-hist-meta">총 ${trashBin.length}개 · <a href="#" onclick="event.preventDefault(); emptyTrash();">휴지통 비우기</a></div>
+      ${trashBin.map(item => `
+        <div class="cl-hist-item">
+          <div class="cl-hist-head">
+            <b>[${TRASH_KIND_LABEL[item.kind] || item.kind}] ${escapeAttr(item.label)}</b>
+            <span style="display:flex; gap:6px;">
+              <button class="btn xs" onclick="restoreFromTrash(${item.id})">복구</button>
+              <button class="btn ghost xs" onclick="purgeTrashItem(${item.id})">완전삭제</button>
+            </span>
+          </div>
+          <div class="cl-hist-meta">${formatTrashDate(item.deletedAt)}</div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+function refreshTrashModalIfOpen(){
+  const html = document.querySelector('.sm-modal-html');
+  if(html) html.innerHTML = trashListHtml();
+}
+function openTrashModal(){
+  smDialog({ title:'휴지통', html: trashListHtml(), icon:'🗑', cancelText:null, okText:'닫기', wide:true });
+}
+function restoreFromTrash(trashId){
+  const idx = trashBin.findIndex(x => x.id === trashId);
+  if(idx < 0) return;
+  const item = trashBin[idx];
+  if(item.kind === 'client'){
+    if(!clients.some(c => c.id === item.data.id)) clients.push(item.data);
+  } else if(item.kind === 'task'){
+    if(!tasks.some(t => t.id === item.data.id)) tasks.push(item.data);
+  } else if(item.kind === 'checklist'){
+    const m = item.extra && item.extra.month;
+    if(m){ worklistChecklist[m] = worklistChecklist[m] || []; worklistChecklist[m].push(item.data); }
+  }
+  trashBin.splice(idx, 1);
+  scheduleGoogleSave();
+  renderAll();
+  refreshTrashModalIfOpen();
+}
+async function purgeTrashItem(trashId){
+  if(!(await smConfirm('완전히 삭제할까요?', '복구할 수 없어요.', { tone:'danger', icon:'!', okText:'완전 삭제' }))) return;
+  trashBin = trashBin.filter(x => x.id !== trashId);
+  scheduleGoogleSave();
+  refreshTrashModalIfOpen();
+}
+async function emptyTrash(){
+  if(!trashBin.length) return;
+  if(!(await smConfirm('휴지통을 비울까요?', `${trashBin.length}개 항목이 모두 완전히 삭제돼요.`, { tone:'danger', icon:'!', okText:'비우기' }))) return;
+  trashBin = [];
+  scheduleGoogleSave();
+  refreshTrashModalIfOpen();
+}
+
+// 퀵배포: 토큰이 저장돼 있으면 바로 파일 선택창 → 고른 SM.html을 확인 후 배포. 토큰이 없으면 설정의 GitHub 배포로 이동
+function quickDeploy(){
+  const token = (localStorage.getItem(GITHUB_DEPLOY_TOKEN_KEY) || '').trim();
+  if(!token){
+    smAlert('GitHub 토큰이 필요해요', '설정 → GitHub 배포에서 토큰을 한 번 저장해 주세요.');
+    goToSettingsSection('settings-deploy');
+    return;
+  }
+  let picker = document.getElementById('quickDeployFile');
+  if(!picker){
+    picker = document.createElement('input');
+    picker.type = 'file'; picker.accept = '.html,text/html'; picker.id = 'quickDeployFile'; picker.style.display = 'none';
+    picker.onchange = () => {
+      const f = picker.files && picker.files[0];
+      picker.value = '';
+      if(!f) return;
+      smDeploySelectedFile = f;
+      if(typeof setSmDeployMsg === 'function') setSmDeployMsg(`선택됨: ${f.name}`);
+      runSmDeploy();
+    };
+    document.body.appendChild(picker);
+  }
+  picker.click();
 }
 
 /* =========================================================
@@ -1332,6 +1487,7 @@ async function deleteTask(id){
   if(!t) return;
   if(!(await smConfirm('이 할 일을 삭제할까요?', t.text, { tone:'danger', icon:'!', okText:'삭제' }))) return;
   if(t.source === 'master' || t.origKey) hideMasterKey('hiddenMasterTasks', t.origKey || (t.date + '|' + t.text));
+  moveToTrash('task', t.text, t);
   tasks = tasks.filter(x => x.id !== id);
   renderAll();
 }
@@ -1675,6 +1831,7 @@ let chkPickerOpen = false;
 let checklistSearch = '';
 let checklistSearchOpen = false;
 const SEARCH_SVG = '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>';
+const UPLOAD_XLSX_SVG = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v12"/><path d="M7 11l5 5 5-5"/><path d="M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg>';
 function checklistYear(){ return new Date().getFullYear(); }
 function selectWorklistMonth(m){
   if(!m) return;
@@ -1742,6 +1899,7 @@ async function deleteChecklistItem(month, idx){
   if(!item) return;
   if(!(await smConfirm('이 항목을 삭제할까요?', item.text, { tone:'danger', icon:'!', okText:'삭제' }))) return;
   if(item.source !== 'user') hideMasterKey('hiddenMasterChecklist', month + '|' + (item.origText || item.text));
+  moveToTrash('checklist', item.text, item, { month });
   worklistChecklist[month].splice(idx, 1);
   renderAll();
 }
@@ -1797,9 +1955,12 @@ function renderWorklist(){
       <div class="notice-top">
         <span></span>
         <div class="notice-title">체크리스트</div>
-        <div class="search-wrap ${checklistSearchOpen || checklistSearch ? 'open' : ''}">
-          <input type="text" id="checklistSearch" class="search-input" placeholder="체크리스트 검색" value="${escapeAttr(checklistSearch)}" oninput="onChecklistSearch(this.value)" onkeydown="if(event.key==='Escape'){ closeChecklistSearch(); }">
-          <button class="search-icon" onclick="toggleChecklistSearch()" title="체크리스트 검색" aria-label="체크리스트 검색">${SEARCH_SVG}</button>
+        <div style="display:flex; align-items:center; gap:6px; justify-self:end;">
+          <button class="icon-btn" onclick="document.getElementById('worklistXlsxInput').click()" title="엑셀로 가져오기" aria-label="엑셀로 가져오기">${UPLOAD_XLSX_SVG}</button>
+          <div class="search-wrap ${checklistSearchOpen || checklistSearch ? 'open' : ''}">
+            <input type="text" id="checklistSearch" class="search-input" placeholder="체크리스트 검색" value="${escapeAttr(checklistSearch)}" oninput="onChecklistSearch(this.value)" onkeydown="if(event.key==='Escape'){ closeChecklistSearch(); }">
+            <button class="search-icon" onclick="toggleChecklistSearch()" title="체크리스트 검색" aria-label="체크리스트 검색">${SEARCH_SVG}</button>
+          </div>
         </div>
       </div>
       <div class="notice-months">
@@ -1846,11 +2007,15 @@ function renderWorklist(){
       <div class="notice-top">
         <span id="wlTodayBtnSlot"></span>
         <div class="today-title">Today</div>
-        <div class="search-wrap open">
-          <input type="text" id="worklistSearch" class="search-input" placeholder="할 일 검색" value="${escapeAttr(worklistSearch)}" oninput="onWorklistSearch(this.value)" onkeydown="if(event.key==='Escape'){ this.value=''; onWorklistSearch(''); }">
-          <span class="search-icon static" aria-hidden="true">${SEARCH_SVG}</span>
+        <div style="display:flex; align-items:center; gap:6px; justify-self:end;">
+          <button class="icon-btn" onclick="document.getElementById('worklistXlsxInput').click()" title="엑셀로 가져오기" aria-label="엑셀로 가져오기">${UPLOAD_XLSX_SVG}</button>
+          <div class="search-wrap open">
+            <input type="text" id="worklistSearch" class="search-input" placeholder="할 일 검색" value="${escapeAttr(worklistSearch)}" oninput="onWorklistSearch(this.value)" onkeydown="if(event.key==='Escape'){ this.value=''; onWorklistSearch(''); }">
+            <span class="search-icon static" aria-hidden="true">${SEARCH_SVG}</span>
+          </div>
         </div>
       </div>
+      <input type="file" id="worklistXlsxInput" accept=".xlsx,.xls" style="display:none;" onchange="importWorklistExcel(this)">
       <div class="wl-daynav">
         <button class="wl-navbtn" onclick="shiftWorklistDay(-1)" title="이전 날 (키보드 ←)" aria-label="이전 날">‹</button>
         <div class="wl-date-pick">
@@ -2559,8 +2724,11 @@ function addClient(){
   renderAll();
 }
 async function deleteClient(id){
+  const c = clients.find(x => x.id === id);
+  if(!c) return;
   if(!(await smConfirm('이 거래처를 삭제할까요?', '각 신고 탭의 기록도 함께 지워져요.', { tone:'danger', icon:'!', okText:'삭제' }))) return;
-  clients = clients.filter(c => c.id !== id);
+  moveToTrash('client', c.name, c);
+  clients = clients.filter(x => x.id !== id);
   renderAll();
 }
 
@@ -2592,7 +2760,6 @@ function renderClients(){
             ${[['regular','기장거래처', clients.length], ['other','기타거래처', clientsOther.length], ['terminated','해지거래처', clientsTerminated.length]]
               .map(([k, l, n]) => `<button class="cl-subtab ${clientsView === k ? 'on' : ''}" onclick="setClientsView('${k}')">${l} <span>${n}</span></button>`).join('')}
           </div>
-          <div class="desc">${clientsView === 'regular' ? '모든 신고 탭이 기장거래처 목록을 기준으로 해요.' : 'Tax.J 엑셀에서 가져온 목록이에요. (보기 전용)'}</div>
         </div>
         <div style="text-align:right;">
           <button class="btn primary xs" onclick="document.getElementById('taxjXlsxInput').click()">Tax.J 엑셀 가져오기</button>
@@ -2779,6 +2946,7 @@ const GOOGLE_DATA_KEYS = [
   'worklistChecklist','worklistSchedule',
   'events','nextEventId',
   'clientsOther','clientsTerminated',
+  'trashBin','nextTrashId',
 ];
 
 function collectGoogleSnapshot(){
@@ -2790,6 +2958,7 @@ function collectGoogleSnapshot(){
     worklistChecklist, worklistSchedule,
     events, nextEventId,
     clientsOther, clientsTerminated,
+    trashBin, nextTrashId,
   };
 }
 
@@ -3052,6 +3221,8 @@ function applySnapshot(o){
   if(o.clientsOther) clientsOther = o.clientsOther;
   if(o.clientsTerminated) clientsTerminated = o.clientsTerminated;
   if(o.nextEventId != null) nextEventId = o.nextEventId;
+  if(o.trashBin) trashBin = o.trashBin;
+  if(o.nextTrashId != null) nextTrashId = o.nextTrashId;
 }
 // 로그인·재연결 직후(시트를 불러온 다음) 호출
 function resolvePendingAfterLoad(){
@@ -3349,6 +3520,129 @@ async function importWorklistFromMaster(){
   return { taskCount: importedTasks.length, checklistMonths: Object.keys(newChecklist).length };
 }
 
+/* ===== 엑셀 파일에서 체크리스트·할 일 가져오기 =====
+   "★Tax_2026" 마스터 시트를 엑셀로 내려받은 파일을 읽어요.
+   A1이 "Work List"인 시트(들)에서, B4:B12는 고정 체크리스트, E4:E12는 주요 세무일정,
+   A열에 "OO년 O월 O일"로 병합된 칸을 날짜 구간으로 보고 그 아래 A열(체크)·B열(내용)을 할 일로 읽어요. */
+function computeWorklistImportFromExcel(wb){
+  const dateRe = /(\d{2,4})년\s*(\d{1,2})월\s*(\d{1,2})일/;
+  const importedTasks = [];
+  const newChecklist = {};
+  const newSchedule = {};
+
+  const wlSheets = wb.SheetNames.filter(name => {
+    const ws = wb.Sheets[name];
+    const a1 = ws && ws['A1'] ? String(ws['A1'].v == null ? '' : ws['A1'].v).trim() : '';
+    return a1 === 'Work List';
+  });
+  const targetSheets = wlSheets.length ? wlSheets : wb.SheetNames;
+
+  targetSheets.forEach(title => {
+    const ws = wb.Sheets[title];
+    if(!ws) return;
+    const merges = ws['!merges'] || [];
+    const range = XLSX.utils.decode_range(ws['!ref'] || 'A1:A1');
+    const cellText = (ri, ci) => {
+      const cell = ws[XLSX.utils.encode_cell({ r: ri, c: ci })];
+      if(!cell) return '';
+      return String(cell.w != null ? cell.w : (cell.v == null ? '' : cell.v)).trim();
+    };
+
+    const checklist = [];
+    const schedule = [];
+    for(let ri = 3; ri <= 11; ri++){
+      const b = cellText(ri, 1);
+      const e = cellText(ri, 4);
+      if(b) checklist.push(b);
+      if(e) schedule.push(e);
+    }
+
+    const dateHeaders = merges
+      .filter(m => m.s.c === 0 && (m.e.c - m.s.c) >= 2)
+      .map(m => ({ merge: m, text: cellText(m.s.r, 0) }))
+      .filter(h => dateRe.test(h.text))
+      .sort((a, b) => a.merge.s.r - b.merge.s.r);
+
+    const dayTasks = [];
+    const monthCounts = {};
+    dateHeaders.forEach((h, idx) => {
+      const m = dateRe.exec(h.text);
+      let year = parseInt(m[1], 10);
+      if(year < 100) year += 2000;
+      const mo = parseInt(m[2], 10);
+      const mm = pad2(mo);
+      const dd = pad2(parseInt(m[3], 10));
+      const dateStr = `${year}-${mm}-${dd}`;
+      monthCounts[mo] = (monthCounts[mo] || 0) + 1;
+
+      const startRow = h.merge.e.r + 1;
+      const endRow = idx + 1 < dateHeaders.length ? dateHeaders[idx + 1].merge.s.r : (range.e.r + 1);
+      for(let ri = startRow; ri < endRow; ri++){
+        const check = cellText(ri, 0);
+        const text = cellText(ri, 1);
+        if(!text) continue;
+        if(check !== 'TRUE' && check !== 'FALSE') continue;
+        dayTasks.push({ date: dateStr, text, done: check === 'TRUE' });
+      }
+    });
+
+    let monthLabel = null, bestCount = -1;
+    Object.entries(monthCounts).forEach(([mo, cnt]) => {
+      if(cnt > bestCount){ bestCount = cnt; monthLabel = `${parseInt(mo, 10)}월`; }
+    });
+    if(!monthLabel) monthLabel = cellText(1, 0) || title;
+
+    if(checklist.length) newChecklist[monthLabel] = checklist.map(text => ({ text, done:false }));
+    if(schedule.length) newSchedule[monthLabel] = schedule;
+    dayTasks.forEach(t => importedTasks.push({ id: nextTaskId++, date: t.date, text: t.text, done: t.done, source:'master' }));
+  });
+
+  return { importedTasks, newChecklist, newSchedule };
+}
+
+function applyWorklistImport({ importedTasks, newChecklist, newSchedule }){
+  const movedKeys = new Set(tasks.filter(t => t.movedFrom).map(t => t.movedFrom + '|' + t.text).concat(settings.hiddenMasterTasks || []));
+  tasks = tasks.filter(t => t.source !== 'master').concat(importedTasks.filter(t => !movedKeys.has(t.date + '|' + t.text)));
+  const hiddenCL = new Set(settings.hiddenMasterChecklist || []);
+  Object.keys(newChecklist).forEach(mo => {
+    const old = worklistChecklist[mo] || [];
+    const byText = {}; old.forEach(it => { byText[it.origText || it.text] = it; });
+    const fromMaster = newChecklist[mo]
+      .filter(it => !hiddenCL.has(mo + '|' + it.text) || byText[it.text])
+      .map(it => byText[it.text] || it);
+    const kept = old.filter(it => it.source === 'user' || (it.origText && !fromMaster.includes(it)));
+    worklistChecklist[mo] = fromMaster.concat(kept.filter(it => !fromMaster.includes(it)));
+  });
+  worklistSchedule = Object.assign({}, worklistSchedule, newSchedule);
+}
+
+async function importWorklistExcel(input){
+  const file = input.files && input.files[0];
+  input.value = '';
+  if(!file) return;
+  try{
+    if(typeof XLSX === 'undefined'){
+      await new Promise((res, rej) => { const el = document.createElement('script'); el.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js'; el.onload = res; el.onerror = () => rej(new Error('엑셀 읽기 도구를 불러오지 못했어요')); document.head.appendChild(el); });
+    }
+    const wb = XLSX.read(await file.arrayBuffer(), { type:'array' });
+    const parsed = computeWorklistImportFromExcel(wb);
+    const checklistMonths = Object.keys(parsed.newChecklist).length;
+    if(!parsed.importedTasks.length && !checklistMonths){
+      smAlert('가져올 내용을 찾지 못했어요', '"Work List" 형식의 엑셀 파일인지 확인해주세요.', { tone:'danger' });
+      return;
+    }
+    if(!(await smConfirm(`할 일 ${parsed.importedTasks.length}건, 체크리스트 ${checklistMonths}개월분을 가져올까요?`,
+      '엑셀 파일의 최신 내용으로 맞춰요.\n직접 추가한 항목은 그대로 남아요.', { icon:'↓', okText:'가져오기' }))) return;
+    applyWorklistImport(parsed);
+    scheduleGoogleSave();
+    renderAll();
+    smAlert('가져왔어요', `할 일 ${parsed.importedTasks.length}건, 체크리스트 ${checklistMonths}개월분을 반영했어요.`, { icon:'✓' });
+  }catch(e){
+    console.error(e);
+    smAlert('가져오지 못했어요', e.message || '알 수 없는 오류', { tone:'danger' });
+  }
+}
+
 async function importClientsOnlyFromMaster(){
   if(!googleAccessToken){ smAlert('먼저 Google 로그인을 해주세요'); return; }
   const ok = await smConfirm('거래처 기본정보만 가져올까요?', '마스터 시트("기장현황")의 최신 내용으로 바뀌어요.\n직접 추가한 거래처는 그대로 남아요.', { icon:'↓', okText:'가져오기' });
@@ -3559,20 +3853,6 @@ function renderSettings(){
           </div>
         </div>
         <div class="hint" id="syncStatusLine" style="margin-top:10px;">${googleSyncStatus}</div>
-      </div>
-
-      <div class="settings-block" id="settings-master">
-        <div class="row">
-          <div>
-            <h3>업무용 마스터 시트에서 가져오기</h3>
-            <div class="hint">"★Tax_2026"에서 거래처·할 일을 가져와요.</div>
-          </div>
-          <div class="ctrl" style="display:flex; gap:6px;">
-            <button class="btn ghost xs" onclick="importClientsOnlyFromMaster()" ${googleAccessToken ? '' : 'disabled'}>거래처만 가져오기</button>
-            <button class="btn primary xs" onclick="importFromMasterSheet()" ${googleAccessToken ? '' : 'disabled'}>거래처+할 일 가져오기</button>
-          </div>
-        </div>
-        <div class="hint" id="masterSyncStatusLine" style="margin-top:10px;">${masterSyncStatus}</div>
       </div>
 
       <div class="settings-block" id="settings-deploy">
