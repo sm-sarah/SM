@@ -3809,6 +3809,59 @@ async function resetAllData(){
   renderAll();
 }
 
+// ── [2026.10.04] Tax.J 사용 현황(개인계정 전용) ──
+// Tax.J와 같은 Firebase 프로젝트에 개인 Google 계정으로 로그인해 증표(ID 토큰)를 받은 뒤, Tax.J 서버(sendPush)에 사용 현황만 요청함.
+// 서버가 이 계정(TAXJ_USAGE_OWNER)인지 확인한 뒤에만 응답하고, 거래처·근태·결재 같은 업무 데이터는 보내지 않음
+const TAXJ_USAGE_OWNER = 'sunmin2040@gmail.com';
+const TAXJ_USAGE_URL = 'https://us-central1-taxj-a3e01.cloudfunctions.net/sendPush';
+const TAXJ_FIREBASE_CONFIG = { apiKey:'AIzaSyArJvHCtIMwn0GHZXOXQSNIqZnvyN--tgw', authDomain:'taxj-a3e01.firebaseapp.com', projectId:'taxj-a3e01', appId:'1:669418345168:web:5cce25e2573fa5e05cc4d5' };
+let taxjUsageHtml = '';
+function taxjLoadScript(src){ return new Promise((res, rej)=>{ if(document.querySelector(`script[src="${src}"]`)) return res(); const el = document.createElement('script'); el.src = src; el.onload = res; el.onerror = rej; document.head.appendChild(el); }); }
+function taxjUsageSet(html){ taxjUsageHtml = html; const box = document.getElementById('taxjUsageBox'); if(box) box.innerHTML = html; }
+function taxjEsc(v){ return String(v == null ? '' : v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function taxjWhen(v){ if(!v) return '-'; const d = new Date(typeof v === 'number' ? v : String(v)); if(isNaN(d)) return '-'; return `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`; }
+async function loadTaxjUsage(){
+  const btn = document.getElementById('taxjUsageBtn'); if(btn) btn.disabled = true;
+  try{
+    taxjUsageSet('<div class="hint">불러오는 중…</div>');
+    await taxjLoadScript('https://www.gstatic.com/firebasejs/10.13.1/firebase-app-compat.js');
+    await taxjLoadScript('https://www.gstatic.com/firebasejs/10.13.1/firebase-auth-compat.js');
+    const app = firebase.apps.find(a=> a.name === 'taxjUsage') || firebase.initializeApp(TAXJ_FIREBASE_CONFIG, 'taxjUsage');
+    const auth = app.auth();
+    let user = auth.currentUser;
+    if(!user || String(user.email||'').toLowerCase() !== TAXJ_USAGE_OWNER){
+      const provider = new firebase.auth.GoogleAuthProvider();
+      provider.setCustomParameters({ login_hint: TAXJ_USAGE_OWNER, prompt: 'select_account' });
+      user = (await auth.signInWithPopup(provider)).user;
+    }
+    if(String(user.email||'').toLowerCase() !== TAXJ_USAGE_OWNER){ await auth.signOut(); taxjUsageSet(`<div class="hint">${taxjEsc(TAXJ_USAGE_OWNER)} 계정으로 로그인해야 볼 수 있어요.</div>`); return; }
+    const token = await user.getIdToken();
+    const res = await fetch(TAXJ_USAGE_URL, { method:'POST', headers:{ 'Content-Type':'application/json', Authorization:'Bearer ' + token }, body: JSON.stringify({ action:'usageReport' }) });
+    const data = await res.json().catch(()=>({}));
+    if(!res.ok || !data.ok){ taxjUsageSet(`<div class="hint">불러오지 못했어요 (${taxjEsc(data.error || res.status)}). 서버에 사용 현황 기능이 배포됐는지 확인해 주세요.</div>`); return; }
+    taxjUsageSet(taxjUsageTableHtml(data.report));
+  }catch(e){
+    console.error('Tax.J 사용 현황 실패', e);
+    taxjUsageSet(`<div class="hint">불러오지 못했어요 (${taxjEsc(e && (e.code || e.message) || e)}).</div>`);
+  }finally{ if(btn) btn.disabled = false; }
+}
+function taxjUsageTableHtml(rep){
+  const people = ((rep && rep.people) || []).filter(p=> p.status !== '퇴사');
+  const notifTxt = { granted:'허용', denied:'차단', default:'안 정함', unsupported:'미지원' };
+  const rows = people.map(p=>{
+    const online = (p.presence||[]).filter(x=> x.online);
+    const last = Math.max(0, ...(p.presence||[]).map(x=> Math.max(x.at||0, x.lastAt||0)));
+    const nowTxt = online.length ? `<b style="color:var(--ok, #16a34a);">접속 중</b><div class="hint" style="margin:0;">${online.map(x=> taxjEsc((x.device||'기기') + (x.screen ? ' · ' + x.screen : ''))).join('<br>')}</div>` : `<span class="hint" style="margin:0;">마지막 ${taxjWhen(last)}</span>`;
+    const devs = (p.devices||[]).map(d=> `${taxjEsc(d.dev || (d.mob ? '휴대폰' : '기기'))} <span class="hint" style="margin:0;">알림 ${taxjEsc(notifTxt[d.notif] || '-')} · ${taxjWhen(d.at)}</span>`).join('<br>') || '<span class="hint" style="margin:0;">기록 없음</span>';
+    const clk = (p.clock||[]).slice(0,7).map(c=> `${c.date.slice(5).replace('-','/')} ${c.checkIn ? (c.checkIn === 'done' ? '출근✓' : c.checkIn === 'leave' ? '휴가' : '출근알림') : ''}${c.checkIn && c.checkOut ? ' · ' : ''}${c.checkOut ? (c.checkOut === 'done' ? '퇴근✓' : c.checkOut === 'leave' ? '휴가' : '퇴근알림') : ''}`).join('<br>') || '-';
+    return `<tr><td style="white-space:nowrap;"><b>${taxjEsc(p.name)}</b>${p.position ? `<div class="hint" style="margin:0;">${taxjEsc(p.position)}</div>` : ''}</td><td>${nowTxt}</td><td>${devs}</td><td style="white-space:nowrap;">${p.clockReminder ? '켬' : '끔'}</td><td style="white-space:nowrap; font-size:12px;">${clk}</td></tr>`;
+  }).join('');
+  return `<div class="hint" style="margin-bottom:6px;">${taxjWhen(rep && rep.at)} 기준</div>
+    <div style="overflow-x:auto;"><table style="width:100%; border-collapse:collapse; font-size:12.5px;">
+      <thead><tr>${['직원','지금','기기 · 알림','출퇴근 알림','최근 출퇴근 알림(7일)'].map(h=>`<th style="text-align:left; padding:6px 8px; border-bottom:1px solid var(--line, #eee); white-space:nowrap;">${h}</th>`).join('')}</tr></thead>
+      <tbody>${rows.replace(/<td/g, '<td style="padding:6px 8px; border-bottom:1px solid var(--line, #f1f1f1); vertical-align:top;"').replace(/<td style="padding:6px 8px; border-bottom:1px solid var\(--line, #f1f1f1\); vertical-align:top;" style="/g, '<td style="padding:6px 8px; border-bottom:1px solid var(--line, #f1f1f1); vertical-align:top; ')}</tbody>
+    </table></div>`;
+}
 function renderSettings(){
   const el = document.getElementById('tab-settings');
   el.innerHTML = `
@@ -3874,6 +3927,21 @@ function renderSettings(){
           <button type="button" class="btn primary xs" id="smDeployBtn" onclick="runSmDeploy()" ${((localStorage.getItem(GITHUB_DEPLOY_TOKEN_KEY) || '').trim() && smDeploySelectedFile) ? '' : 'disabled'}>GitHub에 배포</button>
         </div>
         <div class="hint" id="smDeployMsg" style="margin-top:6px;">${smDeployMsgText}</div>
+      </div>
+
+      <!-- [2026.10.04] "개인계정으로만 Tax.J 사용 현황 보기"(요청) - 개인 Google 계정으로 로그인해 서버(sendPush)에 사용 현황만 요청.
+           업무 데이터는 받지 않음(개인계정은 Tax.J 데이터 저장소에 직접 접근 못 함) -->
+      <div class="settings-block" id="settings-taxj-usage">
+        <div class="row">
+          <div>
+            <h3>Tax.J 사용 현황</h3>
+            <div class="hint">개인계정(${TAXJ_USAGE_OWNER})으로만 볼 수 있어요. 직원별 접속·기기·알림 상태만 보여요.</div>
+          </div>
+          <div class="ctrl">
+            <button type="button" class="btn primary xs" id="taxjUsageBtn" onclick="loadTaxjUsage()">불러오기</button>
+          </div>
+        </div>
+        <div id="taxjUsageBox" style="margin-top:10px;">${taxjUsageHtml}</div>
       </div>
 
       <div class="settings-block" id="settings-recurring">
