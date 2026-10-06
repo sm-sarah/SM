@@ -1137,6 +1137,27 @@ function armAutoConnect(){
   document.addEventListener('pointerdown', onFirst, true);
 }
 let connectDoneHook = null;
+const TOKEN_REFRESH_BEFORE_MS = 10 * 60 * 1000;   // 만료 10분 전부터 클릭 시 미리 갱신
+let tokenRefreshing = false;
+function googleTokenExp(){
+  try{ const v = JSON.parse(localStorage.getItem(GOOGLE_TOKEN_KEY) || 'null'); return v && v.exp ? v.exp : 0; }catch(e){ return 0; }
+}
+document.addEventListener('pointerdown', () => {
+  if(!googleAccessToken || !googleTokenClient || tokenRefreshing) return;
+  if(Date.now() < googleTokenExp() - TOKEN_REFRESH_BEFORE_MS) return;
+  tokenRefreshing = true;
+  googleTokenClient.callback = resp => {
+    tokenRefreshing = false;
+    if(resp.error || !resp.access_token) return;   // 실패하면 기존 흐름(만료 시 다음 클릭에 재연결)으로
+    googleAccessToken = resp.access_token;
+    gapi.client.setToken({ access_token: googleAccessToken });
+    saveGoogleToken(resp);
+  };
+  let hint = '';
+  try{ hint = localStorage.getItem(AUTH_STORAGE_KEY) || ''; }catch(e){}
+  try{ googleTokenClient.requestAccessToken(hint ? { prompt: '', hint } : { prompt: '' }); }catch(e){ tokenRefreshing = false; }
+  setTimeout(() => { tokenRefreshing = false; }, 30000);
+}, true);
 async function tryResumeSavedLogin(){
   if(resumeTried || !gapiReady) return;
   resumeTried = true;
@@ -3051,11 +3072,15 @@ function handleGoogleTokenExpired(){
   googleAccessToken = null;
   settings.sheetsConnected = false;
   clearInterval(googlePollTimer);
-  setSyncStatus('로그인이 만료됐어요 · 설정에서 다시 로그인해주세요');
+  setSyncStatus('Google 연결이 끝났어요 · 아무 곳이나 누르면 다시 연결돼요');
   const badge = document.getElementById('syncWarningBadge');
   if(badge) badge.style.display = '';
   if(activeTab === 'settings') renderSettings();
   updateConnectBanner();
+  // 요청 배경: 로그인한 지 오래돼도 연동이 계속되길 원함. 서버 없는 페이지라 클릭 없이 재연결은 불가 →
+  // 만료되면 설정 화면까지 갈 필요 없이, 다음에 아무 곳이나 누를 때 자동으로 다시 연결.
+  autoConnectArmed = false;
+  armAutoConnect();
 }
 
 function clearSyncWarningBadge(){
