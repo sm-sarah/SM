@@ -335,6 +335,9 @@
   .task-list .task-date{ font-size:11.5px; color:var(--muted); min-width:82px; font-weight:700; }
   .task-list .task-text{ flex:1; }
   .task-list li.done .task-text{ text-decoration:line-through; color:var(--muted); }
+  /* 요청 배경: 할 일마다 비고·메모를 적어둘 수 있게 함. 할 일 아래에 작은 글씨로 표시(줄바꿈 유지). */
+  .task-list .task-note{ display:block; margin-top:3px; font-size:12px; color:var(--muted); white-space:pre-wrap; word-break:break-word; }
+  .task-list li.done .task-note{ text-decoration:none; }
 
   /* ===== To do: 연속 스크롤 아젠다(네이버 할일 스타일) ===== */
   .wl-agenda{
@@ -711,6 +714,8 @@
   .sm-modal-fields{ text-align:left; margin-top:12px; display:flex; flex-direction:column; gap:10px; }
   .sm-modal-field span{ display:block; font-size:12.5px; font-weight:700; color:var(--muted); margin-bottom:4px; }
   .sm-modal-field input{ width:100%; border-radius:12px; padding:10px 12px; }
+  .sm-modal-field textarea{ width:100%; border-radius:12px; padding:10px 12px; font-size:13px; border:1px solid var(--border); background:var(--bg); color:var(--text); resize:vertical; line-height:1.5; box-sizing:border-box; }
+  .sm-modal-field textarea:focus{ outline:2px solid var(--primary-soft); border-color:var(--primary); }
   .sm-modal-btns{ display:flex; gap:8px; margin-top:20px; }
   .sm-modal-btns button{ flex:1; padding:12px 0; border-radius:12px; border:none; font-family:inherit; font-size:14px; font-weight:700; cursor:pointer; }
   .sm-modal-cancel{ background:#f3eef1; color:var(--muted); }
@@ -1498,16 +1503,20 @@ async function editTask(id){
   const r = await smForm('할 일 수정', [
     { label:'날짜', type:'date', value:t.date },
     { label:'내용', value:t.text },
+    { label:'메모 · 비고 (Enter 줄바꿈, Ctrl+Enter 저장)', type:'textarea', value:t.note || '', placeholder:'진행 상황, 연락처, 참고할 내용 등', rows:3 },
   ], { okText:'저장', icon:'✎', wide:true });
   if(!r) return;
-  const [date, text] = [r[0] || t.date, (r[1] || '').trim()];
+  const [date, text, note] = [r[0] || t.date, (r[1] || '').trim(), (r[2] || '').trim()];
   if(!text) return;
   const changes = [];
   if(date !== t.date) changes.push({ label:'날짜', from:t.date, to:date });
   if(text !== t.text) changes.push({ label:'내용', from:t.text, to:text });
+  if(note !== (t.note || '')) changes.push({ label:'메모', from:t.note || '', to:note });
   if(!changes.length) return;
+  // 마스터 시트 항목은 다시 불러올 때 통째로 교체되므로, 메모만 고쳐도 'edited'로 바꿔 메모가 지워지지 않게 함
   if(t.source === 'master'){ t.origKey = t.date + '|' + t.text; t.source = 'edited'; hideMasterKey('hiddenMasterTasks', t.origKey); }
   t.date = date; t.text = text;
+  if(note) t.note = note; else delete t.note;
   pushHist(t, '수정', changes);
   renderAll();
 }
@@ -2112,7 +2121,7 @@ function wlTaskItem(t, opts = {}){
     <li class="${t.done ? 'done' : ''}">
       <input type="checkbox" ${t.done ? 'checked' : ''} onchange="toggleTask(${t.id})">
       ${opts.showDate ? `<span class="task-date" style="cursor:pointer;" onclick="setWorklistDay('${t.date}')" title="이 날짜로 이동">${shortDate(t.date)}</span>` : ''}
-      <span class="task-text">${t.text}${t.movedFrom ? ` <span class="wl-moved">${shortDate(t.movedFrom)}에서 넘어옴</span>` : ''}</span>
+      <span class="task-text">${t.text}${t.movedFrom ? ` <span class="wl-moved">${shortDate(t.movedFrom)}에서 넘어옴</span>` : ''}${t.note ? `<span class="task-note">${escapeAttr(t.note)}</span>` : ''}</span>
       ${canCarry ? `<button class="btn xs" onclick="carryTaskToToday(${t.id})" title="오늘 할 일로 옮기기">오늘로 →</button>` : ''}
       ${actionIcons(`editTask(${t.id})`, `showTaskHistory(${t.id})`, `deleteTask(${t.id})`)}
     </li>`;
@@ -2151,7 +2160,7 @@ function renderWorklistBody(){
 
   const q = worklistSearch.trim().toLowerCase();
   if(q){
-    const hits = tasks.filter(t => (t.text || '').toLowerCase().includes(q))
+    const hits = tasks.filter(t => (t.text || '').toLowerCase().includes(q) || (t.note || '').toLowerCase().includes(q))
                       .sort((a, b) => b.date.localeCompare(a.date));
     body.innerHTML = hits.length ? `
       <div class="wl-day-head">검색 결과 ${hits.length}건 · 날짜를 누르면 그 날로 이동해요</div>
@@ -4111,6 +4120,7 @@ function smDialog(opts){
         ${o.fields ? `<div class="sm-modal-fields">${o.fields.map((f,i) => `
           <label class="sm-modal-field"><span>${esc(f.label)}</span>
             ${f.options ? `<select data-i="${i}">${f.options.map(op => `<option ${op === f.value ? 'selected' : ''}>${esc(op)}</option>`).join('')}</select>`
+              : f.type === 'textarea' ? `<textarea data-i="${i}" rows="${f.rows || 3}" placeholder="${esc(f.placeholder)}">${esc(f.value)}</textarea>`
               : `<input type="${f.type || 'text'}" data-i="${i}" value="${esc(f.value)}" placeholder="${esc(f.placeholder)}">`}</label>`).join('')}</div>` : ''}
         <div class="sm-modal-btns">
           ${o.cancelText ? `<button type="button" class="sm-modal-cancel">${esc(o.cancelText)}</button>` : ''}
@@ -4119,7 +4129,7 @@ function smDialog(opts){
       </div>`;
     document.body.appendChild(wrap);
     requestAnimationFrame(() => wrap.classList.add('show'));
-    const inputs = Array.from(wrap.querySelectorAll('input, select'));
+    const inputs = Array.from(wrap.querySelectorAll('input, select, textarea'));
     const done = ok => {
       document.removeEventListener('keydown', onKey, true);
       wrap.classList.remove('show');
@@ -4129,7 +4139,11 @@ function smDialog(opts){
     };
     const onKey = e => {
       if(e.key === 'Escape'){ e.preventDefault(); e.stopPropagation(); done(false); }
-      else if(e.key === 'Enter' && !e.isComposing){ e.preventDefault(); e.stopPropagation(); done(true); }
+      else if(e.key === 'Enter' && !e.isComposing){
+        // 여러 줄 입력칸(메모)에서는 Enter = 줄바꿈, Ctrl/Cmd+Enter = 저장
+        if(e.target && e.target.tagName === 'TEXTAREA' && !(e.ctrlKey || e.metaKey)) return;
+        e.preventDefault(); e.stopPropagation(); done(true);
+      }
     };
     document.addEventListener('keydown', onKey, true);
     wrap.querySelector('.sm-modal-ok').onclick = () => done(true);
