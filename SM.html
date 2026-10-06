@@ -4106,6 +4106,34 @@ async function refreshTaxjPayPanel(btn){
   finally{ if(btn) btn.disabled = false; }
   const box = document.getElementById('taxjPayPanel'); if(box) box.innerHTML = taxjPayPanelHtml();
 }
+// [2026.10.06] Tax.J 검토표 계산식 불러오기(요청) - Tax.J 페이지(공개)에 든 계산식 정리 블록만 읽음. 로그인 필요 없음
+const TAXJ_PAGE_URL = 'https://sm-sarah.github.io/Tax.J/';
+let taxjFormulaHtml = '';
+function taxjFormulaSet(html){ taxjFormulaHtml = html; const box = document.getElementById('taxjFormulaBox'); if(box) box.innerHTML = html; }
+async function loadTaxjFormula(){
+  const btn = document.getElementById('taxjFormulaBtn'); if(btn) btn.disabled = true;
+  try{
+    taxjFormulaSet('<div class="hint">불러오는 중…</div>');
+    const res = await fetch(TAXJ_PAGE_URL + '?_=' + Date.now(), { cache:'no-store' });
+    if(!res.ok) throw new Error('Tax.J 페이지 응답 ' + res.status);
+    const html = await res.text();
+    const m = html.match(/<script type="application\/json" id="taxjFormulaDoc">([\s\S]*?)<\/script>/);
+    if(!m){ taxjFormulaSet('<div class="hint">Tax.J에 계산식 정리가 아직 없어요. Tax.J 새 버전이 올라갔는지 확인해 주세요.</div>'); return; }
+    taxjFormulaSet(taxjFormulaDocHtml(JSON.parse(m[1])));
+  }catch(e){
+    console.error(e);
+    taxjFormulaSet(`<div class="hint">불러오지 못했어요 (${taxjEsc(e && e.message || e)}).</div>`);
+  }finally{ if(btn) btn.disabled = false; }
+}
+function taxjFormulaDocHtml(doc){
+  const secs = (doc && doc.sections) || [];
+  return `<div class="hint" style="margin-bottom:8px;">${taxjEsc(doc.title || '')}${doc.updated ? ' · ' + taxjEsc(doc.updated) + ' 기준' : ''}</div>` + secs.map(sec => `
+    <div style="margin-bottom:12px;">
+      <div style="font-weight:800; margin-bottom:4px;">${taxjEsc(sec.title || '')}</div>
+      ${(sec.formulas || []).map(f => `<div style="font-family:ui-monospace,Consolas,monospace; font-size:12.5px; background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:6px 10px; margin:4px 0; white-space:pre-wrap; word-break:keep-all;">${taxjEsc(f)}</div>`).join('')}
+      ${(sec.lines || []).length ? `<ul style="margin:4px 0 0; padding-left:18px; font-size:13px; line-height:1.6;">${sec.lines.map(l => `<li>${taxjEsc(l)}</li>`).join('')}</ul>` : ''}
+    </div>`).join('');
+}
 function taxjUsageTableHtml(rep){
   const people = ((rep && rep.people) || []).filter(p=> p.status !== '퇴사');
   const notifTxt = { granted:'허용', denied:'차단', default:'안 정함', unsupported:'미지원' };
@@ -4203,6 +4231,21 @@ function renderSettings(){
           </div>
         </div>
         <div id="taxjUsageBox" style="margin-top:10px;">${taxjUsageHtml}</div>
+      </div>
+
+      <!-- [2026.10.06] "검토표 계산식을 기억하고 싶다 - 사용 현황처럼 불러와 보기"(요청). 업무 데이터는 받지 않고, Tax.J 페이지에 들어 있는
+           계산식 정리(taxjFormulaDoc)만 읽어 옴. Tax.J 계산식을 고치면 그 정리도 같이 고쳐지므로 불러올 때마다 최신 -->
+      <div class="settings-block" id="settings-taxj-formula">
+        <div class="row">
+          <div>
+            <h3>Tax.J 검토표 계산식</h3>
+            <div class="hint">원천세 검토표 검증에 쓰는 계산식만 불러와요. 업무 자료는 받지 않아요.</div>
+          </div>
+          <div class="ctrl">
+            <button type="button" class="btn primary xs" id="taxjFormulaBtn" onclick="loadTaxjFormula()">불러오기</button>
+          </div>
+        </div>
+        <div id="taxjFormulaBox" style="margin-top:10px;">${taxjFormulaHtml}</div>
       </div>
 
       <div class="settings-block" id="settings-recurring">
