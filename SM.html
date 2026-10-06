@@ -4025,6 +4025,8 @@ async function runSmDeploy(){
       throw new Error(errBody.message || `GitHub 커밋 실패 (${putRes.status})`);
     }
     setSmDeployMsg('배포 완료! 잠시 후 실제 서비스 화면에 반영돼요.');
+    // 요청 배경(2026.10.06): 왼쪽 퀵배포로 올리면 설정 화면의 작은 글씨가 안 보여 완료 여부를 몰랐음 → 어느 화면에서든 팝업으로 알림
+    smAlert('배포 완료!', '잠시 후 실제 서비스 화면에 반영돼요.', { icon:'✓' });
     smDeploySelectedFile = null;
     const labelText = document.getElementById('smDeployFileLabelText');
     if(labelText) labelText.textContent = 'SM.html 파일 선택';
@@ -4033,6 +4035,7 @@ async function runSmDeploy(){
   } catch(e){
     console.error('GitHub 배포 실패', e);
     setSmDeployMsg('배포 실패: ' + (e && e.message ? e.message : e));
+    smAlert('배포 실패', String(e && e.message ? e.message : e));
   } finally {
     smDeployUpdateBtnState();
   }
