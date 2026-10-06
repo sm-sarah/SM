@@ -337,7 +337,8 @@
   .task-list li.done .task-text{ text-decoration:line-through; color:var(--muted); }
   /* 요청 배경: 할 일마다 비고·메모를 적어둘 수 있게 함. 할 일 아래에 작은 글씨로 표시(줄바꿈 유지). */
   .task-list .task-note{ display:block; margin-top:3px; font-size:12px; color:var(--muted); white-space:pre-wrap; word-break:break-word; }
-  .task-list li.done .task-note{ text-decoration:none; }
+  /* 요청 배경: 할 일을 완료해도 메모에는 취소선이 그어지지 않게 함(부모 취소선은 inline-block 자식에 전달되지 않음). */
+  .task-list li.done .task-note{ text-decoration:none; display:inline-block; width:100%; vertical-align:top; }
 
   /* ===== To do: 연속 스크롤 아젠다(네이버 할일 스타일) ===== */
   .wl-agenda{
