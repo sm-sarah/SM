@@ -820,6 +820,32 @@
   .wl-side .notice-card{ background:linear-gradient(180deg,#fff8ea 0%,#fffdf8 55%); border:1px solid #f1dfba; border-top:4px solid #f5b544; }
   .wl-layout > .card.wl-today-card{ background:#fff; border-top:4px solid var(--primary); box-shadow:0 2px 4px rgba(150,50,90,.08), 0 18px 36px -14px rgba(150,50,90,.35); }
   .wl-main > .card{ background:#fbf6f9; border-top:4px solid #d9bfcd; box-shadow:var(--shadow-sm); }
+  .wl-hist-agenda{ max-height:340px; }
+  /* 요청 배경(2026.10.06): 아래 여백 없이 세 칸 모두 화면 맨 아래까지 같은 높이로 채움. 목록이 짧으면 칸 안이 빈 채로 둠.
+     높이(--wl-h)는 fitWorklistHeight()가 화면 높이에 맞춰 계산. 3단으로 나란히 보이는 넓은 화면에서만 적용 */
+  @media (min-width:1301px){
+    main:has(> #tab-worklist.active){ padding-bottom:24px; }
+    .wl-layout{ height:var(--wl-h, auto); align-items:stretch; }
+    .wl-layout > aside{ min-height:0; }
+    .wl-side .notice-card{ position:static; height:100%; max-height:none; overflow-y:auto; }
+    .wl-layout > .card.wl-today-card{ display:flex; flex-direction:column; min-height:0; }
+    .wl-today-card .wl-agenda{ flex:1 1 0; max-height:none; min-height:120px; }
+    .wl-layout > .wl-main{ height:100%; min-height:0; }
+    .wl-main > #wlHistory{ flex:1 1 0; min-height:0; display:flex; flex-direction:column; }
+    #wlHistory .wl-hist-agenda{ flex:1 1 0; max-height:none; min-height:80px; }
+  }
+  /* ===== 계정(개인 아이디·비번 보관함) ===== */
+  .acc-wrap input[type=password]{ font-family:inherit; font-size:13px; padding:8px 12px; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--bg); color:var(--text); }
+  .acc-lock{ max-width:420px; margin:40px auto; text-align:center; }
+  .acc-lock .acc-lock-ic{ width:52px; height:52px; margin:0 auto 12px; border-radius:50%; display:flex; align-items:center; justify-content:center; background:linear-gradient(135deg,#f5a3c2 0%,#f7c46e 100%); color:#fff; }
+  .acc-lock input{ width:100%; box-sizing:border-box; margin-bottom:8px; }
+  .acc-lock .btn{ width:100%; }
+  .acc-site{ font-weight:700; }
+  .acc-site a{ color:inherit; text-decoration:none; }
+  .acc-site a:hover{ color:var(--primary-dark); text-decoration:underline; }
+  .acc-secret{ font-family:ui-monospace,Consolas,monospace; letter-spacing:.02em; }
+  .acc-cell{ display:inline-flex; align-items:center; gap:6px; }
+  .acc-memo{ font-size:12.5px; color:var(--muted); white-space:pre-wrap; word-break:break-word; }
   .wl-mcal-more{ font-size:10.5px; font-weight:700; color:var(--primary-dark); padding:0 5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   @media (max-width:1300px){
     .wl-layout{ grid-template-columns:minmax(250px, 300px) minmax(0, 1fr); }
@@ -1035,6 +1061,7 @@
 
     <div id="tab-home" class="tab"></div>
     <div id="tab-worklist" class="tab"></div>
+    <div id="tab-accounts" class="tab"></div>
     <div id="tab-vat" class="tab"></div>
     <div id="tab-pay" class="tab"></div>
     <div id="tab-corp" class="tab"></div>
@@ -1264,6 +1291,15 @@ let worklistChecklist = {};   // 실제 데이터는 Google 시트(SM_data)에�
 let worklistSchedule = {};   // 실제 데이터는 Google 시트(SM_data)에서 불러옴
 let trashBin = [];   // 삭제한 거래처/할 일/체크리스트를 임시 보관 (복구 가능)
 let nextTrashId = 1;
+// 계정 보관함(아래 '계정' 부분 참고) - 다른 데이터와 같이 처음부터 선언해 둠
+let accountVault = null;   // { v:1, salt, iv, data } - 암호화된 상태로만 저장·동기화
+let accountItems = null;   // 잠금 해제 후 메모리에만: [{id, site, url, user, pw, memo, at}]
+let accountNextId = 1;
+let accountKey = null, accountSalt = null;
+let accountSearch = '';
+let accountView = 'all';   // all | mine | taxj
+const accountShown = new Set();
+let accountIdleTimer = null;
 const _todayForCal = new Date(todayStr());
 let calYear = _todayForCal.getFullYear();
 let calMonth = _todayForCal.getMonth(); // 0-indexed
@@ -1338,6 +1374,7 @@ function pill(text, kind){ return `<span class="pill ${kind}">${text}</span>`; }
 const ICONS = {
   home: '<path d="M4 11.5 12 4l8 7.5"/><path d="M6 10v9a1 1 0 0 0 1 1h3.2v-6h3.6v6H17a1 1 0 0 0 1-1v-9"/>',
   worklist: '<rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18"/><path d="M8 3v4"/><path d="M16 3v4"/>',
+  accounts: '<circle cx="8" cy="15" r="4"/><path d="M10.8 12.2 20 3"/><path d="M16.5 6.5l2.5 2.5"/><path d="M14 9l2 2"/>',
   vat: '<path d="M6 2.5h12v18l-2.3-1.4L13.3 20.5 11 19.1 8.7 20.5 6.4 19.1z"/><path d="M9 8h6M9 12h6M9 16h3.5"/>',
   pay: '<rect x="3" y="6.5" width="18" height="12.5" rx="2.5"/><path d="M3 10.5h18"/><circle cx="16.5" cy="14.5" r="1.3" fill="currentColor" stroke="none"/>',
   corp: '<rect x="4" y="3" width="12" height="18" rx="1"/><path d="M16 21V8l4 2v11z"/><path d="M7.5 7h1.6M11 7h1.6M7.5 11h1.6M11 11h1.6M7.5 15h1.6M11 15h1.6"/>',
@@ -1349,6 +1386,7 @@ const ICONS = {
 const TABS = [
   {id:'home',     label:'홈'},
   {id:'worklist', label:'To do'},
+  {id:'accounts', label:'계정'},
   {id:'vat',      label:'부가세'},
   {id:'pay',      label:'원천세'},
   {id:'corp',     label:'법인세'},
@@ -1359,6 +1397,7 @@ const TABS = [
 const TAB_TITLES = {
   home:['홈','오늘 기준으로 챙겨야 할 신고 기한과 현황을 한눈에 봅니다.'],
   worklist:['To do',''],
+  accounts:['계정','개인 사이트 아이디·비밀번호를 암호화해서 보관해요.'],
   vat:['부가가치세','기간별 신고 현황을 관리합니다.'],
   pay:['원천세·급여','월별 급여·원천세 처리 현황입니다.'],
   corp:['법인세','법인 거래처의 결산~신고 단계를 추적합니다.'],
@@ -2143,6 +2182,7 @@ function renderWorklist(){
   `;
   renderWorklistBody();
   bindWorklistSwipe();
+  fitWorklistHeight();
 }
 
 /* ----- 날짜별 할 일: 하루씩 보기 / 검색 / 미완료 넘기기 ----- */
@@ -2346,13 +2386,22 @@ function renderWlHistory(){
       <div class="wl-daynav-label">${worklistDayLabel(date)}${rel ? ` <span class="wl-rel">${rel}</span>` : ''}</div>
       <button class="wl-navbtn" onclick="setWlHistDay(addDaysStr('${date}', 1))" title="다음 날" aria-label="다음 날">›</button>
     </div>
-    <div class="wl-agenda" style="max-height:340px;">
+    <div class="wl-agenda wl-hist-agenda">
       ${list.length ? `
         <div class="wl-day-head">${list.length}건 · 완료 ${list.length - left}건 · 못한 일 ${left}건</div>
         <ul class="task-list">${list.map(t => wlTaskItem(t)).join('')}</ul>`
       : `<div class="empty">이 날은 등록된 할 일이 없어요.</div>`}
     </div>`;
 }
+
+// 세 칸 높이를 화면 맨 아래(24px 위)까지 맞춤. 너무 작은 창에서는 최소 560px
+function fitWorklistHeight(){
+  const lay = document.querySelector('#tab-worklist .wl-layout');
+  if(!lay) return;
+  const top = lay.getBoundingClientRect().top + window.scrollY;
+  lay.style.setProperty('--wl-h', Math.max(560, Math.floor(window.innerHeight - top - 24)) + 'px');
+}
+window.addEventListener('resize', fitWorklistHeight);
 
 function renderWorklistBody(){
   renderWlMonthCal();
@@ -3213,6 +3262,7 @@ function collectGoogleSnapshot(){
     events, nextEventId,
     clientsOther, clientsTerminated,
     trashBin, nextTrashId,
+    accountVault,
   };
 }
 
@@ -3272,6 +3322,7 @@ async function loadFromGoogleSheet(){
     if(map.clientsOther)  clientsOther = JSON.parse(map.clientsOther);
     if(map.clientsTerminated) clientsTerminated = JSON.parse(map.clientsTerminated);
     if(map.nextEventId)   nextEventId  = JSON.parse(map.nextEventId);
+    if(map.accountVault)  accountVault = JSON.parse(map.accountVault);
   } catch(e){
     console.error('시트 데이터 파싱 실패', e);
   }
@@ -3456,6 +3507,7 @@ function hasUnsavedChanges(){
 }
 function applySnapshot(o){
   if(!o) return;
+  if(o.accountVault) accountVault = o.accountVault;
   if(o.clients) clients = o.clients;
   if(o.tasks) tasks = o.tasks;
   if(o.vatData) vatData = o.vatData;
@@ -4063,6 +4115,7 @@ async function resetAllData(){
   worklistChecklist = {}; worklistSchedule = {};
   events = [];
   clientsOther = []; clientsTerminated = [];
+  accountVault = null; accLock(true);
   settings.displayName = '';
   settings.soonDays = 7;
   renderNav();
@@ -4098,12 +4151,30 @@ async function loadTaxjUsage(){
     const token = await user.getIdToken();
     const res = await fetch(TAXJ_USAGE_URL, { method:'POST', headers:{ 'Content-Type':'application/json', Authorization:'Bearer ' + token }, body: JSON.stringify({ action:'usageReport' }) });
     const data = await res.json().catch(()=>({}));
-    if(!res.ok || !data.ok){ taxjUsageSet(`<div class="hint">불러오지 못했어요 (${taxjEsc(data.error || res.status)}). 서버에 사용 현황 기능이 배포됐는지 확인해 주세요.</div>`); return; }
+    // 요청 배경(2026.10.06): 실패해도 로그인 창이 안 떠서 다시 시도할 방법이 없었음 → 실패 문구 옆에 '다시 로그인' 버튼.
+    // 서버가 "회사 계정만" 이라고 거절하는 건 로그인 문제가 아니라 Tax.J 서버(sendpush)에 개인계정용 사용 현황 기능이 아직 안 올라간 것이라 그렇게 안내함
+    if(!res.ok || !data.ok){
+      const err = String(data.error || res.status);
+      const serverSide = /회사 계정만/.test(err);
+      taxjUsageSet(`<div class="hint">불러오지 못했어요 (${taxjEsc(err)}). ${serverSide
+        ? `${taxjEsc(user.email)}로 로그인은 되어 있는데, Tax.J 서버가 아직 개인계정 요청을 받지 않아요. 서버에 사용 현황 기능이 반영돼야 해요.`
+        : '서버에 사용 현황 기능이 배포됐는지 확인해 주세요.'}</div>${taxjReloginBtn()}`);
+      return;
+    }
     taxjUsageSet(taxjUsageTableHtml(data.report));
   }catch(e){
     console.error('Tax.J 사용 현황 실패', e);
-    taxjUsageSet(`<div class="hint">불러오지 못했어요 (${taxjEsc(e && (e.code || e.message) || e)}).</div>`);
+    taxjUsageSet(`<div class="hint">불러오지 못했어요 (${taxjEsc(e && (e.code || e.message) || e)}).</div>${taxjReloginBtn()}`);
   }finally{ if(btn) btn.disabled = false; }
+}
+function taxjReloginBtn(){ return `<button type="button" class="btn ghost xs" style="margin-top:6px;" onclick="taxjUsageRelogin()">개인계정으로 다시 로그인</button>`; }
+// 저장된 로그인을 지우고 Google 계정 선택 창을 다시 띄워서 불러오기
+async function taxjUsageRelogin(){
+  try{
+    const app = (window.firebase && firebase.apps.find(a=> a.name === 'taxjUsage'));
+    if(app) await app.auth().signOut();
+  }catch(e){ console.error(e); }
+  loadTaxjUsage();
 }
 // ── [2026.10.06] Tax.J 회사 데이터 조회(읽기 전용) - "회사에 입력한 걸 가져오는 게 보안상 낫다"(요청) ──
 // 개인 계정으로 로그인 → 회사 조회 전용 서버(worksread)가 계정을 확인한 뒤 필요한 항목만 돌려줌. 이 앱은 회사 데이터를 고칠 수 없음.
@@ -4316,7 +4387,7 @@ function renderSettings(){
         <div class="row">
           <div>
             <h3>Tax.J 사용 현황</h3>
-            <div class="hint">개인계정(${TAXJ_USAGE_OWNER})으로만 볼 수 있어요. 직원별 접속·기기·알림 상태만 보여요.</div>
+            <div class="hint"><b>로그인: 개인계정 (${TAXJ_USAGE_OWNER})</b> · 한 번 로그인하면 이 기기에 기억돼서 다음부터는 창이 뜨지 않아요. 직원별 접속·기기·알림 상태만 보여요.</div>
           </div>
           <div class="ctrl">
             <button type="button" class="btn primary xs" id="taxjUsageBtn" onclick="loadTaxjUsage()">불러오기</button>
@@ -4331,7 +4402,7 @@ function renderSettings(){
         <div class="row">
           <div>
             <h3>Tax.J 검토표 계산식</h3>
-            <div class="hint">원천세 검토표 검증에 쓰는 계산식만 불러와요. 업무 자료는 받지 않아요.</div>
+            <div class="hint"><b>로그인 필요 없음</b> · 회사 계정 없이 공개된 Tax.J 페이지에서 원천세 검토표 계산식만 읽어 와요. 업무 자료는 받지 않아요.</div>
           </div>
           <div class="ctrl">
             <button type="button" class="btn primary xs" id="taxjFormulaBtn" onclick="loadTaxjFormula()">불러오기</button>
@@ -4391,13 +4462,255 @@ function renderSettings(){
   `;
 }
 
+// ===== 계정: 개인 아이디·비밀번호 보관함 =====
+// 요청 배경(2026.10.06): "내 개인 아이디·비번을 관리할 메뉴(To do 아래 '계정')". 데이터가 Google 시트·이 기기에도 저장되므로
+// 평문으로 두지 않고, 보관함 비밀번호(이 기기에도 저장 안 함)로 만든 키로 목록 전체를 AES-GCM 암호화해서 저장함.
+// 잠금 해제한 동안에만 메모리에 풀어 두고, 새로고침·잠그기·10분 동안 손대지 않으면 다시 잠김. 보관함 비밀번호를 잊으면 복구할 수 없음.
+const ACC_IDLE_MS = 10 * 60 * 1000;
+function accB64(buf){ const a = new Uint8Array(buf); let s = ''; for(let i = 0; i < a.length; i += 0x8000) s += String.fromCharCode.apply(null, a.subarray(i, i + 0x8000)); return btoa(s); }
+function accUnB64(str){ const b = atob(str); const a = new Uint8Array(b.length); for(let i = 0; i < b.length; i++) a[i] = b.charCodeAt(i); return a; }
+async function accDeriveKey(pw, salt){
+  const base = await crypto.subtle.importKey('raw', new TextEncoder().encode(pw), 'PBKDF2', false, ['deriveKey']);
+  return crypto.subtle.deriveKey({ name:'PBKDF2', salt, iterations:250000, hash:'SHA-256' }, base, { name:'AES-GCM', length:256 }, false, ['encrypt','decrypt']);
+}
+async function accEncryptAndStore(){
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const plain = new TextEncoder().encode(JSON.stringify({ items: accountItems, nextId: accountNextId }));
+  const data = await crypto.subtle.encrypt({ name:'AES-GCM', iv }, accountKey, plain);
+  accountVault = { v:1, salt: accB64(accountSalt), iv: accB64(iv), data: accB64(data) };
+}
+function accTouch(){
+  clearTimeout(accountIdleTimer);
+  if(accountKey) accountIdleTimer = setTimeout(() => { accLock(); }, ACC_IDLE_MS);
+}
+function accLock(silent){
+  accountKey = null; accountSalt = null; accountItems = null; accountShown.clear();
+  clearTimeout(accountIdleTimer);
+  if(!silent) renderAccounts();
+}
+async function accSave(){
+  await accEncryptAndStore();
+  accTouch();
+  renderAccounts();
+  scheduleGoogleSave();
+}
+async function accCreateVault(){
+  const p1 = (document.getElementById('accNewPw') || {}).value || '';
+  const p2 = (document.getElementById('accNewPw2') || {}).value || '';
+  if(p1.length < 6){ smAlert('6자 이상으로 정해 주세요', '보관함 비밀번호는 6자 이상이어야 해요.'); return; }
+  if(p1 !== p2){ smAlert('두 비밀번호가 달라요', '한 번 더 입력한 비밀번호가 같은지 확인해 주세요.'); return; }
+  accountSalt = crypto.getRandomValues(new Uint8Array(16));
+  accountKey = await accDeriveKey(p1, accountSalt);
+  accountItems = []; accountNextId = 1;
+  await accSave();
+}
+async function accUnlock(){
+  const inp = document.getElementById('accPw');
+  const pw = inp ? inp.value : '';
+  if(!pw || !accountVault) return;
+  try{
+    const salt = accUnB64(accountVault.salt);
+    const key = await accDeriveKey(pw, salt);
+    const plain = await crypto.subtle.decrypt({ name:'AES-GCM', iv: accUnB64(accountVault.iv) }, key, accUnB64(accountVault.data));
+    const o = JSON.parse(new TextDecoder().decode(plain));
+    accountKey = key; accountSalt = salt;
+    accountItems = Array.isArray(o.items) ? o.items : [];
+    accountNextId = o.nextId || (accountItems.reduce((m, x) => Math.max(m, x.id || 0), 0) + 1);
+    accTouch();
+    renderAccounts();
+  }catch(e){
+    if(inp){ inp.value = ''; inp.focus(); }
+    smAlert('비밀번호가 맞지 않아요', '보관함 비밀번호를 다시 입력해 주세요.', { tone:'danger' });
+  }
+}
+async function accChangeMaster(){
+  const r = await smForm('보관함 비밀번호 바꾸기', [
+    { label:'새 비밀번호 (6자 이상)', type:'password', value:'' },
+    { label:'새 비밀번호 확인', type:'password', value:'' },
+  ], { okText:'바꾸기', icon:'✎' });
+  if(!r) return;
+  if(r[0].length < 6){ smAlert('6자 이상으로 정해 주세요', '보관함 비밀번호는 6자 이상이어야 해요.'); return; }
+  if(r[0] !== r[1]){ smAlert('두 비밀번호가 달라요', '한 번 더 입력한 비밀번호가 같은지 확인해 주세요.'); return; }
+  accountSalt = crypto.getRandomValues(new Uint8Array(16));
+  accountKey = await accDeriveKey(r[0], accountSalt);
+  await accSave();
+  smAlert('바꿨어요', '다음부터는 새 비밀번호로 열어 주세요.', { icon:'✓' });
+}
+function accFields(x){
+  x = x || {};
+  return [
+    { label:'사이트·서비스', value:x.site || '', placeholder:'예: 홈택스' },
+    { label:'주소 (선택)', value:x.url || '', placeholder:'예: hometax.go.kr' },
+    { label:'아이디', value:x.user || '' },
+    { label:'비밀번호', value:x.pw || '' },
+    { label:'메모 (선택)', type:'textarea', rows:2, value:x.memo || '', placeholder:'예: 공인인증서 위치, 보안질문 힌트' },
+  ];
+}
+async function accAdd(){
+  if(!accountItems) return;
+  accTouch();
+  const r = await smForm('계정 추가', accFields(), { okText:'추가', icon:'+', wide:true });
+  if(!r) return;
+  if(!r[0].trim() && !r[2].trim()){ smAlert('사이트나 아이디를 입력해 주세요', ''); return; }
+  accountItems.push({ id: accountNextId++, site:r[0].trim(), url:r[1].trim(), user:r[2].trim(), pw:r[3], memo:r[4].trim(), at: todayStr() });
+  await accSave();
+}
+async function accEdit(id){
+  const x = (accountItems || []).find(a => a.id === id);
+  if(!x) return;
+  accTouch();
+  const r = await smForm('계정 수정', accFields(x), { okText:'저장', icon:'✎', wide:true });
+  if(!r) return;
+  Object.assign(x, { site:r[0].trim(), url:r[1].trim(), user:r[2].trim(), pw:r[3], memo:r[4].trim(), at: todayStr() });
+  await accSave();
+}
+async function accDelete(id){
+  const x = (accountItems || []).find(a => a.id === id);
+  if(!x) return;
+  if(!(await smConfirm(`'${x.site || x.user}' 계정을 삭제할까요?`, '보관함에서 지우면 휴지통에 남지 않고 바로 사라져요.', { okText:'삭제', tone:'danger' }))) return;
+  accountItems = accountItems.filter(a => a.id !== id);
+  await accSave();
+}
+function accToggle(id){ accountShown.has(id) ? accountShown.delete(id) : accountShown.add(id); accTouch(); renderAccounts(); }
+async function accCopy(id, field, btn){
+  const x = (accountItems || []).find(a => a.id === id);
+  if(!x) return;
+  accTouch();
+  try{
+    await navigator.clipboard.writeText(x[field] || '');
+    if(btn){ const t = btn.textContent; btn.textContent = '복사됨'; setTimeout(() => { btn.textContent = t; }, 1200); }
+  }catch(e){ smAlert('복사하지 못했어요', '브라우저가 클립보드 사용을 막았어요.'); }
+}
+function accOnSearch(v){ accountSearch = v; accTouch(); renderAccounts(); const s = document.getElementById('accSearch'); if(s){ s.focus(); s.setSelectionRange(v.length, v.length); } }
+// 요청 배경(2026.10.06): "회사앱(Tax.J) 계정정보도 가져오기 - 엑셀로". Tax.J 엑셀 일괄 다운로드의 '회사정보' 시트
+// (구분·대상·항목명·유형·ID/내용·PW·메모·암호화 여부)를 읽어 보관함에 '회사(Tax.J)' 항목으로 넣음. 다시 가져오면 회사 항목만 새로 바뀌고 내 개인 항목은 그대로.
+// Tax.J에서 잠금 해제 안 한 채 받은 파일은 값이 "🔒(잠금 상태)"라서 비워 두고 안내함
+async function accImportTaxjExcel(input){
+  const file = input.files && input.files[0];
+  input.value = '';
+  if(!file || !accountItems) return;
+  accTouch();
+  try{
+    if(typeof XLSX === 'undefined'){
+      await new Promise((res, rej) => { const el = document.createElement('script'); el.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js'; el.onload = res; el.onerror = rej; document.head.appendChild(el); });
+    }
+    const wb = XLSX.read(await file.arrayBuffer(), { type:'array' });
+    let rows = null;
+    for(const n of wb.SheetNames){
+      const r = XLSX.utils.sheet_to_json(wb.Sheets[n], { header:1, raw:false, defval:'' });
+      const h = (r[0] || []).map(v => String(v).replace(/\s+/g, ''));
+      if(h.includes('구분') && h.includes('항목명') && h.includes('PW')){ rows = r; break; }
+    }
+    if(!rows){ smAlert('회사정보 시트를 찾지 못했어요', 'Tax.J → 엑셀 일괄 다운로드에서 "회사정보"를 골라 받은 파일을 올려 주세요.'); return; }
+    const head = rows[0].map(v => String(v).replace(/\s+/g, ''));
+    const c = name => head.indexOf(name);
+    const iCat = c('구분'), iTarget = c('대상'), iLabel = c('항목명'), iType = c('유형'), iId = c('ID/내용'), iPw = c('PW'), iMemo = c('메모');
+    const LOCK = /잠금\s*상태/;
+    let locked = 0;
+    const list = rows.slice(1).filter(r => r.some(v => String(v).trim())).map(r => {
+      const v = i => (i >= 0 ? String(r[i] ?? '').trim() : '');
+      let user = v(iId), pw = v(iPw);
+      if(LOCK.test(user) || LOCK.test(pw)){ locked++; user = LOCK.test(user) ? '' : user; pw = LOCK.test(pw) ? '' : pw; }
+      return { site: v(iLabel), url:'', user, pw, memo: v(iMemo), group: [v(iCat), v(iTarget)].filter(Boolean).join(' · '), kind: v(iType) || '계정' };
+    }).filter(x => x.site || x.user);
+    if(!list.length){ smAlert('가져올 항목이 없어요', '회사정보 시트가 비어 있어요.'); return; }
+    const had = accountItems.filter(a => a.src === 'taxj').length;
+    if(!(await smConfirm(`회사(Tax.J) 계정 ${list.length}건을 가져올까요?`, had ? `지금 있는 회사 항목 ${had}건은 새 파일 내용으로 바뀌어요. 내 개인 항목은 그대로예요.` : '내 개인 항목과 구분해서 보관해요.', { icon:'↓', okText:'가져오기' }))) return;
+    const today = todayStr();
+    accountItems = accountItems.filter(a => a.src !== 'taxj').concat(list.map(x => Object.assign({ id: accountNextId++, src:'taxj', at: today }, x)));
+    settings.taxjAccountsImportedAt = today;
+    accountView = 'taxj';
+    await accSave();
+    if(locked) smAlert(`${locked}건은 ID/PW가 비어 있어요`, 'Tax.J에서 잠금을 해제하지 않고 받은 파일이라 암호화된 값이 빠졌어요. Tax.J에서 잠금 해제 후 다시 받아 올려 주세요.');
+  }catch(e){
+    console.error('회사 계정 엑셀 가져오기 실패', e);
+    smAlert('가져오지 못했어요', String(e && e.message || e), { tone:'danger' });
+  }
+}
+function accSetView(v){ accountView = v; accTouch(); renderAccounts(); }
+function accHref(u){ if(!u) return ''; return /^https?:\/\//i.test(u) ? u : 'https://' + u; }
+function renderAccounts(){
+  const el = document.getElementById('tab-accounts');
+  if(!el) return;
+  const lockIc = '<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>';
+  if(!accountVault){
+    el.innerHTML = `
+      <div class="card acc-wrap"><div class="acc-lock">
+        <div class="acc-lock-ic">${lockIc}</div>
+        <h3 style="margin:0 0 6px;">보관함 비밀번호 만들기</h3>
+        <div class="hint" style="margin-bottom:14px;">이 비밀번호로 아이디·비밀번호 목록 전체를 암호화해요. 이 비밀번호는 어디에도 저장되지 않아서, <b>잊으면 보관함을 열 수 없어요.</b></div>
+        <input type="password" id="accNewPw" placeholder="보관함 비밀번호 (6자 이상)" autocomplete="new-password">
+        <input type="password" id="accNewPw2" placeholder="한 번 더 입력" autocomplete="new-password" onkeydown="if(event.key==='Enter') accCreateVault()">
+        <button class="btn primary" onclick="accCreateVault()">보관함 만들기</button>
+      </div></div>`;
+    return;
+  }
+  if(!accountItems){
+    el.innerHTML = `
+      <div class="card acc-wrap"><div class="acc-lock">
+        <div class="acc-lock-ic">${lockIc}</div>
+        <h3 style="margin:0 0 6px;">보관함이 잠겨 있어요</h3>
+        <div class="hint" style="margin-bottom:14px;">보관함 비밀번호를 입력하면 열려요. 10분 동안 손대지 않거나 새로고침하면 다시 잠겨요.</div>
+        <input type="password" id="accPw" placeholder="보관함 비밀번호" autocomplete="current-password" onkeydown="if(event.key==='Enter') accUnlock()">
+        <button class="btn primary" onclick="accUnlock()">열기</button>
+      </div></div>`;
+    return;
+  }
+  const q = accountSearch.trim().toLowerCase();
+  const nMine = accountItems.filter(a => a.src !== 'taxj').length, nTaxj = accountItems.length - nMine;
+  const list = accountItems
+    .filter(a => accountView === 'all' || (accountView === 'taxj') === (a.src === 'taxj'))
+    .filter(a => !q || [a.site, a.url, a.user, a.memo, a.group].some(v => String(v || '').toLowerCase().includes(q)))
+    .sort((a, b) => ((a.src === 'taxj') - (b.src === 'taxj')) || String(a.group || '').localeCompare(String(b.group || ''), 'ko') || String(a.site || '').localeCompare(String(b.site || ''), 'ko'));
+  el.innerHTML = `
+    <div class="card acc-wrap">
+      <div class="cl-head">
+        <div class="cl-subtabs">
+          ${[['all','전체', accountItems.length], ['mine','개인', nMine], ['taxj','회사(Tax.J)', nTaxj]]
+            .map(([k, l, n]) => `<button class="cl-subtab ${accountView === k ? 'on' : ''}" onclick="accSetView('${k}')">${l} <span>${n}</span></button>`).join('')}
+        </div>
+        <div style="text-align:right;">
+          <button class="btn ghost xs" onclick="document.getElementById('accTaxjXlsx').click()" title="Tax.J → 엑셀 일괄 다운로드 → 회사정보 파일">Tax.J 엑셀 가져오기</button>
+          <input type="file" id="accTaxjXlsx" accept=".xlsx,.xls" style="display:none;" onchange="accImportTaxjExcel(this)">
+          <div class="hint" style="margin-top:4px;">${settings.taxjAccountsImportedAt ? '마지막 가져오기: ' + settings.taxjAccountsImportedAt : 'Tax.J에서 잠금 해제 후 받은 회사정보 엑셀을 올려주세요'}</div>
+        </div>
+      </div>
+      <div class="toolbar">
+        <input type="text" id="accSearch" placeholder="사이트·아이디·메모 검색" value="${escapeAttr(accountSearch)}" oninput="accOnSearch(this.value)" style="flex:1; min-width:200px;">
+        <button class="btn primary" onclick="accAdd()">계정 추가</button>
+        <button class="btn ghost" onclick="accChangeMaster()">보관함 비밀번호 변경</button>
+        <button class="btn ghost" onclick="accLock()">잠그기</button>
+      </div>
+      ${list.length ? `
+      <div class="table-scroll">
+      <table>
+        <thead><tr><th>사이트·서비스</th><th>아이디</th><th>비밀번호</th><th>메모</th><th>수정일</th><th></th></tr></thead>
+        <tbody>
+          ${list.map(a => `
+          <tr>
+            <td class="acc-site">${a.url ? `<a href="${escapeAttr(accHref(a.url))}" target="_blank" rel="noopener noreferrer" title="${escapeAttr(a.url)}">${escapeAttr(a.site || a.url)}</a>` : escapeAttr(a.site || '-')}${a.src === 'taxj' ? `<div class="acc-memo" style="font-weight:600;">회사 · ${escapeAttr(a.group || 'Tax.J')}</div>` : ''}</td>
+            <td><span class="acc-cell"><span class="acc-secret">${escapeAttr(a.user || '-')}</span>${a.user ? `<button class="btn xs" onclick="accCopy(${a.id}, 'user', this)">복사</button>` : ''}</span></td>
+            <td><span class="acc-cell"><span class="acc-secret">${a.pw ? (accountShown.has(a.id) ? escapeAttr(a.pw) : '••••••••') : '-'}</span>${a.pw ? `<button class="btn xs" onclick="accToggle(${a.id})">${accountShown.has(a.id) ? '숨기기' : '보기'}</button><button class="btn xs" onclick="accCopy(${a.id}, 'pw', this)">복사</button>` : ''}</span></td>
+            <td><div class="acc-memo">${escapeAttr(a.memo || '')}</div></td>
+            <td style="white-space:nowrap;">${a.at ? shortDate(a.at) : ''}</td>
+            <td style="white-space:nowrap;"><span class="row-actions">
+              <button class="icon-btn" onclick="accEdit(${a.id})" title="수정" aria-label="수정">${ICON_EDIT}</button>
+              <button class="icon-btn danger" onclick="accDelete(${a.id})" title="삭제" aria-label="삭제">${ICON_TRASH}</button>
+            </span></td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+      </div>` : `<div class="empty">${q ? `"${escapeAttr(accountSearch)}" 검색 결과가 없어요.` : '아직 보관한 계정이 없어요. \'계정 추가\'로 넣어 주세요.'}</div>`}
+    </div>`;
+}
+
 /* =========================================================
    초기 렌더 (로그인 성공 후에만 실행됨)
    ========================================================= */
 
 function renderAllNoSave(){
   try{ ensurePayMonths(); ensureTaxRows(); generateRecurringTasks(); }catch(e){ console.warn(e); }
-  renderHome(); renderWorklist(); renderVat(); renderPay(); renderCorp(); renderIndiv(); renderClients(); renderSettings();
+  renderHome(); renderWorklist(); renderAccounts(); renderVat(); renderPay(); renderCorp(); renderIndiv(); renderClients(); renderSettings();
 }
 function renderAll(){
   renderAllNoSave();
@@ -4443,6 +4756,7 @@ document.addEventListener('visibilitychange', () => {
 function updateConnectBanner(){
   const b = document.getElementById('connectBanner');
   if(b) b.style.display = googleAccessToken ? 'none' : '';
+  if(typeof fitWorklistHeight === 'function') fitWorklistHeight();   // 안내 띠가 생기거나 사라지면 To do 높이 다시 맞춤
 }
 function startAppAfterAuth(){
   document.getElementById('todayPill').textContent = todayStr().replaceAll('-','.');
