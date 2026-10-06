@@ -332,6 +332,19 @@
   .task-list input[type=checkbox]{
     width:18px; height:18px; accent-color:var(--primary); cursor:pointer;
   }
+  /* 요청 배경: '골라서 넘기기' 목록의 체크박스는 완료가 아니라 '넘길 일 고르기'라서, 완료 체크(네모)와 헷갈리지 않게
+     같은 크기(18px)의 동그라미 선택 버튼으로 보이게 함. 고르면 분홍으로 채워지고 흰 체크 표시. */
+  .task-list input[type=checkbox].carry-pick{
+    -webkit-appearance:none; appearance:none; flex-shrink:0;
+    border:1.5px solid var(--primary); border-radius:50%; background:#fff;
+    display:inline-grid; place-content:center; transition:background .15s;
+  }
+  .task-list input[type=checkbox].carry-pick::after{
+    content:''; width:8px; height:4px; margin-top:-2px;
+    border-left:2px solid #fff; border-bottom:2px solid #fff; transform:rotate(-45deg); opacity:0;
+  }
+  .task-list input[type=checkbox].carry-pick:checked{ background:var(--primary); }
+  .task-list input[type=checkbox].carry-pick:checked::after{ opacity:1; }
   .task-list .task-date{ font-size:11.5px; color:var(--muted); min-width:82px; font-weight:700; }
   .task-list .task-text{ flex:1; }
   .task-list li.done .task-text{ text-decoration:line-through; color:var(--muted); }
@@ -2107,7 +2120,10 @@ function renderWorklist(){
         <button class="btn primary" onclick="addTask()">추가</button>
       </div>
     </div>
-    <div class="card" id="wlMonthCal"></div>
+    <div class="wl-main">
+      <div class="card" id="wlMonthCal"></div>
+      <div class="card" id="wlHistory"></div>
+    </div>
     </div>
   `;
   renderWorklistBody();
@@ -2205,14 +2221,32 @@ async function postponeDayLeft(date){
   list.forEach(postponeOne);
   renderAll();
 }
-function toggleCarryList(){ worklistCarryOpen = !worklistCarryOpen; renderWorklistBody(); }
+function toggleCarryList(){ worklistCarryOpen = !worklistCarryOpen; carryPicked.clear(); renderWorklistBody(); }
+// 요청 배경: '골라서 넘기기' 목록의 체크를 누르면 완료 처리돼 목록에서 사라졌음. 여러 건을 골라 한 번에 넘기고 싶어서,
+// 이 목록에서만 체크박스를 '넘길 일 고르기'로 쓰고, 고른 게 있으면 '모두 오늘로' 버튼이 '선택 N건 오늘로'로 바뀜.
+const carryPicked = new Set();
+function toggleCarryPick(id){ carryPicked.has(id) ? carryPicked.delete(id) : carryPicked.add(id); renderWorklistBody(); }
+async function carrySelectedToToday(){
+  const list = carryCandidates().filter(t => carryPicked.has(t.id));
+  if(!list.length){ carryPicked.clear(); renderWorklistBody(); return; }
+  if(!(await smConfirm(`고른 일 ${list.length}건을 오늘로 넘길까요?`, `최근 ${WL_CARRY_DAYS}일 동안 끝내지 못한 일이에요.`, { icon:'→', okText:'넘기기' }))) return;
+  const todayS = todayStr();
+  list.forEach(t => {
+    if(!t.movedFrom) t.movedFrom = t.date;
+    if(t.source === 'master') t.source = 'moved';
+    pushHist(t, '오늘로 넘김', [{ label:'날짜', from:t.date, to:todayS }]);
+    t.date = todayS;
+  });
+  carryPicked.clear();
+  renderAll();
+}
 
 function wlTaskItem(t, opts = {}){
   const todayS = todayStr();
   const canCarry = !t.done && t.date < todayS;
   return `
     <li class="${t.done ? 'done' : ''}">
-      <input type="checkbox" ${t.done ? 'checked' : ''} onchange="toggleTask(${t.id})">
+      ${opts.carryPick ? `<input type="checkbox" class="carry-pick" ${carryPicked.has(t.id) ? 'checked' : ''} onchange="toggleCarryPick(${t.id})" title="넘길 일로 고르기">` : `<input type="checkbox" ${t.done ? 'checked' : ''} onchange="toggleTask(${t.id})">`}
       ${opts.showDate ? `<span class="task-date" style="cursor:pointer;" onclick="setWorklistDay('${t.date}')" title="이 날짜로 이동">${shortDate(t.date)}</span>` : ''}
       <span class="task-text">${t.text}${t.movedFrom ? `<span class="wl-dot moved" title="${shortDate(t.movedFrom)}에서 넘어옴"></span>` : ''}${t.postponedFrom ? `<span class="wl-dot postponed" title="${shortDate(t.postponedFrom)}에서 미룸"></span>` : ''}${t.note ? `<span class="task-note">${escapeAttr(t.note)}</span>` : ''}</span>
       ${canCarry ? `<button class="btn xs" onclick="carryTaskToToday(${t.id})" title="오늘 할 일로 옮기기">오늘로 →</button>` : ''}
@@ -2234,7 +2268,7 @@ function renderWlMonthCal(){
   if(!wlCalYM) wlCalYM = (worklistViewDate || todayStr()).slice(0,7);
   const [y, m] = wlCalYM.split('-').map(Number);
   const first = new Date(y, m - 1, 1), startDow = first.getDay();
-  const todayS = todayStr(), sel = worklistViewDate || todayS;
+  const todayS = todayStr(), sel = wlHistDate || defaultWlHistDate();
   const cells = [];
   const startDate = addDaysStr(`${y}-${pad2(m)}-01`, -startDow);
   const lastDate = new Date(y, m, 0).getDate();
@@ -2257,7 +2291,7 @@ function renderWlMonthCal(){
         const left = list.filter(t => !t.done).length;
         const shown = list.slice(0, 2);   // 칸을 낮게(3단 배치) - 제목 2건까지
         return `
-        <div class="cal-day ${ds === todayS ? 'today' : ''} ${ds.slice(0,7) !== wlCalYM ? 'other' : ''} ${ds === sel ? 'wl-sel' : ''}" onclick="setWorklistDay('${ds}')" title="${list.length ? `${list.length}건 · 남은 일 ${left}건` : ''}">
+        <div class="cal-day ${ds === todayS ? 'today' : ''} ${ds.slice(0,7) !== wlCalYM ? 'other' : ''} ${ds === sel ? 'wl-sel' : ''}" onclick="setWlHistDay('${ds}')" title="${list.length ? `${list.length}건 · 남은 일 ${left}건` : ''}">
           <div class="wl-mcal-top"><div class="cal-daynum">${parseInt(ds.slice(8), 10)}</div>${list.length ? `<span class="wl-mcal-cnt ${left ? '' : 'all-done'}">${list.length}</span>` : ''}</div>
           <div class="cal-tasks" style="max-height:none;">
             ${shown.map(t => `<div class="wl-ct ${t.done ? 'done' : ''}">${escapeAttr(t.text)}</div>`).join('')}
@@ -2268,8 +2302,46 @@ function renderWlMonthCal(){
     </div>`;
 }
 
+// 요청 배경(2026.10.06): 달력은 '지난 할 일 돌아보기'용. 날짜를 누르면 Today는 오늘 그대로 두고,
+// 달력 아래 'History' 카드에 그날 할 일 전체(완료·못한 일·메모)를 보여줌. 처음엔 오늘 이전에 할 일이 있었던 가장 최근 날.
+let wlHistDate = null;
+function defaultWlHistDate(){
+  const todayS = todayStr();
+  const past = tasks.filter(t => t.date < todayS).map(t => t.date).sort();
+  return past.length ? past[past.length - 1] : addDaysStr(todayS, -1);
+}
+function setWlHistDay(dateStr){
+  if(!dateStr) return;
+  wlHistDate = dateStr;
+  renderWlMonthCal();
+  renderWlHistory();
+}
+function renderWlHistory(){
+  const el = document.getElementById('wlHistory');
+  if(!el) return;
+  const todayS = todayStr();
+  const date = wlHistDate || defaultWlHistDate();
+  const rel = date === todayS ? '오늘' : date === addDaysStr(todayS, -1) ? '어제' : date === addDaysStr(todayS, 1) ? '내일' : '';
+  const list = tasks.filter(t => t.date === date).slice().sort((a, b) => (a.done - b.done));
+  const left = list.filter(t => !t.done).length;
+  el.innerHTML = `
+    <div class="notice-top"><span></span><div class="today-title">History</div><span></span></div>
+    <div class="wl-daynav">
+      <button class="wl-navbtn" onclick="setWlHistDay(addDaysStr('${date}', -1))" title="이전 날" aria-label="이전 날">‹</button>
+      <div class="wl-daynav-label">${worklistDayLabel(date)}${rel ? ` <span class="wl-rel">${rel}</span>` : ''}</div>
+      <button class="wl-navbtn" onclick="setWlHistDay(addDaysStr('${date}', 1))" title="다음 날" aria-label="다음 날">›</button>
+    </div>
+    <div class="wl-agenda" style="max-height:340px;">
+      ${list.length ? `
+        <div class="wl-day-head">${list.length}건 · 완료 ${list.length - left}건 · 못한 일 ${left}건</div>
+        <ul class="task-list">${list.map(t => wlTaskItem(t)).join('')}</ul>`
+      : `<div class="empty">이 날은 등록된 할 일이 없어요.</div>`}
+    </div>`;
+}
+
 function renderWorklistBody(){
   renderWlMonthCal();
+  renderWlHistory();
   const body = document.getElementById('worklistAgenda');
   if(!body) return;
   const todayS = todayStr();
@@ -2293,10 +2365,12 @@ function renderWorklistBody(){
           <span>지난 ${WL_CARRY_DAYS}일 동안 못한 일 <b>${cands.length}건</b></span>
           <span style="display:flex; gap:6px;">
             <button class="btn ghost xs" onclick="toggleCarryList()">${worklistCarryOpen ? '접기' : '골라서 넘기기'}</button>
-            <button class="btn primary xs" onclick="carryAllToToday()">모두 오늘로</button>
+            ${(worklistCarryOpen && cands.some(t => carryPicked.has(t.id)))
+              ? `<button class="btn primary xs" onclick="carrySelectedToToday()">선택 ${cands.filter(t => carryPicked.has(t.id)).length}건 오늘로</button>`
+              : `<button class="btn primary xs" onclick="carryAllToToday()">모두 오늘로</button>`}
           </span>
         </div>
-        ${worklistCarryOpen ? `<ul class="task-list">${cands.map(t => wlTaskItem(t, {showDate:true})).join('')}</ul>` : ''}
+        ${worklistCarryOpen ? `<ul class="task-list">${cands.map(t => wlTaskItem(t, {showDate:true, carryPick:true})).join('')}</ul>` : ''}
       </div>` : '';
   }
 
