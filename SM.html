@@ -780,14 +780,18 @@
 
   /* 요청 배경(2026.10.06): To do 화면을 [왼쪽 체크리스트 길게 | 오른쪽 위 할 일 월 달력 + 아래 Today 목록]으로.
      좁은 화면(1000px 이하)에서는 위아래로 쌓임. */
-  .wl-layout{ display:grid; grid-template-columns:minmax(290px, 360px) minmax(0, 1fr); gap:20px; align-items:start; }
-  .wl-layout.no-side{ grid-template-columns:minmax(0, 1fr); }
+  /* 요청 배경(2026.10.06): "한눈에 보이게" - [체크리스트 | Today | 월 달력] 3단 나란히. 이 화면만 폭을 넓게 씀.
+     1300px 이하: 체크리스트 | (Today 위, 달력 아래) / 1000px 이하: 체크리스트 → Today → 달력 순으로 쌓임 */
+  main #tab-worklist{ max-width:1760px; }
+  .wl-layout{ display:grid; grid-template-columns:minmax(260px, 320px) minmax(0, 1.05fr) minmax(0, 1fr); gap:18px; align-items:start; }
+  .wl-layout.no-side{ grid-template-columns:minmax(0, 1.05fr) minmax(0, 1fr); }
+  .wl-layout > .card{ margin:0; min-width:0; }
   .wl-side .notice-card{ max-width:none; margin:0; padding:20px 18px 18px; position:sticky; top:16px; max-height:calc(100vh - 32px); overflow-y:auto; }
   .wl-side .notice-items{ grid-template-columns:1fr; }
   .wl-main{ min-width:0; display:flex; flex-direction:column; gap:18px; }
   .wl-main > .card{ margin:0; }
-  .wl-mcal-grid{ grid-auto-rows:minmax(92px, auto); }
-  .wl-mcal-grid .cal-day{ min-height:92px; cursor:pointer; }
+  .cal-grid.wl-mcal-grid{ grid-auto-rows:minmax(74px, auto); gap:5px; }
+  .wl-mcal-grid .cal-day{ min-height:74px; cursor:pointer; padding:5px 5px 6px; }
   .wl-mcal-grid .cal-day:hover{ border-color:var(--primary); }
   .wl-mcal-grid .cal-day.wl-sel{ box-shadow:inset 0 0 0 2px var(--primary-dark); }
   .wl-mcal-top{ display:flex; align-items:center; justify-content:space-between; margin-bottom:5px; }
@@ -796,9 +800,15 @@
   .wl-mcal-cnt.all-done{ color:var(--muted); background:#f3eef1; }
   .wl-ct{ font-size:11px; font-weight:600; color:var(--text); background:#fbf3f7; border-radius:5px; padding:2px 5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .wl-ct.done{ text-decoration:line-through; color:#b9a9b2; background:transparent; }
-  .wl-mcal-more{ font-size:10.5px; font-weight:700; color:var(--primary-dark); padding:0 5px; }
+  .wl-mcal-more{ font-size:10.5px; font-weight:700; color:var(--primary-dark); padding:0 5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  @media (max-width:1300px){
+    .wl-layout{ grid-template-columns:minmax(250px, 300px) minmax(0, 1fr); }
+    .wl-layout > aside{ grid-row:span 2; }
+    .wl-layout.no-side{ grid-template-columns:minmax(0, 1fr); }
+  }
   @media (max-width:1000px){
     .wl-layout{ grid-template-columns:minmax(0, 1fr); }
+    .wl-layout > aside{ grid-row:auto; }
     .wl-side .notice-card{ position:static; max-height:none; }
   }
 
@@ -2066,8 +2076,6 @@ function renderWorklist(){
   el.innerHTML = `
     <div class="wl-layout ${refSections ? '' : 'no-side'}">
     <aside class="wl-side">${refSections}</aside>
-    <div class="wl-main">
-    <div class="card" id="wlMonthCal"></div>
     <div class="card">
       <div class="notice-top">
         <span id="wlTodayBtnSlot"></span>
@@ -2098,7 +2106,7 @@ function renderWorklist(){
         <button class="btn primary" onclick="addTask()">추가</button>
       </div>
     </div>
-    </div>
+    <div class="card" id="wlMonthCal"></div>
     </div>
   `;
   renderWorklistBody();
@@ -2211,7 +2219,7 @@ function wlTaskItem(t, opts = {}){
     </li>`;
 }
 
-// 할 일 월 달력(요청): 날짜마다 할 일 몇 건인지 + 앞의 3건까지 제목, 넘치면 '+N'. 날짜를 누르면 아래 Today 목록이 그 날로 바뀜
+// 할 일 월 달력(요청): 날짜마다 할 일 몇 건인지 + 앞의 2건까지 제목, 넘치면 '+N'. 날짜를 누르면 아래 Today 목록이 그 날로 바뀜
 let wlCalYM = null;   // 'YYYY-MM'
 function shiftWlCal(n){
   const [y, m] = (wlCalYM || (worklistViewDate || todayStr()).slice(0,7)).split('-').map(Number);
@@ -2246,13 +2254,13 @@ function renderWlMonthCal(){
       ${cells.map(ds => {
         const list = (byDate[ds] || []).slice().sort((a, b) => (a.done - b.done));
         const left = list.filter(t => !t.done).length;
-        const shown = list.slice(0, 3);
+        const shown = list.slice(0, 2);   // 칸을 낮게(3단 배치) - 제목 2건까지
         return `
         <div class="cal-day ${ds === todayS ? 'today' : ''} ${ds.slice(0,7) !== wlCalYM ? 'other' : ''} ${ds === sel ? 'wl-sel' : ''}" onclick="setWorklistDay('${ds}')" title="${list.length ? `${list.length}건 · 남은 일 ${left}건` : ''}">
           <div class="wl-mcal-top"><div class="cal-daynum">${parseInt(ds.slice(8), 10)}</div>${list.length ? `<span class="wl-mcal-cnt ${left ? '' : 'all-done'}">${list.length}</span>` : ''}</div>
           <div class="cal-tasks" style="max-height:none;">
             ${shown.map(t => `<div class="wl-ct ${t.done ? 'done' : ''}">${escapeAttr(t.text)}</div>`).join('')}
-            ${list.length > 3 ? `<div class="wl-mcal-more">+${list.length - 3} 더보기</div>` : ''}
+            ${list.length > 2 ? `<div class="wl-mcal-more">+${list.length - 2}건 더</div>` : ''}
           </div>
         </div>`;
       }).join('')}
@@ -2533,6 +2541,7 @@ function renderPay(){
       </table>
       </div>
     </div>
+    <div class="card" id="taxjPayPanel">${taxjPayPanelHtml()}</div>
   `;
 }
 
@@ -2742,21 +2751,45 @@ async function importTaxjExcel(input){
       const t = g(r, iTax); return (t === '기장대행' || t === '신고대리') && g(r, iStatus) !== '해지';
     });
     if(!regular.length) throw new Error('기장거래처를 한 건도 찾지 못했어요.');
+    const incomingList = regular.map((r, idx) => {
+      const feeRaw = g(r, iFee).replace(/[^0-9]/g, '');
+      return {
+        seq: g(r, iSeq) || String(idx + 1), taxType: g(r, iTax).replace(/^기타\((.*)\)$/, '$1'),
+        type: g(r, iEntity).startsWith('법인') ? '법인' : '개인', name: g(r, iName), biz: g(r, iBiz), corpNo: g(r, iCorp),
+        ceo: g(r, iCeo), fee: feeRaw ? Number(feeRaw).toLocaleString() : '', contractDate: g(r, iContract), start: g(r, iStart), openDate: g(r, iOpen),
+      };
+    });
+    const allName = wb.SheetNames.find(n => n.includes('전체거래처'));
+    const allRows = allName ? XLSX.utils.sheet_to_json(wb.Sheets[allName], { header:1, raw:false, defval:'' }).slice(1) : body;
+    const plain = (r, i) => {
+      const feeRaw = g(r, iFee).replace(/[^0-9]/g, '');
+      return { seq: String(i + 1), taxType: g(r, iTax).replace(/^기타\((.*)\)$/, '$1'), type: g(r, iEntity).startsWith('법인') ? '법인' : '개인',
+        name: g(r, iName), biz: g(r, iBiz), corpNo: g(r, iCorp), ceo: g(r, iCeo), fee: feeRaw ? Number(feeRaw).toLocaleString() : '',
+        contractDate: g(r, iContract), start: g(r, iStart), terminationDate: g(r, iTermDate), terminationMonth: g(r, iTermMonth), terminationReason: g(r, iTermReason) };
+    };
+    const groupOf = r => g(r, iGroup) || (g(r, iStatus) === '해지' ? '해지' : (['기장대행','신고대리'].includes(g(r, iTax)) ? '기장' : '기타'));
+    await taxjApplyClients(incomingList,
+      allRows.filter(r => g(r, iName) && groupOf(r) === '기타').map(plain),
+      allRows.filter(r => g(r, iName) && groupOf(r) === '해지').map(plain),
+      `"${sheetName}" 시트에서 읽었어요.`, 'Tax.J 엑셀에서 가져옴');
+  }catch(e){
+    console.error(e);
+    smAlert('엑셀을 가져오지 못했어요', e.message || String(e), { tone:'danger' });
+  }
+}
+// [2026.10.06] 엑셀 가져오기와 Tax.J 실시간 불러오기가 같이 쓰는 '맞추기' - 사업자번호(없으면 상호명)로 같은 거래처를 찾아
+// 여기서 직접 수정한 칸(overrides)은 그대로 두고 나머지만 Tax.J 값으로 바꿈. 바뀐 칸은 이력에 남김
+async function taxjApplyClients(incomingList, otherList, termList, fromDesc, addKind){
+  {
     const digits = v => String(v || '').replace(/\D/g, '');
     const byBiz = {}, byName = {};
     clients.forEach(c => { if(digits(c.biz)) byBiz[digits(c.biz)] = c; byName[c.name] = c; });
     const LABEL = { seq:'순번', taxType:'수임구분', type:'사업자구분', name:'상호명', biz:'사업자번호', corpNo:'법인등록번호', ceo:'대표자', fee:'수임료', contractDate:'계약일', start:'수임시작일', openDate:'개업일' };
     const nowIso = new Date().toISOString(), used = new Set();
-    const merged = regular.map((r, idx) => {
-      const feeRaw = g(r, iFee).replace(/[^0-9]/g, '');
-      const incoming = {
-        seq: g(r, iSeq) || String(idx + 1), taxType: g(r, iTax).replace(/^기타\((.*)\)$/, '$1'),
-        type: g(r, iEntity).startsWith('법인') ? '법인' : '개인', name: g(r, iName), biz: g(r, iBiz), corpNo: g(r, iCorp),
-        ceo: g(r, iCeo), fee: feeRaw ? Number(feeRaw).toLocaleString() : '', contractDate: g(r, iContract), start: g(r, iStart), openDate: g(r, iOpen),
-      };
+    const merged = incomingList.map((incoming) => {
       const old = byBiz[digits(incoming.biz)] || byName[incoming.name];
       if(old) used.add(old);
-      const base = old ? { ...old } : { id: nextClientId++, history: [{ at: nowIso, kind:'Tax.J 엑셀에서 가져옴', changes: [] }] };
+      const base = old ? { ...old } : { id: nextClientId++, history: [{ at: nowIso, kind: addKind, changes: [] }] };
       base.source = 'taxj';
       const ov = base.overrides || {}, changes = [];
       Object.keys(incoming).forEach(k => {
@@ -2771,27 +2804,14 @@ async function importTaxjExcel(input){
     const dropped = clients.filter(c => !used.has(c) && c.source);          // Tax.J 기장거래처에 없는 예전 가져온 거래처
     const keepManual = clients.filter(c => !used.has(c) && !c.source && !(typeof c.id === 'number' && c.id <= 8 && /^(110-81|220-11)-\d{5}$/.test(c.biz || '')));
     if(!(await smConfirm(`기장거래처 ${merged.length}건으로 맞출까요?`,
-      `"${sheetName}" 시트에서 읽었어요.${dropped.length ? `\nTax.J 기장거래처에 없는 ${dropped.length}건은 목록에서 빠져요.` : ''}\n여기서 직접 수정한 칸은 그대로 남아요.`, { icon:'↓', okText:'가져오기' }))) return;
+      `${fromDesc}${dropped.length ? `\nTax.J 기장거래처에 없는 ${dropped.length}건은 목록에서 빠져요.` : ''}\n여기서 직접 수정한 칸은 그대로 남아요.`, { icon:'↓', okText:'가져오기' }))) return;
     clients = merged.concat(keepManual);
-    // 기타·해지 거래처: "전체거래처" 시트(없으면 같은 시트)에서 구분이 기타/해지인 줄 (읽기 전용 보기용)
-    const allName = wb.SheetNames.find(n => n.includes('전체거래처'));
-    const allRows = allName ? XLSX.utils.sheet_to_json(wb.Sheets[allName], { header:1, raw:false, defval:'' }).slice(1) : body;
-    const plain = (r, i) => {
-      const feeRaw = g(r, iFee).replace(/[^0-9]/g, '');
-      return { seq: String(i + 1), taxType: g(r, iTax).replace(/^기타\((.*)\)$/, '$1'), type: g(r, iEntity).startsWith('법인') ? '법인' : '개인',
-        name: g(r, iName), biz: g(r, iBiz), corpNo: g(r, iCorp), ceo: g(r, iCeo), fee: feeRaw ? Number(feeRaw).toLocaleString() : '',
-        contractDate: g(r, iContract), start: g(r, iStart), terminationDate: g(r, iTermDate), terminationMonth: g(r, iTermMonth), terminationReason: g(r, iTermReason) };
-    };
-    const groupOf = r => g(r, iGroup) || (g(r, iStatus) === '해지' ? '해지' : (['기장대행','신고대리'].includes(g(r, iTax)) ? '기장' : '기타'));
-    clientsOther = allRows.filter(r => g(r, iName) && groupOf(r) === '기타').map(plain);
-    clientsTerminated = allRows.filter(r => g(r, iName) && groupOf(r) === '해지').map(plain);
+    clientsOther = otherList;
+    clientsTerminated = termList;
     const d = new Date();
     settings.taxjImportedAt = `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
     renderAll();
     smAlert('Tax.J 거래처를 가져왔어요', `기장 ${merged.length}건 · 기타 ${clientsOther.length}건 · 해지 ${clientsTerminated.length}건\nTax.J와 같은 순서(법인 → 개인, 기장대행 → 신고대리)예요.`, { icon:'✓' });
-  }catch(e){
-    console.error(e);
-    smAlert('엑셀을 가져오지 못했어요', e.message || String(e), { tone:'danger' });
   }
 }
 
@@ -2905,7 +2925,8 @@ function renderClients(){
           </div>
         </div>
         <div style="text-align:right;">
-          <button class="btn primary xs" onclick="document.getElementById('taxjXlsxInput').click()">Tax.J 엑셀 가져오기</button>
+          <button class="btn primary xs" onclick="importTaxjLiveClients()" title="회사앱(Tax.J)에 입력된 거래처를 바로 받아와요(조회만)">Tax.J에서 불러오기</button>
+          <button class="btn ghost xs" onclick="document.getElementById('taxjXlsxInput').click()">Tax.J 엑셀 가져오기</button>
           <input type="file" id="taxjXlsxInput" accept=".xlsx,.xls" style="display:none;" onchange="importTaxjExcel(this)">
           <div class="hint" style="margin-top:4px;">${settings.taxjImportedAt ? '마지막 가져오기: ' + settings.taxjImportedAt : 'Tax.J → 엑셀 일괄 다운로드 파일을 올려주세요'}</div>
         </div>
@@ -3990,6 +4011,99 @@ async function loadTaxjUsage(){
     console.error('Tax.J 사용 현황 실패', e);
     taxjUsageSet(`<div class="hint">불러오지 못했어요 (${taxjEsc(e && (e.code || e.message) || e)}).</div>`);
   }finally{ if(btn) btn.disabled = false; }
+}
+// ── [2026.10.06] Tax.J 회사 데이터 조회(읽기 전용) - "회사에 입력한 걸 가져오는 게 보안상 낫다"(요청) ──
+// 개인 계정으로 로그인 → 회사 조회 전용 서버(worksread)가 계정을 확인한 뒤 필요한 항목만 돌려줌. 이 앱은 회사 데이터를 고칠 수 없음.
+// 받는 항목: 거래처 목록(대표자 주민번호 제외), 원천세 진행 일자·신고대상·신고구분. 받은 값은 이 화면에서만 씀(저장 안 함)
+const TAXJ_READ_URL = 'https://us-central1-taxj-a3e01.cloudfunctions.net/worksread';
+let taxjLive = null;   // { at, data:{ clients, itFilingStatus, filingTargets, filingCycles, itOverview } }
+async function taxjOwnerToken(){
+  await taxjLoadScript('https://www.gstatic.com/firebasejs/10.13.1/firebase-app-compat.js');
+  await taxjLoadScript('https://www.gstatic.com/firebasejs/10.13.1/firebase-auth-compat.js');
+  const app = firebase.apps.find(a=> a.name === 'taxjUsage') || firebase.initializeApp(TAXJ_FIREBASE_CONFIG, 'taxjUsage');
+  const auth = app.auth();
+  let user = auth.currentUser;
+  if(!user || String(user.email||'').toLowerCase() !== TAXJ_USAGE_OWNER){
+    const provider = new firebase.auth.GoogleAuthProvider();
+    provider.setCustomParameters({ login_hint: TAXJ_USAGE_OWNER, prompt: 'select_account' });
+    user = (await auth.signInWithPopup(provider)).user;
+  }
+  if(String(user.email||'').toLowerCase() !== TAXJ_USAGE_OWNER){ await auth.signOut(); throw new Error(`${TAXJ_USAGE_OWNER} 계정으로 로그인해야 해요`); }
+  return user.getIdToken();
+}
+async function loadTaxjLive(parts){
+  const token = await taxjOwnerToken();
+  const res = await fetch(TAXJ_READ_URL, { method:'POST', headers:{ 'Content-Type':'application/json', Authorization:'Bearer ' + token }, body: JSON.stringify(parts ? { parts } : {}) });
+  const out = await res.json().catch(()=>({}));
+  if(!res.ok || !out.ok) throw new Error(out.error || ('서버 응답 ' + res.status + ' - 회사 조회 서버(worksread)가 배포됐는지 확인해 주세요'));
+  taxjLive = { at: out.at, data: Object.assign({}, (taxjLive && taxjLive.data) || {}, out.data || {}) };
+  return taxjLive;
+}
+// Tax.J 거래처 → 이 앱 거래처 모양. 순서는 Tax.J와 같게(법인 → 개인, 기장대행 → 신고대리, 그다음 등록 순)
+function taxjLiveClientRows(){
+  const list = ((taxjLive && taxjLive.data && taxjLive.data.clients) || {}).list || [];
+  const isReg = c => ['기장대행','신고대리'].includes(c.taxType);
+  const w1 = c => c.entityType === '법인' ? 0 : c.entityType === '개인' ? 1 : 2;
+  const w2 = c => c.taxType === '기장대행' ? 0 : c.taxType === '신고대리' ? 1 : 2;
+  const sorted = list.map((c, i)=> ({ c, i })).sort((a, b)=> (w1(a.c) - w1(b.c)) || (w2(a.c) - w2(b.c)) || (a.i - b.i)).map(x=> x.c);
+  const fee = v => { const n = String(v == null ? '' : v).replace(/[^0-9]/g, ''); return n ? Number(n).toLocaleString() : ''; };
+  const row = (c, i) => ({ seq: String(i + 1), taxType: c.taxType === '기타' && c.taxTypeEtc ? c.taxTypeEtc : (c.taxType || ''), type: c.entityType === '법인' ? '법인' : '개인',
+    name: c.name || '', biz: c.bizNo || '', corpNo: c.corpRegNo || '', ceo: c.repName || '', fee: fee(c.fee), contractDate: c.contractDate || '', start: c.start || '', openDate: c.openDate || '',
+    terminationDate: c.terminationDate || '', terminationMonth: c.terminationMonth || '', terminationReason: c.terminationReason || '', taxjId: c.id });
+  const reg = sorted.filter(c=> isReg(c) && c.status !== '해지').map(row);
+  const other = sorted.filter(c=> !isReg(c) && c.status !== '해지').map(row);
+  const term = sorted.filter(c=> c.status === '해지').map(row);
+  return { reg, other, term };
+}
+async function importTaxjLiveClients(){
+  try{
+    await loadTaxjLive(['clients']);
+    const { reg, other, term } = taxjLiveClientRows();
+    if(!reg.length) throw new Error('Tax.J 기장거래처를 한 건도 받지 못했어요.');
+    const strip = r => { const o = { ...r }; delete o.terminationDate; delete o.terminationMonth; delete o.terminationReason; delete o.taxjId; return o; };
+    await taxjApplyClients(reg.map(strip), other, term, 'Tax.J 회사 데이터에서 바로 받았어요.', 'Tax.J에서 불러옴');
+  }catch(e){
+    console.error(e);
+    smAlert('Tax.J에서 불러오지 못했어요', e.message || String(e), { tone:'danger' });
+  }
+}
+// 원천세 화면 - 이 달(귀속월) Tax.J 진행 일자 조회표
+const TAXJ_IT_STAGES = [['payslip','급여명세서 전달'], ['payroll','급여마감'], ['returnClose','신고서 마감'], ['national','원천세 신고'], ['local','지방세 신고']];
+function payMonthPeriod(key){
+  const due = payDue[key];
+  if(due){ const d = new Date(Number(due.slice(0,4)), Number(due.slice(5,7)) - 2, 1); return `${d.getFullYear()}-${pad2(d.getMonth()+1)}`; }
+  return `${new Date().getFullYear()}-${pad2(parseInt(key, 10) || 1)}`;
+}
+function taxjPayPanelHtml(){
+  const head = `<div style="display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap; margin-bottom:10px;">
+      <div style="font-weight:800;">Tax.J 원천세 진행 <span class="hint" style="font-weight:600;">${taxjLive ? '· ' + taxjWhen(taxjLive.at) + ' 기준 · 조회만 돼요' : '· 회사앱에 입력한 날짜를 조회해요'}</span></div>
+      <button class="btn primary xs" onclick="refreshTaxjPayPanel(this)">${taxjLive && taxjLive.data.itFilingStatus ? '새로고침' : 'Tax.J에서 불러오기'}</button>
+    </div>`;
+  const d = taxjLive && taxjLive.data;
+  if(!d || !d.itFilingStatus) return head;
+  const period = payMonthPeriod(currentPayMonth);
+  const st = (d.itFilingStatus || {})[period] || {}, tg = d.filingTargets || {};
+  const list = taxjLiveClientRows().reg;
+  const rows = [];
+  list.forEach(r => {
+    const t = (tg[r.taxjId] || {})[period], e = st[r.taxjId] || {};
+    let lanes = t && t.marked && t.applicable ? [t.sameMonthPay ? 'sameMonth' : null, t.nextMonthPay ? 'nextMonth' : null].filter(Boolean) : [];
+    ['sameMonth','nextMonth'].forEach(k => { if(!lanes.includes(k) && e[k] && TAXJ_IT_STAGES.some(([f]) => e[k][f])) lanes.push(k); });
+    lanes.forEach(k => rows.push({ r, k, dual: lanes.length > 1, v: e[k] || {} }));
+  });
+  if(!rows.length) return head + `<div class="empty">${period.slice(0,4)}년 ${Number(period.slice(5))}월 귀속에 Tax.J 신고대상·입력된 날짜가 없어요.</div>`;
+  const cell = v => v ? `<span>${taxjEsc(v.slice(5).replace('-', '/'))}</span>` : '<span style="color:#d4c6cd;">-</span>';
+  return head + `<div class="table-scroll"><table>
+    <thead><tr><th class="tx-seq">순번</th><th>상호명</th>${TAXJ_IT_STAGES.map(([, l]) => `<th>${l}</th>`).join('')}</tr></thead>
+    <tbody>${rows.map(x => `<tr><td class="tx-seq">${taxjEsc(x.r.seq)}</td><td class="tx-name">${taxjEsc(x.r.name)}${x.dual ? ` <span class="hint" style="margin:0; font-weight:700; color:${x.k === 'sameMonth' ? '#047857' : '#be123c'};">${x.k === 'sameMonth' ? '당월' : '익월'}</span>` : ''}</td>${TAXJ_IT_STAGES.map(([f]) => `<td>${cell(x.v[f])}</td>`).join('')}</tr>`).join('')}</tbody>
+  </table></div>`;
+}
+async function refreshTaxjPayPanel(btn){
+  if(btn) btn.disabled = true;
+  try{ await loadTaxjLive(['clients','itFilingStatus','filingTargets']); }
+  catch(e){ console.error(e); smAlert('Tax.J에서 불러오지 못했어요', e.message || String(e), { tone:'danger' }); }
+  finally{ if(btn) btn.disabled = false; }
+  const box = document.getElementById('taxjPayPanel'); if(box) box.innerHTML = taxjPayPanelHtml();
 }
 function taxjUsageTableHtml(rep){
   const people = ((rep && rep.people) || []).filter(p=> p.status !== '퇴사');
