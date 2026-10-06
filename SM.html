@@ -4015,7 +4015,7 @@ async function loadTaxjUsage(){
 // ── [2026.10.06] Tax.J 회사 데이터 조회(읽기 전용) - "회사에 입력한 걸 가져오는 게 보안상 낫다"(요청) ──
 // 개인 계정으로 로그인 → 회사 조회 전용 서버(worksread)가 계정을 확인한 뒤 필요한 항목만 돌려줌. 이 앱은 회사 데이터를 고칠 수 없음.
 // 받는 항목: 거래처 목록(대표자 주민번호 제외), 원천세 진행 일자·신고대상·신고구분. 받은 값은 이 화면에서만 씀(저장 안 함)
-const TAXJ_READ_URL = 'https://us-central1-taxj-a3e01.cloudfunctions.net/worksread';
+const TAXJ_READ_URL = 'https://worksread-669418345168.us-central1.run.app';
 let taxjLive = null;   // { at, data:{ clients, itFilingStatus, filingTargets, filingCycles, itOverview } }
 async function taxjOwnerToken(){
   await taxjLoadScript('https://www.gstatic.com/firebasejs/10.13.1/firebase-app-compat.js');
