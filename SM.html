@@ -366,6 +366,10 @@
   .wl-carry .task-list li{ padding:8px 0; }
   .wl-moved{ display:inline-block; margin-left:6px; padding:1px 7px; border-radius:999px; font-size:10.5px; font-weight:700; background:var(--amber-soft); color:#b45309; }
   .wl-day .task-list li{ padding:8px 0; }
+  /* 요청 배경: '10/5에서 넘어옴' 글자 대신 노란 점으로(마우스를 올리면 날짜). 내일로 미룬 일은 분홍 점으로 구분 */
+  .wl-dot{ display:inline-block; width:7px; height:7px; border-radius:50%; margin-left:6px; vertical-align:middle; cursor:help; }
+  .wl-dot.moved{ background:var(--amber); }
+  .wl-dot.postponed{ background:var(--primary); }
 
   .deadline-list{ list-style:none; margin:0; padding:0; }
   .deadline-list li{ display:flex; align-items:center; gap:10px; justify-content:space-between; padding:10px 0; border-bottom:1px solid var(--border); font-size:13px; }
@@ -773,6 +777,30 @@
   .notice-sched{ border-top:none; margin-top:14px; padding-top:0; }
   .notice-sched-label{ color:var(--muted); }
   .notice-sched-chip{ background:#f7f1f4; color:var(--text); border:1px solid var(--border); }
+
+  /* 요청 배경(2026.10.06): To do 화면을 [왼쪽 체크리스트 길게 | 오른쪽 위 할 일 월 달력 + 아래 Today 목록]으로.
+     좁은 화면(1000px 이하)에서는 위아래로 쌓임. */
+  .wl-layout{ display:grid; grid-template-columns:minmax(290px, 360px) minmax(0, 1fr); gap:20px; align-items:start; }
+  .wl-layout.no-side{ grid-template-columns:minmax(0, 1fr); }
+  .wl-side .notice-card{ max-width:none; margin:0; padding:20px 18px 18px; position:sticky; top:16px; max-height:calc(100vh - 32px); overflow-y:auto; }
+  .wl-side .notice-items{ grid-template-columns:1fr; }
+  .wl-main{ min-width:0; display:flex; flex-direction:column; gap:18px; }
+  .wl-main > .card{ margin:0; }
+  .wl-mcal-grid{ grid-auto-rows:minmax(92px, auto); }
+  .wl-mcal-grid .cal-day{ min-height:92px; cursor:pointer; }
+  .wl-mcal-grid .cal-day:hover{ border-color:var(--primary); }
+  .wl-mcal-grid .cal-day.wl-sel{ box-shadow:inset 0 0 0 2px var(--primary-dark); }
+  .wl-mcal-top{ display:flex; align-items:center; justify-content:space-between; margin-bottom:5px; }
+  .wl-mcal-top .cal-daynum{ margin-bottom:0; }
+  .wl-mcal-cnt{ font-size:10.5px; font-weight:800; color:var(--primary-dark); background:var(--primary-soft); border-radius:999px; padding:0 6px; line-height:16px; }
+  .wl-mcal-cnt.all-done{ color:var(--muted); background:#f3eef1; }
+  .wl-ct{ font-size:11px; font-weight:600; color:var(--text); background:#fbf3f7; border-radius:5px; padding:2px 5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .wl-ct.done{ text-decoration:line-through; color:#b9a9b2; background:transparent; }
+  .wl-mcal-more{ font-size:10.5px; font-weight:700; color:var(--primary-dark); padding:0 5px; }
+  @media (max-width:1000px){
+    .wl-layout{ grid-template-columns:minmax(0, 1fr); }
+    .wl-side .notice-card{ position:static; max-height:none; }
+  }
 
   /* 홈 달력: 스크롤 없이 한 화면에 들어오도록 화면 높이에 맞춤 (칸 최소 90px) */
   .cal-grid{ grid-auto-rows:minmax(116px, auto); gap:8px; }
@@ -1499,9 +1527,12 @@ function addTask(){
   const textEl = document.getElementById('newTaskText');
   if(!textEl.value.trim()) return;
   const nt = {id: nextTaskId++, date: dateEl.value || todayStr(), text: textEl.value.trim(), done:false};
+  const noteEl = document.getElementById('newTaskNote');   // 할 일 추가할 때 메모도 같이(요청)
+  if(noteEl && noteEl.value.trim()) nt.note = noteEl.value.trim();
   pushHist(nt, '추가');
   tasks.push(nt);
   textEl.value = '';
+  if(noteEl) noteEl.value = '';
   renderAll();
 }
 function toggleTask(id){
@@ -2033,7 +2064,10 @@ function renderWorklist(){
   if(!worklistViewDate) worklistViewDate = todayS;
 
   el.innerHTML = `
-    ${refSections}
+    <div class="wl-layout ${refSections ? '' : 'no-side'}">
+    <aside class="wl-side">${refSections}</aside>
+    <div class="wl-main">
+    <div class="card" id="wlMonthCal"></div>
     <div class="card">
       <div class="notice-top">
         <span id="wlTodayBtnSlot"></span>
@@ -2060,8 +2094,11 @@ function renderWorklist(){
       <div class="toolbar" style="margin-top:12px;">
         <input type="date" id="newTaskDate" value="${worklistViewDate}">
         <input type="text" id="newTaskText" placeholder="할 일을 입력하세요 (Enter로 추가)" style="flex:1; min-width:200px;" onkeydown="if(event.key==='Enter' && !event.isComposing) addTask()">
+        <input type="text" id="newTaskNote" placeholder="메모 (선택)" style="flex:0 1 220px; min-width:120px;" onkeydown="if(event.key==='Enter' && !event.isComposing) addTask()">
         <button class="btn primary" onclick="addTask()">추가</button>
       </div>
+    </div>
+    </div>
     </div>
   `;
   renderWorklistBody();
@@ -2085,6 +2122,7 @@ function shortDate(dateStr){ const [, m, d] = dateStr.split('-'); return `${pars
 function setWorklistDay(dateStr){
   if(!dateStr) return;
   worklistViewDate = dateStr;
+  wlCalYM = dateStr.slice(0,7);
   worklistSearch = '';
   const s = document.getElementById('worklistSearch'); if(s) s.value = '';
   const j = document.getElementById('worklistJumpDate'); if(j) j.value = dateStr;
@@ -2133,6 +2171,31 @@ async function carryAllToToday(){
   });
   renderAll();
 }
+// 요청 배경: '못한 일 가져오기'(지난 일 → 오늘)와 별개로, 오늘(또는 앞으로) 적어 둔 일을 다음 날로 미루는 기능.
+// 원래 날짜는 postponedFrom 에 남겨 분홍 점으로 표시(넘어온 일의 노란 점과 구분). 마스터 시트 항목은 다시 불러와도
+// 원래 날짜에 되살아나지 않도록 수정한 항목과 같은 방식으로 처리.
+const ICON_POSTPONE = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18"/><path d="M10 15h6"/><path d="M14 12.5l2.5 2.5-2.5 2.5"/></svg>';
+function postponeOne(t){
+  const to = addDaysStr(t.date, 1);
+  if(!t.postponedFrom) t.postponedFrom = t.date;
+  if(t.source === 'master'){ t.origKey = t.date + '|' + t.text; t.source = 'edited'; hideMasterKey('hiddenMasterTasks', t.origKey); }
+  pushHist(t, '다음 날로 미룸', [{ label:'날짜', from:t.date, to }]);
+  t.date = to;
+}
+function postponeTask(id){
+  const t = tasks.find(x => x.id === id);
+  if(!t) return;
+  postponeOne(t);
+  renderAll();
+}
+async function postponeDayLeft(date){
+  const list = tasks.filter(t => t.date === date && !t.done);
+  if(!list.length) return;
+  const to = addDaysStr(date, 1);
+  if(!(await smConfirm(`남은 일 ${list.length}건을 ${shortDate(to)}로 미룰까요?`, `${shortDate(date)}에 끝내지 못한 일이에요.`, { icon:'→', okText:'미루기' }))) return;
+  list.forEach(postponeOne);
+  renderAll();
+}
 function toggleCarryList(){ worklistCarryOpen = !worklistCarryOpen; renderWorklistBody(); }
 
 function wlTaskItem(t, opts = {}){
@@ -2142,13 +2205,62 @@ function wlTaskItem(t, opts = {}){
     <li class="${t.done ? 'done' : ''}">
       <input type="checkbox" ${t.done ? 'checked' : ''} onchange="toggleTask(${t.id})">
       ${opts.showDate ? `<span class="task-date" style="cursor:pointer;" onclick="setWorklistDay('${t.date}')" title="이 날짜로 이동">${shortDate(t.date)}</span>` : ''}
-      <span class="task-text">${t.text}${t.movedFrom ? ` <span class="wl-moved">${shortDate(t.movedFrom)}에서 넘어옴</span>` : ''}${t.note ? `<span class="task-note">${escapeAttr(t.note)}</span>` : ''}</span>
+      <span class="task-text">${t.text}${t.movedFrom ? `<span class="wl-dot moved" title="${shortDate(t.movedFrom)}에서 넘어옴"></span>` : ''}${t.postponedFrom ? `<span class="wl-dot postponed" title="${shortDate(t.postponedFrom)}에서 미룸"></span>` : ''}${t.note ? `<span class="task-note">${escapeAttr(t.note)}</span>` : ''}</span>
       ${canCarry ? `<button class="btn xs" onclick="carryTaskToToday(${t.id})" title="오늘 할 일로 옮기기">오늘로 →</button>` : ''}
-      ${actionIcons(`editTask(${t.id})`, `showTaskHistory(${t.id})`, `deleteTask(${t.id})`)}
+      ${actionIcons(`editTask(${t.id})`, `showTaskHistory(${t.id})`, `deleteTask(${t.id})`).replace('<span class="row-actions">', '<span class="row-actions">' + ((!t.done && t.date >= todayS) ? `<button class="icon-btn" onclick="postponeTask(${t.id})" title="다음 날로 미루기" aria-label="다음 날로 미루기">${ICON_POSTPONE}</button>` : ''))}
     </li>`;
 }
 
+// 할 일 월 달력(요청): 날짜마다 할 일 몇 건인지 + 앞의 3건까지 제목, 넘치면 '+N'. 날짜를 누르면 아래 Today 목록이 그 날로 바뀜
+let wlCalYM = null;   // 'YYYY-MM'
+function shiftWlCal(n){
+  const [y, m] = (wlCalYM || (worklistViewDate || todayStr()).slice(0,7)).split('-').map(Number);
+  const d = new Date(y, m - 1 + n, 1);
+  wlCalYM = `${d.getFullYear()}-${pad2(d.getMonth()+1)}`;
+  renderWlMonthCal();
+}
+function renderWlMonthCal(){
+  const el = document.getElementById('wlMonthCal');
+  if(!el) return;
+  if(!wlCalYM) wlCalYM = (worklistViewDate || todayStr()).slice(0,7);
+  const [y, m] = wlCalYM.split('-').map(Number);
+  const first = new Date(y, m - 1, 1), startDow = first.getDay();
+  const todayS = todayStr(), sel = worklistViewDate || todayS;
+  const cells = [];
+  const startDate = addDaysStr(`${y}-${pad2(m)}-01`, -startDow);
+  const lastDate = new Date(y, m, 0).getDate();
+  const total = Math.ceil((startDow + lastDate) / 7) * 7;
+  for(let i = 0; i < total; i++) cells.push(addDaysStr(startDate, i));
+  const byDate = {};
+  tasks.forEach(t => { if(t.date >= cells[0] && t.date <= cells[cells.length-1]) (byDate[t.date] = byDate[t.date] || []).push(t); });
+  const dow = ['일','월','화','수','목','금','토'];
+  el.innerHTML = `
+    <div class="notice-top"><span></span><div class="today-title">Month</div><span></span></div>
+    <div class="wl-daynav">
+      <button class="wl-navbtn" onclick="shiftWlCal(-1)" title="이전 달" aria-label="이전 달">‹</button>
+      <div class="wl-daynav-label">${y}년 ${m}월</div>
+      <button class="wl-navbtn" onclick="shiftWlCal(1)" title="다음 달" aria-label="다음 달">›</button>
+    </div>
+    <div class="cal-grid wl-mcal-grid">
+      ${dow.map(x => `<div class="cal-dow">${x}</div>`).join('')}
+      ${cells.map(ds => {
+        const list = (byDate[ds] || []).slice().sort((a, b) => (a.done - b.done));
+        const left = list.filter(t => !t.done).length;
+        const shown = list.slice(0, 3);
+        return `
+        <div class="cal-day ${ds === todayS ? 'today' : ''} ${ds.slice(0,7) !== wlCalYM ? 'other' : ''} ${ds === sel ? 'wl-sel' : ''}" onclick="setWorklistDay('${ds}')" title="${list.length ? `${list.length}건 · 남은 일 ${left}건` : ''}">
+          <div class="wl-mcal-top"><div class="cal-daynum">${parseInt(ds.slice(8), 10)}</div>${list.length ? `<span class="wl-mcal-cnt ${left ? '' : 'all-done'}">${list.length}</span>` : ''}</div>
+          <div class="cal-tasks" style="max-height:none;">
+            ${shown.map(t => `<div class="wl-ct ${t.done ? 'done' : ''}">${escapeAttr(t.text)}</div>`).join('')}
+            ${list.length > 3 ? `<div class="wl-mcal-more">+${list.length - 3} 더보기</div>` : ''}
+          </div>
+        </div>`;
+      }).join('')}
+    </div>`;
+}
+
 function renderWorklistBody(){
+  renderWlMonthCal();
   const body = document.getElementById('worklistAgenda');
   if(!body) return;
   const todayS = todayStr();
@@ -2193,7 +2305,7 @@ function renderWorklistBody(){
   const dayTasks = tasks.filter(t => t.date === date);
   const left = dayTasks.filter(t => !t.done).length;
   body.innerHTML = dayTasks.length ? `
-      <div class="wl-day-head">${dayTasks.length}건 · 남은 일 ${left}건</div>
+      <div class="wl-day-head" style="display:flex; align-items:center; justify-content:space-between; gap:8px;"><span>${dayTasks.length}건 · 남은 일 ${left}건</span>${(left && date >= todayS) ? `<button class="btn ghost xs" onclick="postponeDayLeft('${date}')" title="이 날 남은 일을 모두 다음 날로">남은 일 ${date === todayS ? '내일로' : '다음 날로'} →</button>` : ''}</div>
       <ul class="task-list">${dayTasks.map(t => wlTaskItem(t)).join('')}</ul>`
     : `<div class="empty">이 날은 등록된 할 일이 없어요.</div>`;
 }
