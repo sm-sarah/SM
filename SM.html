@@ -814,6 +814,12 @@
   .wl-mcal-cnt.all-done{ color:var(--muted); background:#f3eef1; }
   .wl-ct{ font-size:11px; font-weight:600; color:var(--text); background:#fbf3f7; border-radius:5px; padding:2px 5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .wl-ct.done{ text-decoration:line-through; color:#b9a9b2; background:transparent; }
+  /* 요청 배경(2026.10.06): To do 화면은 가로폭을 넓게 쓰고, 세 칸이 비슷해 보여 구분이 안 된다고 해서 역할별로 색을 나눔.
+     체크리스트 = 이달의 큰일(크림+골드 띠), Today = 메인(흰색+분홍 띠, 그림자 진하게), Month·History = 돌아보기용(옅은 분홍 바탕, 차분한 띠) */
+  main #tab-worklist{ max-width:none; }
+  .wl-side .notice-card{ background:linear-gradient(180deg,#fff8ea 0%,#fffdf8 55%); border:1px solid #f1dfba; border-top:4px solid #f5b544; }
+  .wl-layout > .card.wl-today-card{ background:#fff; border-top:4px solid var(--primary); box-shadow:0 2px 4px rgba(150,50,90,.08), 0 18px 36px -14px rgba(150,50,90,.35); }
+  .wl-main > .card{ background:#fbf6f9; border-top:4px solid #d9bfcd; box-shadow:var(--shadow-sm); }
   .wl-mcal-more{ font-size:10.5px; font-weight:700; color:var(--primary-dark); padding:0 5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   @media (max-width:1300px){
     .wl-layout{ grid-template-columns:minmax(250px, 300px) minmax(0, 1fr); }
@@ -2099,7 +2105,7 @@ function renderWorklist(){
   el.innerHTML = `
     <div class="wl-layout ${refSections ? '' : 'no-side'}">
     <aside class="wl-side">${refSections}</aside>
-    <div class="card">
+    <div class="card wl-today-card">
       <div class="notice-top">
         <span id="wlTodayBtnSlot"></span>
         <div class="today-title">Today</div>
