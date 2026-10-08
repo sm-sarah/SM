@@ -384,6 +384,15 @@
   .wl-dot{ display:inline-block; width:7px; height:7px; border-radius:50%; margin-left:6px; vertical-align:middle; cursor:help; }
   .wl-dot.moved{ background:var(--amber); }
   .wl-dot.postponed{ background:var(--primary); }
+  /* 요청 배경(2026.10.08): 홈·Month 달력에 회사(Tax.J) 공휴일(날짜 빨강 + 이름)과 내 휴가·재택·회식 등을 작은 배지로 */
+  .cal-grid > .cal-day:nth-child(n) .cal-daynum.tj-hol{ color:#e11d48; }
+  .cal-grid > .cal-day.other:nth-child(n) .cal-daynum.tj-hol{ color:#f0a3b5; }
+  .tj-holname{ font-size:10px; font-weight:700; margin-left:4px; color:#e11d48; }
+  .tj-atts{ display:flex; flex-wrap:wrap; gap:3px; margin-bottom:3px; }
+  .tj-att{ font-size:10.5px; font-weight:700; line-height:16px; border-radius:5px; padding:0 5px; white-space:nowrap; }
+  .tj-att.leave{ background:#e0f2fe; color:#0369a1; }
+  .tj-att.remote{ background:#dcfce7; color:#047857; }
+  .tj-att.etc{ background:#f1f5f9; color:#64748b; }
   /* 요청 배경(2026.10.08): 브라우저 기본 말풍선(title)이 마우스 물음표 커서와 겹쳐서, 점의 왼쪽(커서 반대쪽)에 직접 그린 말풍선으로 바꿈 */
   .wl-dot[data-tip]{ position:relative; }
   .wl-dot[data-tip]:hover::after{ content:attr(data-tip); position:absolute; right:calc(100% + 8px); top:50%; transform:translateY(-50%);
@@ -822,7 +831,8 @@
   /* 요청 배경(2026.10.06): To do 화면은 가로폭을 넓게 쓰고, 세 칸이 비슷해 보여 구분이 안 된다고 해서 역할별로 색을 나눔.
      체크리스트 = 이달의 큰일(크림+골드 띠), Today = 메인(흰색+분홍 띠, 그림자 진하게), Month·History = 돌아보기용(옅은 분홍 바탕, 차분한 띠) */
   main #tab-worklist{ max-width:none; }
-  .wl-side .notice-card{ background:linear-gradient(180deg,#fff8ea 0%,#fffdf8 55%); border:1px solid #f1dfba; border-top:4px solid #f5b544; }
+  /* 요청 배경(2026.10.08): 체크리스트 색을 크림+골드 → 밝은 연하늘색으로 */
+  .wl-side .notice-card{ background:linear-gradient(180deg,#eaf6ff 0%,#f8fcff 55%); border:1px solid #cfe6f7; border-top:4px solid #7cc4ee; }
   .wl-layout > .card.wl-today-card{ background:#fff; border-top:4px solid var(--primary); box-shadow:0 2px 4px rgba(150,50,90,.08), 0 18px 36px -14px rgba(150,50,90,.35); }
   .wl-main > .card{ background:#fbf6f9; border-top:4px solid #d9bfcd; box-shadow:var(--shadow-sm); }
   .wl-hist-agenda{ max-height:340px; }
@@ -1845,6 +1855,7 @@ const CAL_DEADLINE_CLASS = {
   '부가가치세':'cd-vat', '원천세·급여':'cd-pay', '법인세':'cd-corp', '종합소득세':'cd-indiv', '세무일정':'cd-etc',
 };
 function renderCalendar(){
+  const tjMarks = taxjCalMarks();   // 회사 공휴일·제외일정·내 근태(요청 2026.10.08)
   const first = new Date(calYear, calMonth, 1);
   const startDow = first.getDay();
   const daysInMonth = new Date(calYear, calMonth + 1, 0).getDate();
@@ -1901,9 +1912,11 @@ function renderCalendar(){
       ${cells.map(c => {
         const dayDeadlines = deadlinesAll.filter(x => x.date === c.dateStr);
         const dayEvents = events.filter(x => x.date === c.dateStr);
+        const mk = (tjMarks || {})[c.dateStr];
         return `
         <div class="cal-day ${c.dateStr===todayS?'today':''} ${c.other?'other':''}">
-          <div class="cal-daynum">${c.d}</div>
+          <div class="cal-daynum ${mk && mk.hol ? 'tj-hol' : ''}">${c.d}${mk && mk.hol ? `<span class="tj-holname">${taxjEsc(mk.hol)}</span>` : ''}</div>
+          ${taxjCalItemsHtml(mk)}
           <div class="cal-tasks">
             ${dayDeadlines.map(x => `<div class="cal-task cal-deadline ${CAL_DEADLINE_CLASS[x.domain] || ''}" title="${x.label}">${x.label}</div>`).join('')}
             ${dayEvents.map(ev => `<div class="cal-task cal-event" onclick="openEvent(${ev.id})" title="${ev.text} (눌러서 수정·이력·삭제)">★ ${ev.text}</div>`).join('')}
@@ -2381,6 +2394,7 @@ function renderWlMonthCal(){
   const byDate = {};
   tasks.forEach(t => { if(t.date >= cells[0] && t.date <= cells[cells.length-1]) (byDate[t.date] = byDate[t.date] || []).push(t); });
   const dow = ['일','월','화','수','목','금','토'];
+  const tjMarks = taxjCalMarks();   // 회사 공휴일·제외일정·내 근태(요청 2026.10.08)
   el.innerHTML = `
     <div class="notice-top"><span></span><div class="today-title">Month</div><span></span></div>
     <div class="wl-daynav">
@@ -2394,9 +2408,11 @@ function renderWlMonthCal(){
         const list = (byDate[ds] || []).slice().sort((a, b) => (a.done - b.done));
         const left = list.filter(t => !t.done).length;
         const shown = list.slice(0, 2);   // 칸을 낮게(3단 배치) - 제목 2건까지
+        const mk = (tjMarks || {})[ds];
         return `
         <div class="cal-day ${ds === todayS ? 'today' : ''} ${ds.slice(0,7) !== wlCalYM ? 'other' : ''} ${ds === sel ? 'wl-sel' : ''}" onclick="setWlHistDay('${ds}')" title="${list.length ? `${list.length}건 · 남은 일 ${left}건` : ''}">
-          <div class="wl-mcal-top"><div class="cal-daynum">${parseInt(ds.slice(8), 10)}</div>${list.length ? `<span class="wl-mcal-cnt ${left ? '' : 'all-done'}">${list.length}</span>` : ''}</div>
+          <div class="wl-mcal-top"><div class="cal-daynum ${mk && mk.hol ? 'tj-hol' : ''}">${parseInt(ds.slice(8), 10)}${mk && mk.hol ? `<span class="tj-holname">${taxjEsc(mk.hol)}</span>` : ''}</div>${list.length ? `<span class="wl-mcal-cnt ${left ? '' : 'all-done'}">${list.length}</span>` : ''}</div>
+          ${taxjCalItemsHtml(mk)}
           <div class="cal-tasks" style="max-height:none;">
             ${shown.map(t => `<div class="wl-ct ${t.done ? 'done' : ''}">${escapeAttr(t.text)}</div>`).join('')}
             ${list.length > 2 ? `<div class="wl-mcal-more">+${list.length - 2}건 더</div>` : ''}
@@ -4470,7 +4486,7 @@ async function taxjRestoreFull(){
       if(fromSheet && (!best || fromSheet.at > best.at)){ best = fromSheet; try{ await taxjIdbSet(best); }catch(e){} }
     }catch(e){ /* 탭이 아직 없으면 그냥 넘어감 */ }
   }else taxjFullRestoreTried = false;   // Google 연결 뒤 다시 시도
-  if(best && (!taxjFull || best.at > taxjFull.at)){ taxjFull = best; taxjFullSaveMsg = '저장해 둔 자료예요. 최신으로 받으려면 새로고침'; if(activeTab === 'taxj') renderTaxjFull(); }
+  if(best && (!taxjFull || best.at > taxjFull.at)){ taxjFull = best; taxjFullSaveMsg = '저장해 둔 자료예요. 최신으로 받으려면 새로고침'; if(activeTab === 'taxj') renderTaxjFull(); if(activeTab === 'home') renderHome(); if(activeTab === 'worklist') renderWlMonthCal(); }
 }
 const TAXJ_FULL_GROUPS = [
   { id:'filing', label:'신고 진행 현황', keys:[
@@ -4768,6 +4784,32 @@ function taxjFilingHtml(docs){
     return subBar + TAXJ_FULL_GROUPS[0].keys.map(([k, label]) => taxjSectionHtml(label, docs['s__' + k])).join('');
   }
   return subBar + `<div class="card"><div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:10px;">${ctrl}</div>${body}</div>`;
+}
+
+// ── [2026.10.08] 홈·Month 달력에 회사(Tax.J) 공휴일·제외일정과 '내 근태'(휴가·재택) 표시(요청: "둘 다 넣고, 내 근태만") ──
+// 저장해 둔 Tax.J 자료(taxjFull)에서 읽음: 공용 제외일(s__exclusionDays: 공휴일/회식 등) + 로그인한 회사 계정과 이메일이 같은 직원의
+// attendance.leaveUsage(휴가)·remoteEntries(재택). 회사웹에서 근태를 바꾸면 Tax.J 메뉴에서 '새로고침'해야 달력에도 반영됨
+function taxjCalMarks(){
+  let full = null;
+  try{ full = taxjFull; if(!taxjFullRestoreTried) taxjRestoreFull(); }catch(e){ return null; }   // 첫 화면에서 아직 선언 전이면 건너뜀
+  if(!full || !full.docs) return null;
+  if(taxjCalMarks.cache && taxjCalMarks.cache.at === full.at) return taxjCalMarks.cache.map;
+  const docs = full.docs, map = {};
+  const add = (d, k, v) => { if(!d) return; const o = map[d] = map[d] || { hol:'', items:[] }; if(k === 'hol') o.hol = o.hol || v; else o.items.push(v); };
+  (Array.isArray(docs.s__exclusionDays) ? docs.s__exclusionDays : []).forEach(x => {
+    if(!x || !x.date || x.deleted) return;
+    if(x.reason === '공휴일') add(x.date, 'hol', x.name || '공휴일');
+    else add(x.date, 'item', { cls:'etc', label: x.name || x.reason || '제외일', title: [x.reason, x.name].filter(Boolean).join(' · ') });
+  });
+  const me = (docs.profiles || []).find(p => p && String(p.email || '').toLowerCase() === String(full.email || '').toLowerCase());
+  const att = me ? ((docs['data__' + me.id] || {}).attendance || {}) : {};
+  (att.leaveUsage || []).forEach(u => { if(u && u.date && !u.deleted) add(u.date, 'item', { cls:'leave', label: u.type || '휴가', title: [u.type, u.subtype, u.memo].filter(Boolean).join(' · ') }); });
+  (att.remoteEntries || []).forEach(r => { if(r && r.date && !r.deleted) add(r.date, 'item', { cls:'remote', label: r.bonus ? '특별재택' : r.half === 'am' ? '오전재택' : r.half === 'pm' ? '오후재택' : '재택', title: [r.bonus ? '특별재택' : r.half ? '반일재택' : '정기재택', r.memo].filter(Boolean).join(' · ') }); });
+  taxjCalMarks.cache = { at: full.at, map };
+  return map;
+}
+function taxjCalItemsHtml(mk){
+  return mk && mk.items.length ? `<div class="tj-atts">${mk.items.map(i => `<span class="tj-att ${i.cls}" title="${escapeAttr(i.title || i.label)}">${taxjEsc(i.label)}</span>`).join('')}</div>` : '';
 }
 
 // ── [2026.10.08] 검토표 메뉴(요청: "검토표는 따로 메뉴 만들어서 거기서 조회") - 설정에 있던 'Tax.J 검토표 계산식'을 옮겨옴. 메뉴를 열면 자동으로 불러옴 ──
