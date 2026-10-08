@@ -2978,11 +2978,16 @@ async function taxjApplyClients(incomingList, otherList, termList, fromDesc, add
     clients.forEach(c => { if(digits(c.biz)) byBiz[digits(c.biz)] = c; byName[c.name] = c; });
     const LABEL = { seq:'순번', taxType:'수임구분', type:'사업자구분', name:'상호명', biz:'사업자번호', corpNo:'법인등록번호', ceo:'대표자', fee:'수임료', contractDate:'계약일', start:'수임시작일', openDate:'개업일' };
     const nowIso = new Date().toISOString(), used = new Set();
-    const merged = incomingList.map((incoming) => {
+    // 요청 배경(2026.10.08): 가져올 때 '업데이트된 내용만'(직접 고친 칸 유지, 기본) / '원데이터'(직접 고친 칸 모두 지우고 Tax.J 값으로)를 고를 수 있게 함.
+    // 원데이터는 위험해서 확인창의 '고급 기능'을 펼쳐야 고를 수 있고, 고르면 한 번 더 확인받음.
+    const editedClients = clients.filter(c => Object.keys(c.overrides || {}).length);
+    let rawMode = false;
+    const buildMerged = () => { used.clear(); return incomingList.map((incoming) => {
       const old = byBiz[digits(incoming.biz)] || byName[incoming.name];
       if(old) used.add(old);
       const base = old ? { ...old } : { id: nextClientId++, history: [{ at: nowIso, kind: addKind, changes: [] }] };
       base.source = 'taxj';
+      if(rawMode && old && Object.keys(base.overrides || {}).length){ base.overrides = {}; base.history = (base.history || []).concat([{ at: nowIso, kind:'원데이터로 가져옴 (직접 수정 해제)', changes: [] }]); }
       const ov = base.overrides || {}, changes = [];
       Object.keys(incoming).forEach(k => {
         if(ov[k]) return;
@@ -2992,11 +2997,27 @@ async function taxjApplyClients(incomingList, otherList, termList, fromDesc, add
       });
       if(old && changes.length) base.history = (base.history || []).concat([{ at: nowIso, kind:'Tax.J 반영', changes }]);
       return base;
-    });
+    }); };
+    buildMerged();
     const dropped = clients.filter(c => !used.has(c) && c.source);          // Tax.J 기장거래처에 없는 예전 가져온 거래처
     const keepManual = clients.filter(c => !used.has(c) && !c.source && !(typeof c.id === 'number' && c.id <= 8 && /^(110-81|220-11)-\d{5}$/.test(c.biz || '')));
-    if(!(await smConfirm(`기장거래처 ${merged.length}건으로 맞출까요?`,
-      `${fromDesc}${dropped.length ? `\nTax.J 기장거래처에 없는 ${dropped.length}건은 목록에서 빠져요.` : ''}\n여기서 직접 수정한 칸은 그대로 남아요.`, { icon:'↓', okText:'가져오기' }))) return;
+    const hEsc = v => String(v == null ? '' : v).replace(/&/g,'&amp;').replace(/</g,'&lt;');
+    window._taxjRawMode = false;
+    const ok = await smDialog({ title:`기장거래처 ${incomingList.length}건으로 맞출까요?`, icon:'↓', okText:'가져오기', html: `
+      <div>${hEsc(fromDesc)}${dropped.length ? `<br>Tax.J 기장거래처에 없는 ${dropped.length}건은 목록에서 빠져요.` : ''}<br>여기서 직접 수정한 칸은 그대로 남아요.</div>
+      <details style="margin-top:12px; text-align:left;">
+        <summary style="cursor:pointer; font-weight:700;">고급 기능</summary>
+        <label style="display:flex; gap:6px; align-items:flex-start; margin-top:8px;"><input type="radio" name="taxjMode" checked onchange="window._taxjRawMode=false"><span><b>업데이트된 내용만 가져오기</b> (기본, 직접 고친 칸 유지)</span></label>
+        <label style="display:flex; gap:6px; align-items:flex-start; margin-top:6px; color:#e2445c;"><input type="radio" name="taxjMode" onchange="window._taxjRawMode=true"><span><b>원데이터 가져오기</b> (직접 고친 칸을 모두 지우고 Tax.J 값으로 바꿔요${editedClients.length ? ` · 고친 거래처 ${editedClients.length}곳` : ''})</span></label>
+      </details>` });
+    if(!ok) return;
+    if(window._taxjRawMode){
+      if(!(await smConfirm('원데이터로 가져올까요?', editedClients.length
+        ? `직접 고친 칸이 있는 거래처 ${editedClients.length}곳(${editedClients.slice(0,5).map(c => c.name).join(', ')}${editedClients.length > 5 ? ' 등' : ''})의 수정 내용이 모두 Tax.J 값으로 바뀌어요.\n되돌릴 수 없어요.`
+        : '직접 고친 칸이 없어서 업데이트만 가져오는 것과 결과가 같아요.', { tone:'danger', icon:'!', okText:'원데이터로 가져오기' }))) return;
+      rawMode = true;
+    }
+    const merged = buildMerged();
     clients = merged.concat(keepManual);
     clientsOther = otherList;
     clientsTerminated = termList;
