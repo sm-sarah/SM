@@ -1067,6 +1067,8 @@
     <div id="tab-corp" class="tab"></div>
     <div id="tab-indiv" class="tab"></div>
     <div id="tab-clients" class="tab"></div>
+    <div id="tab-review" class="tab"></div>
+    <div id="tab-taxj" class="tab"></div>
     <div id="tab-settings" class="tab"></div>
   </main>
 </div>
@@ -1380,6 +1382,8 @@ const ICONS = {
   corp: '<rect x="4" y="3" width="12" height="18" rx="1"/><path d="M16 21V8l4 2v11z"/><path d="M7.5 7h1.6M11 7h1.6M7.5 11h1.6M11 11h1.6M7.5 15h1.6M11 15h1.6"/>',
   indiv: '<circle cx="12" cy="8" r="4"/><path d="M4.2 20c0-4.3 3.6-6.8 7.8-6.8s7.8 2.5 7.8 6.8"/>',
   clients: '<circle cx="9" cy="8" r="3.2"/><path d="M2.8 19.5c0-3.6 2.8-5.8 6.2-5.8s6.2 2.2 6.2 5.8"/><circle cx="17" cy="8.6" r="2.4"/><path d="M15 13.9c2.9.2 4.7 2.2 4.9 5.3"/>',
+  review: '<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 3.5h6v3H9z"/><path d="M8.5 11l1.5 1.5 3-3"/><path d="M8.5 16.5h7"/>',
+  taxj: '<rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/><path d="M7 9.5h4M7 12.5h7"/>',
   settings: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>',
 };
 
@@ -1392,6 +1396,8 @@ const TABS = [
   {id:'corp',     label:'법인세'},
   {id:'indiv',    label:'종소세'},
   {id:'clients',  label:'거래처'},
+  {id:'review',   label:'검토표'},
+  {id:'taxj',     label:'Tax.J'},
   {id:'settings', label:'설정'},
 ];
 const TAB_TITLES = {
@@ -1403,10 +1409,19 @@ const TAB_TITLES = {
   corp:['법인세','법인 거래처의 결산~신고 단계를 추적합니다.'],
   indiv:['종합소득세','개인사업자 거래처의 신고 단계를 추적합니다.'],
   clients:['거래처','모든 신고 탭이 참조하는 기준정보입니다.'],
+  review:['검토표','Tax.J 원천세 검토표 계산식을 조회해요.'],
+  taxj:['Tax.J','회사웹(Tax.J)의 데이터를 그대로 조회해요.'],
   settings:['설정',''],
 };
 
 const NAV_SUBMENUS = {
+  taxj: [
+    {js:"setTaxjFullView('filing')", label:'신고 진행 현황'},
+    {js:"setTaxjFullView('pay')",    label:'급여·일용직'},
+    {js:"setTaxjFullView('work')",   label:'근태·경비·결재'},
+    {js:"setTaxjFullView('info')",   label:'공지·세무일정·회사정보'},
+    {js:"setTaxjFullView('remote')", label:'회사웹 화면'},
+  ],
   clients: [
     {js:"setClientsView('regular')",    label:'기장거래처'},
     {js:"setClientsView('other')",      label:'기타거래처'},
@@ -4371,6 +4386,189 @@ function taxjFormulaDocHtml(doc){
       ${(sec.lines || []).length ? `<ul style="margin:4px 0 0; padding-left:18px; font-size:13px; line-height:1.6;">${sec.lines.map(l => `<li>${taxjEsc(l)}</li>`).join('')}</ul>` : ''}
     </div>`).join('');
 }
+// ── [2026.10.08] Tax.J 회사 데이터 전체 보기(요청: "회사웹 정보도 다 내 권한·내가 만든 정보라 모든 정보를 가져오고 싶다") ──
+// 회사 계정(@ciacc.co.kr)으로 로그인해 Tax.J 저장소(Firestore taxj-a3e01 / 컬렉션 taxj)를 직접 읽음. 읽기만 하고 회사 원본은 고치지 않음.
+// 받은 값은 이 화면에서만 씀(저장 안 함). 암호화된 민감정보(주민번호·계정 ID/PW 등)는 '잠김'으로만 보임.
+// 문서 구조(Tax.J fsPayloadToDocs와 같음): profiles / data__<직원id>{settings,attendance,expense,schedule} / s__<공용항목>. 큰 값은 '<키>~p1..' 조각으로 나뉨
+const TAXJ_COMPANY_DOMAIN = '@ciacc.co.kr';
+let taxjFull = null;            // { at, email, docs:{ 문서키: 값 } }
+let taxjFullView = 'filing';    // filing | pay | work | info | remote
+let taxjFullPerson = '';        // 근태·경비에서 보는 직원 id
+let taxjFullBusy = false, taxjFullErr = '';
+const TAXJ_FULL_GROUPS = [
+  { id:'filing', label:'신고 진행 현황', keys:[
+    ['filingTargets','신고대상 (원천세)'], ['filingCycles','신고구분 (매월·반기)'], ['itFilingStatus','원천세 진행 일자'], ['itOverview','원천세 총괄'],
+    ['reviewFigures','원천세 검토 수치'], ['reviewMeta','검토 메모·상태'], ['reviewStatus','검토 현황'], ['filingStatus','신고·제출 현황'],
+    ['vatFilingTargets','부가세 신고대상'], ['vatReviewFigures','부가세 검토 수치'], ['profitLossReports','손익보고서'], ['filingHelp','신고 도움말'] ] },
+  { id:'pay', label:'급여·일용직', keys:[ ['payroll','급여'], ['dailyWorkers','일용직'] ] },
+  { id:'work', label:'근태·경비·결재', keys:[
+    ['approvals','결재 문서'], ['exclusionDays','근무 제외일'], ['workHourExceptions','근무시간 예외'], ['specialPeriods','특별 기간'],
+    ['specialPeriodHistory','특별 기간 이력'], ['lunchLimitHistory','점심 한도 이력'] ] },
+  { id:'info', label:'공지·세무일정·회사정보', keys:[
+    ['noticeHistory','공지사항'], ['taxScheduleOverrides','세무일정 수정분'], ['taxScheduleCustomItems','세무일정 추가 항목'],
+    ['companyName','회사명'], ['companyInfo','사내정보'], ['teamInfo','팀 정보'], ['hrTeamInfo','인사 팀 정보'], ['orgChart','조직도'], ['seatChart','자리 배치도'],
+    ['clients','거래처'], ['personalInfo','거래처 개인정보'], ['autoPhrases','자주 쓰는 문구'],
+    ['teamPolicyHistory','팀 지침 이력'], ['opsPolicyHistory','운영 지침 이력'], ['quickGuideHistory','빠른 안내 이력'] ] },
+];
+const TAXJ_PERSON_PARTS = [['attendance','근태'], ['expense','경비'], ['schedule','일정'], ['settings','개인 설정']];
+// 자주 나오는 안쪽 항목 이름만 한글로(나머지는 원래 이름 그대로)
+const TAXJ_KEY_KO = { id:'ID', name:'이름', title:'제목', content:'내용', body:'내용', text:'내용', memo:'메모', note:'메모', date:'날짜', month:'월', amount:'금액',
+  status:'상태', type:'유형', author:'작성자', createdAt:'작성', updatedAt:'수정', at:'시각', email:'이메일', position:'직급', start:'시작', end:'종료',
+  bizNo:'사업자번호', corpRegNo:'법인등록번호', repName:'대표자', fee:'수임료', taxType:'수임구분', entityType:'사업자구분', reason:'사유', category:'구분' };
+
+async function taxjCompanyApp(){
+  await taxjLoadScript('https://www.gstatic.com/firebasejs/10.13.1/firebase-app-compat.js');
+  await taxjLoadScript('https://www.gstatic.com/firebasejs/10.13.1/firebase-auth-compat.js');
+  await taxjLoadScript('https://www.gstatic.com/firebasejs/10.13.1/firebase-firestore-compat.js');
+  return firebase.apps.find(a=> a.name === 'taxjCompany') || firebase.initializeApp(TAXJ_FIREBASE_CONFIG, 'taxjCompany');
+}
+async function loadTaxjFull(relogin){
+  if(taxjFullBusy) return;
+  taxjFullBusy = true; taxjFullErr = ''; renderTaxjFull();
+  try{
+    const app = await taxjCompanyApp();
+    const auth = app.auth();
+    if(relogin) await auth.signOut();
+    let user = auth.currentUser;
+    if(!user) user = await new Promise(res => { const off = auth.onAuthStateChanged(u => { off(); res(u); }); });
+    if(!user || !String(user.email || '').toLowerCase().endsWith(TAXJ_COMPANY_DOMAIN)){
+      if(user) await auth.signOut();
+      const provider = new firebase.auth.GoogleAuthProvider();
+      provider.setCustomParameters({ hd: TAXJ_COMPANY_DOMAIN.slice(1), prompt:'select_account' });
+      user = (await auth.signInWithPopup(provider)).user;
+    }
+    if(!String(user.email || '').toLowerCase().endsWith(TAXJ_COMPANY_DOMAIN)){ await auth.signOut(); throw new Error(`회사 계정(${TAXJ_COMPANY_DOMAIN})으로 로그인해야 해요`); }
+    const snap = await app.firestore().collection('taxj').get();
+    const mains = {}, parts = {};
+    snap.forEach(d => {
+      const id = d.id;
+      if(id === '_meta' || id.startsWith('_presence__')) return;
+      const m = id.match(/^(.*)~p(\d+)$/);
+      if(m) (parts[m[1]] = parts[m[1]] || {})[Number(m[2])] = d.data(); else mains[id] = d.data();
+    });
+    const docs = {};
+    Object.keys(mains).forEach(k => {
+      const m = mains[k], n = m.n || 1; let json = m.j || 'null';
+      for(let i = 1; i < n; i++){ const p = parts[k] && parts[k][i]; if(!p || p.w !== m.w){ json = null; break; } json += p.j; }
+      if(json != null){ try{ docs[k] = JSON.parse(json); }catch(e){} }
+    });
+    taxjFull = { at: Date.now(), email: user.email, docs };
+  }catch(e){
+    console.error(e);
+    taxjFullErr = e && e.code === 'permission-denied' ? '이 계정은 Tax.J 저장소를 읽을 권한이 없어요(회사 계정인지 확인해 주세요).' : (e && (e.message || e.code)) || String(e);
+  }finally{ taxjFullBusy = false; renderTaxjFull(); }
+}
+function setTaxjFullView(v){ taxjFullView = v; if(activeTab !== 'taxj') switchTab('taxj'); else renderTaxjFull(); }
+function setTaxjFullPerson(id){ taxjFullPerson = id; renderTaxjFull(); }
+function taxjIsLocked(v){ return v && typeof v === 'object' && !Array.isArray(v) && typeof v.iv === 'string' && typeof v.data === 'string' && Object.keys(v).length <= 3; }
+function taxjKo(k){ return TAXJ_KEY_KO[k] ? `${TAXJ_KEY_KO[k]}` : k; }
+// 값의 모양에 맞춰 그림: 객체 배열 → 표, 객체 → 펼치는 목록, 나머지 → 글자
+function taxjValHtml(v, depth){
+  depth = depth || 0;
+  if(v == null || v === '') return '<span style="color:#d4c6cd;">-</span>';
+  if(taxjIsLocked(v)) return '<span class="hint" style="margin:0;">🔒 잠김(암호화)</span>';
+  if(typeof v !== 'object') return taxjEsc(typeof v === 'boolean' ? (v ? '예' : '아니오') : v);
+  if(Array.isArray(v)){
+    if(!v.length) return '<span class="hint" style="margin:0;">(비어 있음)</span>';
+    if(v.every(x => x && typeof x === 'object' && !Array.isArray(x) && !taxjIsLocked(x))){
+      const cols = []; v.forEach(x => Object.keys(x).forEach(k => { if(!cols.includes(k) && k !== 'history') cols.push(k); }));
+      const show = cols.slice(0, 14);
+      return `<div class="table-scroll"><table><thead><tr>${show.map(c => `<th>${taxjEsc(taxjKo(c))}</th>`).join('')}</tr></thead>
+        <tbody>${v.slice(0, 500).map(x => `<tr>${show.map(c => `<td style="vertical-align:top;">${taxjCellHtml(x[c], depth)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>
+        ${v.length > 500 ? `<div class="hint">앞의 500건만 보여요 (전체 ${v.length}건)</div>` : ''}${cols.length > 14 ? `<div class="hint">칸이 많아 앞의 14칸만 보여요.</div>` : ''}`;
+    }
+    return `<ul style="margin:0; padding-left:18px;">${v.slice(0, 500).map(x => `<li>${taxjValHtml(x, depth + 1)}</li>`).join('')}</ul>`;
+  }
+  const keys = Object.keys(v);
+  if(!keys.length) return '<span class="hint" style="margin:0;">(비어 있음)</span>';
+  if(keys.every(k => v[k] == null || typeof v[k] !== 'object' || taxjIsLocked(v[k])))
+    return `<div style="display:grid; grid-template-columns:max-content 1fr; gap:2px 12px; font-size:13px;">${keys.map(k => `<div style="color:var(--muted);">${taxjEsc(taxjKo(k))}</div><div>${taxjValHtml(v[k], depth + 1)}</div>`).join('')}</div>`;
+  return keys.map(k => `<details style="margin:4px 0 4px ${depth ? 8 : 0}px;" ${keys.length === 1 ? 'open' : ''}><summary style="cursor:pointer; font-weight:700;">${taxjEsc(taxjKo(k))} <span class="hint" style="margin:0; font-weight:500;">${taxjSizeTxt(v[k])}</span></summary><div style="margin:6px 0 0 12px;">${taxjValHtml(v[k], depth + 1)}</div></details>`).join('');
+}
+function taxjCellHtml(v, depth){
+  if(v && typeof v === 'object' && !taxjIsLocked(v)) return `<details><summary style="cursor:pointer;" class="hint">${taxjSizeTxt(v) || '보기'}</summary>${taxjValHtml(v, depth + 1)}</details>`;
+  return taxjValHtml(v, depth + 1);
+}
+function taxjSizeTxt(v){
+  if(Array.isArray(v)) return `${v.length}건`;
+  if(v && typeof v === 'object' && !taxjIsLocked(v)) return `${Object.keys(v).length}항목`;
+  return '';
+}
+function taxjSectionHtml(label, value){
+  const empty = value == null || (typeof value === 'object' && !taxjIsLocked(value) && !Object.keys(value).length);
+  return `<details class="card" style="margin-bottom:10px;" ${empty ? '' : ''}>
+    <summary style="cursor:pointer; font-weight:800; font-size:15px;">${taxjEsc(label)} <span class="hint" style="margin:0; font-weight:500;">${empty ? '(내용 없음)' : taxjSizeTxt(value)}</span></summary>
+    <div style="margin-top:10px;">${empty ? '<div class="empty">Tax.J에 저장된 내용이 없어요.</div>' : taxjValHtml(value, 0)}</div>
+  </details>`;
+}
+function renderTaxjFull(){
+  const el = document.getElementById('tab-taxj');
+  if(!el) return;
+  const head = `
+    <div class="card" style="margin-bottom:12px;">
+      <div class="cl-head">
+        <div class="cl-subtabs">${TAXJ_FULL_GROUPS.map(g => `<button class="cl-subtab ${taxjFullView === g.id ? 'on' : ''}" onclick="setTaxjFullView('${g.id}')">${g.label}</button>`).join('')}<button class="cl-subtab ${taxjFullView === 'remote' ? 'on' : ''}" onclick="setTaxjFullView('remote')">회사웹 화면</button></div>
+        <div style="text-align:right;">
+          <button class="btn primary xs" onclick="loadTaxjFull()" ${taxjFullBusy ? 'disabled' : ''}>${taxjFullBusy ? '불러오는 중…' : taxjFull ? '새로고침' : 'Tax.J에서 불러오기'}</button>
+          ${taxjFull ? `<button class="btn ghost xs" onclick="loadTaxjFull(true)">다른 계정으로</button>` : ''}
+          <div class="hint" style="margin-top:4px;">${taxjFull ? `${taxjEsc(taxjFull.email)} · ${taxjWhen(taxjFull.at)} 기준 · 조회만 돼요` : `회사 계정(${TAXJ_COMPANY_DOMAIN})으로 로그인해 Tax.J 저장소를 읽어요. 회사 원본은 바뀌지 않아요.`}</div>
+        </div>
+      </div>
+      ${taxjFullErr ? `<div class="hint" style="color:#e2445c; margin-top:8px;">불러오지 못했어요: ${taxjEsc(taxjFullErr)}</div>` : ''}
+    </div>`;
+  // [2026.10.08] "개인웹에서 회사웹 화면 그대로(원격처럼)"(요청) - Tax.J 사이트를 이 화면 안에 그대로 띄움. 같은 주소(sm-sarah.github.io)라서
+  // 이 브라우저에서 Tax.J에 로그인돼 있으면 그대로 이어지고, Tax.J의 모든 기능(수정 포함)을 회사 권한 그대로 씀
+  if(taxjFullView === 'remote'){
+    if(!el.querySelector('#taxjRemoteFrame')){
+      el.innerHTML = head.replace(/<div style="text-align:right;">[\s\S]*?<\/div>\s*<\/div>\s*<\/div>/, `<div style="text-align:right;">
+          <button class="btn ghost xs" onclick="document.getElementById('taxjRemoteFrame').src = TAXJ_PAGE_URL + '?_=' + Date.now()">새로고침</button>
+          <button class="btn ghost xs" onclick="window.open(TAXJ_PAGE_URL, '_blank', 'noopener')">새 창으로</button>
+          <div class="hint" style="margin-top:4px;">여기서 고치면 회사 원본이 바뀌어요.</div>
+        </div></div></div>`)
+        + `<iframe id="taxjRemoteFrame" src="${TAXJ_PAGE_URL}" title="Tax.J" style="width:100%; height:calc(100vh - 230px); min-height:560px; border:1px solid var(--border); border-radius:14px; background:#fff;"></iframe>`;
+    }
+    return;
+  }
+  if(!taxjFull){ el.innerHTML = head + (taxjFullBusy ? '' : '<div class="card"><div class="empty">오른쪽 위 "Tax.J에서 불러오기"를 누르면 회사 데이터가 여기에 보여요.</div></div>'); return; }
+  const docs = taxjFull.docs;
+  const g = TAXJ_FULL_GROUPS.find(x => x.id === taxjFullView) || TAXJ_FULL_GROUPS[0];
+  let body = g.keys.map(([k, label]) => taxjSectionHtml(label, docs['s__' + k])).join('');
+  if(g.id === 'work'){
+    const people = (docs.profiles || []).filter(p => p && p.id);
+    if(!taxjFullPerson || !people.some(p => p.id === taxjFullPerson)) taxjFullPerson = (people.find(p => String(p.email || '').toLowerCase() === String(taxjFull.email).toLowerCase()) || people[0] || {}).id || '';
+    const pd = docs['data__' + taxjFullPerson] || {};
+    body = `<div class="card" style="margin-bottom:12px;">
+        <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;"><b>직원별 근태·경비·일정</b>
+          <select onchange="setTaxjFullPerson(this.value)">${people.map(p => `<option value="${escapeAttr(p.id)}" ${p.id === taxjFullPerson ? 'selected' : ''}>${taxjEsc(p.name || p.email || p.id)}${p.position ? ' · ' + taxjEsc(p.position) : ''}</option>`).join('')}</select>
+        </div></div>`
+      + TAXJ_PERSON_PARTS.map(([k, label]) => taxjSectionHtml(label, pd[k])).join('') + body;
+  }
+  // 다시 그려도 펼쳐 둔 칸은 그대로 펼쳐 있게(같은 보기·같은 직원일 때)
+  const sig = taxjFullView + '|' + taxjFullPerson + '|' + taxjFull.at;
+  const openIdx = el.dataset.sig === sig ? Array.from(el.querySelectorAll('details')).map((d, i) => d.open ? i : -1).filter(i => i >= 0) : null;
+  el.innerHTML = head + body;
+  el.dataset.sig = sig;
+  if(openIdx){ const ds = el.querySelectorAll('details'); openIdx.forEach(i => { if(ds[i]) ds[i].open = true; }); }
+}
+
+// ── [2026.10.08] 검토표 메뉴(요청: "검토표는 따로 메뉴 만들어서 거기서 조회") - 설정에 있던 'Tax.J 검토표 계산식'을 옮겨옴. 메뉴를 열면 자동으로 불러옴 ──
+function renderReview(){
+  const el = document.getElementById('tab-review');
+  if(!el) return;
+  if(!taxjFormulaHtml && activeTab === 'review' && !renderReview.loading){ renderReview.loading = true; setTimeout(() => loadTaxjFormula().finally(() => { renderReview.loading = false; }), 0); }
+  el.innerHTML = `
+    <div class="card">
+      <div class="row" style="display:flex; align-items:flex-start; justify-content:space-between; gap:10px;">
+        <div>
+          <h3 style="margin:0 0 4px;">원천세 검토표 계산식</h3>
+          <div class="hint"><b>로그인 필요 없음</b> · 공개된 Tax.J 페이지에서 계산식 정리만 읽어 와요. Tax.J 계산식이 바뀌면 여기도 최신으로 보여요.</div>
+        </div>
+        <button type="button" class="btn primary xs" id="taxjFormulaBtn" onclick="loadTaxjFormula()">새로고침</button>
+      </div>
+      <div id="taxjFormulaBox" style="margin-top:10px;">${taxjFormulaHtml || '<div class="hint">불러오는 중…</div>'}</div>
+    </div>`;
+}
+
 function taxjUsageTableHtml(rep){
   const people = ((rep && rep.people) || []).filter(p=> p.status !== '퇴사');
   const notifTxt = { granted:'허용', denied:'차단', default:'안 정함', unsupported:'미지원' };
@@ -4470,20 +4668,7 @@ function renderSettings(){
         <div id="taxjUsageBox" style="margin-top:10px;">${taxjUsageHtml}</div>
       </div>
 
-      <!-- [2026.10.06] "검토표 계산식을 기억하고 싶다 - 사용 현황처럼 불러와 보기"(요청). 업무 데이터는 받지 않고, Tax.J 페이지에 들어 있는
-           계산식 정리(taxjFormulaDoc)만 읽어 옴. Tax.J 계산식을 고치면 그 정리도 같이 고쳐지므로 불러올 때마다 최신 -->
-      <div class="settings-block" id="settings-taxj-formula">
-        <div class="row">
-          <div>
-            <h3>Tax.J 검토표 계산식</h3>
-            <div class="hint"><b>로그인 필요 없음</b> · 회사 계정 없이 공개된 Tax.J 페이지에서 원천세 검토표 계산식만 읽어 와요. 업무 자료는 받지 않아요.</div>
-          </div>
-          <div class="ctrl">
-            <button type="button" class="btn primary xs" id="taxjFormulaBtn" onclick="loadTaxjFormula()">불러오기</button>
-          </div>
-        </div>
-        <div id="taxjFormulaBox" style="margin-top:10px;">${taxjFormulaHtml}</div>
-      </div>
+      <!-- [2026.10.08] 'Tax.J 검토표 계산식'은 따로 만든 '검토표' 메뉴로 옮김(요청) -->
 
       <div class="settings-block" id="settings-recurring">
         <div style="flex:1;">
@@ -4785,6 +4970,8 @@ function renderAccounts(){
 function renderAllNoSave(){
   try{ ensurePayMonths(); ensureTaxRows(); generateRecurringTasks(); }catch(e){ console.warn(e); }
   renderHome(); renderWorklist(); renderAccounts(); renderVat(); renderPay(); renderCorp(); renderIndiv(); renderClients(); renderSettings();
+  if(activeTab === 'review') renderReview();
+  if(activeTab === 'taxj') renderTaxjFull();
 }
 function renderAll(){
   renderAllNoSave();
