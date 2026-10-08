@@ -384,6 +384,11 @@
   .wl-dot{ display:inline-block; width:7px; height:7px; border-radius:50%; margin-left:6px; vertical-align:middle; cursor:help; }
   .wl-dot.moved{ background:var(--amber); }
   .wl-dot.postponed{ background:var(--primary); }
+  /* 요청 배경(2026.10.08): 브라우저 기본 말풍선(title)이 마우스 물음표 커서와 겹쳐서, 점의 왼쪽(커서 반대쪽)에 직접 그린 말풍선으로 바꿈 */
+  .wl-dot[data-tip]{ position:relative; }
+  .wl-dot[data-tip]:hover::after{ content:attr(data-tip); position:absolute; right:calc(100% + 8px); top:50%; transform:translateY(-50%);
+    white-space:nowrap; padding:3px 8px; border-radius:6px; background:#fff; border:1px solid var(--border); box-shadow:0 2px 8px rgba(0,0,0,.08);
+    font-size:11.5px; font-weight:600; color:var(--text, #333); z-index:20; pointer-events:none; text-decoration:none; }
 
   .deadline-list{ list-style:none; margin:0; padding:0; }
   .deadline-list li{ display:flex; align-items:center; gap:10px; justify-content:space-between; padding:10px 0; border-bottom:1px solid var(--border); font-size:13px; }
@@ -2347,7 +2352,7 @@ function wlTaskItem(t, opts = {}){
     <li class="${t.done ? 'done' : ''}">
       ${opts.carryPick ? `<input type="checkbox" class="carry-pick" ${carryPicked.has(t.id) ? 'checked' : ''} onchange="toggleCarryPick(${t.id})" title="넘길 일로 고르기">` : `<input type="checkbox" ${t.done ? 'checked' : ''} onchange="toggleTask(${t.id})">`}
       ${opts.showDate ? `<span class="task-date" style="cursor:pointer;" onclick="setWorklistDay('${t.date}')" title="이 날짜로 이동">${shortDate(t.date)}</span>` : ''}
-      <span class="task-text">${t.text}${t.movedFrom ? `<span class="wl-dot moved" title="${shortDate(t.movedFrom)}에서 넘어옴"></span>` : ''}${t.postponedFrom ? `<span class="wl-dot postponed" title="${shortDate(t.postponedFrom)}에서 미룸"></span>` : ''}${t.note ? `<span class="task-note">${escapeAttr(t.note)}</span>` : ''}</span>
+      <span class="task-text">${t.text}${t.movedFrom ? `<span class="wl-dot moved" data-tip="${shortDate(t.movedFrom)}에서 넘어옴"></span>` : ''}${t.postponedFrom ? `<span class="wl-dot postponed" data-tip="${shortDate(t.postponedFrom)}에서 미룸"></span>` : ''}${t.note ? `<span class="task-note">${escapeAttr(t.note)}</span>` : ''}</span>
       ${canCarry ? `<button class="btn xs" onclick="carryTaskToToday(${t.id})" title="오늘 할 일로 옮기기">오늘로 →</button>` : ''}
       ${actionIcons(`editTask(${t.id})`, `showTaskHistory(${t.id})`, `deleteTask(${t.id})`).replace('<span class="row-actions">', '<span class="row-actions">' + ((!t.done && t.date >= todayS) ? `<button class="icon-btn" onclick="postponeTask(${t.id})" title="다음 날로 미루기" aria-label="다음 날로 미루기">${ICON_POSTPONE}</button>` : ''))}
     </li>`;
