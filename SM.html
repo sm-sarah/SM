@@ -1013,6 +1013,37 @@
     padding:4px 0 10px; margin-bottom:4px; box-shadow:none;
   }
   .side-nav{ width:100%; display:flex; flex-direction:column; align-items:center; gap:4px; }
+  /* 요청 배경(2026.10.08): "메뉴·하위메뉴가 회사웹(Tax.J)과 너무 똑같다" → '가로형 사이드바'로 바꿈.
+     아이콘 옆에 이름을 나란히, 고른 메뉴는 핑크→골드 알약, 하위메뉴는 고른 메뉴 바로 아래 점 목록으로 펼침(옆으로 뜨던 방식 대신).
+     단축 아이콘(뒤로·홈·휴지통·퀵배포)은 맨 위 한 줄로. 하위메뉴가 옆으로 뜨지 않으니 그 자리(nav-gutter)는 없앰 */
+  aside.sidebar{ width:212px; margin:24px 20px 0 16px; padding:14px 12px; align-items:stretch; gap:2px; border-radius:22px;
+    max-height:calc(100vh - 108px); overflow-y:auto; scrollbar-width:thin; }
+  aside.sidebar .quick-bar{ flex-direction:row; justify-content:space-between; padding:0 4px 12px; margin-bottom:8px; }
+  .side-nav{ align-items:stretch; gap:2px; }
+  .nav-gutter{ display:none; }
+  .nav-wrap{ display:block; }
+  .nav-item{ width:100%; flex-direction:row; justify-content:flex-start; gap:10px; padding:4px 14px 4px 5px; border-radius:999px; }
+  .nav-item .nav-ic{ width:32px; height:32px; flex:none; }
+  .nav-item svg{ width:18px; height:18px; }
+  .nav-item .tiny{ font-size:14px; font-weight:700; }
+  .nav-item:hover{ background:var(--primary-soft); color:var(--primary-dark); }
+  .nav-item:hover .nav-ic{ background:transparent; }
+  .nav-item.active{ background:linear-gradient(135deg,#f5a3c2 0%,#f7c46e 100%); color:#fff; box-shadow:0 6px 14px -6px rgba(236,123,166,.75); }
+  .nav-item.active .nav-ic{ background:rgba(255,255,255,.28); box-shadow:none; }
+  .nav-flyout{ position:static; display:none; opacity:1; visibility:visible; transform:none; min-width:0; padding:4px 0 8px 22px; }
+  .nav-flyout.open{ display:flex; }
+  .nav-flyout::before{ display:none; }
+  .nav-flyout-item{ font-size:13px; font-weight:600; color:var(--muted); padding:6px 8px 6px 18px; border-radius:10px; white-space:normal; }
+  .nav-flyout-item::before{ left:6px; width:5px; height:5px; border-radius:50%; background:#e6cfdb; }
+  .nav-flyout-item:hover{ color:var(--primary-dark); background:#fdf3f7; }
+  .nav-flyout-item:hover::before{ background:var(--primary); }
+  /* 좁은 화면에서는 이름을 숨기고 아이콘만 */
+  @media (max-width:900px){
+    aside.sidebar{ width:auto; margin-right:8px; }
+    aside.sidebar .quick-bar{ flex-direction:column; align-items:center; }
+    .nav-item{ padding:4px; justify-content:center; }
+    .nav-item .tiny, .nav-flyout.open{ display:none; }
+  }
 
   #connectingOverlay{ position:fixed; inset:0; z-index:1100; background:rgba(255,255,255,.55); display:flex; align-items:center; justify-content:center; }
   #connectingOverlay .co-box{ background:#fff; border:1px solid var(--border); border-radius:16px; padding:16px 22px; font-size:14px; font-weight:700; color:var(--primary-dark);
