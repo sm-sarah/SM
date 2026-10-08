@@ -1615,11 +1615,15 @@ function addTask(){
 }
 // 요청 배경(2026.10.08): 스프레드시트에서 줄바꿈된 할 일 목록을 복사해 붙여넣으면 한 줄씩 건별로 등록되게 함.
 // 체크박스 칸까지 같이 복사되면 딸려오는 TRUE/FALSE·빈 칸은 빼고 내용만 사용. 한 줄만 붙여넣으면 평소처럼 입력칸에 들어감.
-function pasteTasks(e){
-  const raw = (e.clipboardData || window.clipboardData)?.getData('text') || '';
-  const lines = raw.split(/\r?\n/).map(line =>
+// 여러 줄 글을 한 줄씩 나눔. 스프레드시트 체크박스 칸에서 딸려오는 TRUE/FALSE·빈 칸·빈 줄은 뺌(할 일·체크리스트 공용)
+function splitPastedLines(raw){
+  return String(raw || '').split(/\r?\n/).map(line =>
     line.split('\t').map(c => c.trim()).filter(c => c && !/^(TRUE|FALSE|☐|☑|✓|✔)$/i.test(c)).join(' ').trim()
   ).filter(Boolean);
+}
+function pasteTasks(e){
+  const raw = (e.clipboardData || window.clipboardData)?.getData('text') || '';
+  const lines = splitPastedLines(raw);
   if(lines.length < 2) return;   // 한 줄이면 기본 붙여넣기
   e.preventDefault();
   const date = document.getElementById('newTaskDate').value || todayStr();
@@ -2062,12 +2066,18 @@ async function deleteChecklistItem(month, idx){
   worklistChecklist[month].splice(idx, 1);
   renderAll();
 }
+// 요청 배경(2026.10.08): 체크리스트도 줄바꿈된 목록을 붙여넣으면 한 줄씩 건별로 등록되게 함.
 async function addChecklistItem(month){
-  const r = await smForm(`${month} 체크리스트 추가`, [{ label:'항목', placeholder:'예: 부가세 안내문 발송' }], { okText:'추가', wide:true });
-  if(!r || !(r[0] || '').trim()) return;
-  const item = { text: r[0].trim(), done:false, source:'user' };
-  pushHist(item, '추가');
-  (worklistChecklist[month] = worklistChecklist[month] || []).push(item);
+  const r = await smForm(`${month} 체크리스트 추가`, [{ label:'항목 (여러 줄이면 한 줄씩 따로 등록)', type:'textarea', placeholder:'예: 부가세 안내문 발송\n목록을 붙여넣어도 돼요', rows:4 }], { okText:'추가', wide:true });
+  if(!r) return;
+  const lines = splitPastedLines(r[0]);
+  if(!lines.length) return;
+  const list = (worklistChecklist[month] = worklistChecklist[month] || []);
+  lines.forEach(text => {
+    const item = { text, done:false, source:'user' };
+    pushHist(item, '추가');
+    list.push(item);
+  });
   renderAll();
 }
 
@@ -2384,6 +2394,29 @@ function defaultWlHistDate(){
   const past = tasks.filter(t => t.date < todayS).map(t => t.date).sort();
   return past.length ? past[past.length - 1] : addDaysStr(todayS, -1);
 }
+// 요청 배경(2026.10.08): History 카드 오른쪽 위 + 아이콘을 누르면 할 일 등록 팝업. 날짜는 보고 있는 날로 채워둠.
+// 내용에 여러 줄을 적거나 붙여넣으면 한 줄씩 건별로 등록(메모는 한 건일 때만 붙임).
+const ICON_PLUS = '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>';
+async function addTaskPopup(dateStr){
+  const r = await smForm('할 일 추가', [
+    { label:'날짜', type:'date', value:dateStr || todayStr() },
+    { label:'할 일 (여러 줄이면 한 줄씩 따로 등록)', type:'textarea', placeholder:'할 일을 입력하거나 목록을 붙여넣으세요', rows:4 },
+    { label:'메모 · 비고 (선택)', type:'textarea', placeholder:'진행 상황, 연락처, 참고할 내용 등', rows:2 },
+  ], { okText:'추가', wide:true });
+  if(!r) return;
+  const date = r[0] || dateStr || todayStr();
+  const lines = splitPastedLines(r[1]);
+  if(!lines.length) return;
+  const note = (r[2] || '').trim();
+  lines.forEach(text => {
+    const nt = {id: nextTaskId++, date, text, done:false};
+    if(note && lines.length === 1) nt.note = note;
+    pushHist(nt, '추가');
+    tasks.push(nt);
+  });
+  wlHistDate = date;
+  renderAll();
+}
 function setWlHistDay(dateStr){
   if(!dateStr) return;
   wlHistDate = dateStr;
@@ -2399,7 +2432,8 @@ function renderWlHistory(){
   const list = tasks.filter(t => t.date === date).slice().sort((a, b) => (a.done - b.done));
   const left = list.filter(t => !t.done).length;
   el.innerHTML = `
-    <div class="notice-top"><span></span><div class="today-title">History</div><span></span></div>
+    <div class="notice-top"><span></span><div class="today-title">History</div>
+      <div style="display:flex; align-items:center; gap:6px; justify-self:end;"><button class="icon-btn" onclick="addTaskPopup('${date}')" title="할 일 추가" aria-label="할 일 추가">${ICON_PLUS}</button></div></div>
     <div class="wl-daynav">
       <button class="wl-navbtn" onclick="setWlHistDay(addDaysStr('${date}', -1))" title="이전 날" aria-label="이전 날">‹</button>
       <div class="wl-daynav-label">${worklistDayLabel(date)}${rel ? ` <span class="wl-rel">${rel}</span>` : ''}</div>
