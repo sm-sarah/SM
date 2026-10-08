@@ -1013,6 +1013,26 @@
     padding:4px 0 10px; margin-bottom:4px; box-shadow:none;
   }
   .side-nav{ width:100%; display:flex; flex-direction:column; align-items:center; gap:4px; }
+  /* 매뉴얼(2026.10.08): [왼쪽 목록 | 오른쪽 본문] */
+  .mn-layout{ display:grid; grid-template-columns:260px 1fr; gap:18px; margin-top:14px; align-items:start; }
+  .mn-list{ display:flex; flex-direction:column; gap:4px; border-right:1px solid var(--border); padding-right:14px; min-height:320px; }
+  .mn-list input{ font-family:inherit; font-size:13px; padding:8px 12px; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--bg); margin-bottom:6px; }
+  .mn-item{ font-family:inherit; text-align:left; border:none; background:transparent; border-radius:10px; padding:8px 10px; cursor:pointer; display:flex; flex-direction:column; gap:2px; }
+  .mn-item:hover{ background:#fdf3f7; }
+  .mn-item.on{ background:var(--primary-soft); }
+  .mn-item-t{ font-size:13.5px; font-weight:700; color:var(--text); }
+  .mn-item.on .mn-item-t{ color:var(--primary-dark); }
+  .mn-item-s{ font-size:11px; color:var(--muted); }
+  .mn-view{ min-width:0; }
+  .mn-view-head{ display:flex; justify-content:space-between; align-items:flex-start; gap:10px; padding-bottom:12px; margin-bottom:12px; border-bottom:1px solid var(--border); }
+  .mn-view-cat{ font-size:11.5px; font-weight:700; color:var(--primary-dark); }
+  .mn-view-title{ font-size:19px; font-weight:800; color:var(--text); }
+  .mn-body{ font-size:14px; line-height:1.75; color:var(--text); text-align:left; word-break:break-word; }
+  .mn-body .mn-h{ font-size:15.5px; font-weight:800; margin:10px 0 2px; color:var(--primary-dark); }
+  .mn-body ul, .mn-body ol{ margin:2px 0; padding-left:22px; }
+  .mn-body .mn-gap{ height:8px; }
+  .mn-body a{ color:var(--primary-dark); }
+  @media (max-width:900px){ .mn-layout{ grid-template-columns:1fr; } .mn-list{ border-right:none; padding-right:0; min-height:0; } }
   /* 요청 배경(2026.10.08): "메뉴·하위메뉴가 회사웹(Tax.J)과 너무 똑같다" → '가로형 사이드바'로 바꿈.
      아이콘 옆에 이름을 나란히, 고른 메뉴는 핑크→골드 알약, 하위메뉴는 고른 메뉴 바로 아래 점 목록으로 펼침(옆으로 뜨던 방식 대신).
      단축 아이콘(뒤로·홈·휴지통·퀵배포)은 맨 위 한 줄로. 하위메뉴가 옆으로 뜨지 않으니 그 자리(nav-gutter)는 없앰 */
@@ -1109,6 +1129,7 @@
     <div id="tab-worklist" class="tab"></div>
     <div id="tab-accounts" class="tab"></div>
     <div id="tab-links" class="tab"></div>
+    <div id="tab-manuals" class="tab"></div>
     <div id="tab-vat" class="tab"></div>
     <div id="tab-pay" class="tab"></div>
     <div id="tab-corp" class="tab"></div>
@@ -1341,6 +1362,7 @@ let worklistSchedule = {};   // 실제 데이터는 Google 시트(SM_data)에서
 let trashBin = [];   // 삭제한 거래처/할 일/체크리스트를 임시 보관 (복구 가능)
 let nextTrashId = 1;
 // 계정 보관함(아래 '계정' 부분 참고) - 다른 데이터와 같이 처음부터 선언해 둠
+let manuals = [], nextManualId = 1, manualCats = ['개인','회사','신고'];   // [2026.10.08] 매뉴얼 메뉴: [{id, cat, title, body, at, history}]
 let links = [], nextLinkId = 1;   // [2026.10.08] 링크 메뉴: 자주 쓰는 사이트 [{id, name, url, group, memo, at}]
 let accountVault = null;   // { v:1, salt, iv, data } - 암호화된 상태로만 저장·동기화
 let accountItems = null;   // 잠금 해제 후 메모리에만: [{id, site, url, user, pw, memo, at}]
@@ -1424,6 +1446,7 @@ function pill(text, kind){ return `<span class="pill ${kind}">${text}</span>`; }
 const ICONS = {
   home: '<path d="M4 11.5 12 4l8 7.5"/><path d="M6 10v9a1 1 0 0 0 1 1h3.2v-6h3.6v6H17a1 1 0 0 0 1-1v-9"/>',
   worklist: '<rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18"/><path d="M8 3v4"/><path d="M16 3v4"/>',
+  manuals: '<path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5z"/><path d="M4 20.5A2.5 2.5 0 0 0 6.5 23H20v-5"/><path d="M8.5 8h7M8.5 11.5h5"/>',
   links: '<path d="M10 13a5 5 0 0 0 7.07 0l3-3a5 5 0 0 0-7.07-7.07l-1.5 1.5"/><path d="M14 11a5 5 0 0 0-7.07 0l-3 3a5 5 0 0 0 7.07 7.07l1.5-1.5"/>',
   accounts: '<circle cx="8" cy="15" r="4"/><path d="M10.8 12.2 20 3"/><path d="M16.5 6.5l2.5 2.5"/><path d="M14 9l2 2"/>',
   vat: '<path d="M6 2.5h12v18l-2.3-1.4L13.3 20.5 11 19.1 8.7 20.5 6.4 19.1z"/><path d="M9 8h6M9 12h6M9 16h3.5"/>',
@@ -1441,6 +1464,7 @@ const TABS = [
   {id:'worklist', label:'To do'},
   {id:'accounts', label:'계정'},
   {id:'links',    label:'링크'},
+  {id:'manuals',  label:'매뉴얼'},
   {id:'vat',      label:'부가세'},
   {id:'pay',      label:'원천세'},
   {id:'corp',     label:'법인세'},
@@ -1453,6 +1477,7 @@ const TABS = [
 const TAB_TITLES = {
   home:['홈','오늘 기준으로 챙겨야 할 신고 기한과 현황을 한눈에 봅니다.'],
   worklist:['To do',''],
+  manuals:['매뉴얼','업무하면서 필요한 방법·절차를 분야별로 정리해요.'],
   links:['링크','자주 쓰는 사이트를 모아 두고 바로 열어요.'],
   accounts:['계정','개인 사이트 아이디·비밀번호를 암호화해서 보관해요.'],
   vat:['부가가치세','기간별 신고 현황을 관리합니다.'],
@@ -1488,6 +1513,10 @@ const NAV_SUBMENUS = {
   ],
 };
 
+// 매뉴얼 하위메뉴는 내가 정한 분야 목록 그대로(전체 + 분야들) - 분야를 바꾸면 메뉴도 바로 바뀜
+Object.defineProperty(NAV_SUBMENUS, 'manuals', { enumerable:true, get(){
+  return [{ js:"setManualCat('')", label:'전체' }].concat((manualCats || []).map((c, i) => ({ js:`setManualCat(manualCats[${i}])`, label:c })));
+} });
 function goToSettingsSection(anchor){
   if(activeTab !== 'settings'){ switchTab('settings'); }
   setTimeout(() => {
@@ -3397,6 +3426,7 @@ const GOOGLE_DATA_KEYS = [
   'clientsOther','clientsTerminated',
   'trashBin','nextTrashId',
   'links','nextLinkId',
+  'manuals','nextManualId','manualCats',
   'accountVault',   // [2026.10.08] 계정 보관함이 Google 시트에 저장되지 않아 다시 열면 "보관함 만들기"가 다시 뜨던 문제 수정(요청)
 ];
 
@@ -3411,6 +3441,7 @@ function collectGoogleSnapshot(){
     clientsOther, clientsTerminated,
     trashBin, nextTrashId,
     links, nextLinkId,
+    manuals, nextManualId, manualCats,
     accountVault,
   };
 }
@@ -3474,6 +3505,10 @@ async function loadFromGoogleSheet(){
     if(map.accountVault)  accountVault = JSON.parse(map.accountVault);
     if(map.links)         links        = JSON.parse(map.links);
     if(map.nextLinkId)    nextLinkId   = JSON.parse(map.nextLinkId);
+    if(map.manuals)       manuals      = JSON.parse(map.manuals);
+    if(map.nextManualId)  nextManualId = JSON.parse(map.nextManualId);
+    if(map.manualCats)    manualCats   = JSON.parse(map.manualCats);
+    if(map.manualCats)    try{ renderNav(); }catch(e){}   // 매뉴얼 분야 하위메뉴 갱신
   } catch(e){
     console.error('시트 데이터 파싱 실패', e);
   }
@@ -3661,6 +3696,9 @@ function applySnapshot(o){
   if(o.accountVault) accountVault = o.accountVault;
   if(o.links) links = o.links;
   if(o.nextLinkId) nextLinkId = o.nextLinkId;
+  if(o.manuals) manuals = o.manuals;
+  if(o.nextManualId) nextManualId = o.nextManualId;
+  if(o.manualCats) manualCats = o.manualCats;
   if(o.clients) clients = o.clients;
   if(o.tasks) tasks = o.tasks;
   if(o.vatData) vatData = o.vatData;
@@ -5026,6 +5064,132 @@ function renderSettings(){
 }
 
 
+// ===== 매뉴얼: 분야별 업무 매뉴얼 =====
+// 요청 배경(2026.10.08): "업무하면서 필요한 매뉴얼을 정리할 메뉴. 분야(개인·회사·신고 등)를 정해서 하위메뉴로 나눠서".
+// 분야는 직접 추가·이름변경·순서변경 가능하고 왼쪽 메뉴의 '매뉴얼' 아래 하위메뉴로 나옴. 화면은 [왼쪽 목록 | 오른쪽 본문].
+// 본문은 글로 적되 간단한 표시를 알아봄: '# 제목', '- 목록', '1. 순서', '**굵게**', 주소(https://…)는 링크. 고칠 때마다 이력이 남음
+let manualCat = '', manualSel = null, manualSearch = '';
+function setManualCat(c){ manualCat = c || ''; manualSel = null; if(activeTab !== 'manuals') switchTab('manuals'); else renderManuals(); }
+function manualBodyHtml(t){
+  const inline = x => taxjEsc(x).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>');
+  const out = []; let list = null;
+  const close = () => { if(list){ out.push(`</${list}>`); list = null; } };
+  String(t || '').split('\n').forEach(line => {
+    let m;
+    if((m = /^\s*#{1,3}\s+(.*)$/.exec(line))){ close(); out.push(`<div class="mn-h">${inline(m[1])}</div>`); }
+    else if((m = /^\s*[-•·]\s+(.*)$/.exec(line))){ if(list !== 'ul'){ close(); out.push('<ul>'); list = 'ul'; } out.push(`<li>${inline(m[1])}</li>`); }
+    else if((m = /^\s*\d+[.)]\s+(.*)$/.exec(line))){ if(list !== 'ol'){ close(); out.push('<ol>'); list = 'ol'; } out.push(`<li>${inline(m[1])}</li>`); }
+    else if(!line.trim()){ close(); out.push('<div class="mn-gap"></div>'); }
+    else { close(); out.push(`<div>${inline(line)}</div>`); }
+  });
+  close();
+  return out.join('');
+}
+function manualFields(x){
+  x = x || {};
+  const cats = manualCats.length ? manualCats : ['미분류'];
+  return [
+    { label:'분야', options: cats, value: x.cat || manualCat || cats[0] },
+    { label:'제목', value:x.title || '', placeholder:'예: 원천세 반기 신고 순서' },
+    { label:'내용 (# 제목, - 목록, 1. 순서, **굵게** · Enter 줄바꿈, Ctrl+Enter 저장)', type:'textarea', value:x.body || '', rows:16, placeholder:'# 준비물\n- 급여대장\n- 지급명세서\n\n# 순서\n1. 홈택스 로그인\n2. 원천세 신고 메뉴' },
+  ];
+}
+async function manualAdd(){
+  const r = await smForm('매뉴얼 추가', manualFields(), { okText:'추가', wide:true });
+  if(!r || !(r[1] || '').trim()) return;
+  const m = { id: nextManualId++, cat: r[0], title: r[1].trim(), body: r[2] || '', at: new Date().toISOString(), history: [] };
+  manuals.push(m); manualSel = m.id; manualCat = manualCat && manualCat !== m.cat ? m.cat : manualCat;
+  renderAll();
+}
+async function manualEdit(id){
+  const m = manuals.find(x => x.id === id);
+  if(!m) return;
+  const r = await smForm('매뉴얼 수정', manualFields(m), { okText:'저장', icon:'✎', wide:true });
+  if(!r || !(r[1] || '').trim()) return;
+  if(r[0] === m.cat && r[1].trim() === m.title && (r[2] || '') === m.body) return;
+  (m.history = m.history || []).unshift({ at: m.at, cat: m.cat, title: m.title, body: m.body });
+  if(m.history.length > 20) m.history.length = 20;   // 예전 내용은 최근 20번까지만 보관
+  Object.assign(m, { cat: r[0], title: r[1].trim(), body: r[2] || '', at: new Date().toISOString() });
+  renderAll();
+}
+async function manualDelete(id){
+  const m = manuals.find(x => x.id === id);
+  if(!m || !(await smConfirm('이 매뉴얼을 삭제할까요?', m.title, { tone:'danger', icon:'!', okText:'삭제' }))) return;
+  manuals = manuals.filter(x => x.id !== id); if(manualSel === id) manualSel = null;
+  renderAll();
+}
+function manualHistory(id){
+  const m = manuals.find(x => x.id === id);
+  if(!m) return;
+  const fmt = iso => { const d = new Date(iso); return isNaN(d) ? '' : `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`; };
+  const h = m.history || [];
+  smDialog({ title:`${m.title} · 예전 내용`, icon:'⟲', cancelText:null, okText:'닫기', wide:true,
+    html: h.length ? h.map(x => `<details style="text-align:left; margin:6px 0;"><summary style="cursor:pointer; font-weight:700;">${fmt(x.at)} 까지의 내용 <span class="hint" style="margin:0;">${taxjEsc(x.cat)} · ${taxjEsc(x.title)}</span></summary><div class="mn-body" style="margin-top:6px;">${manualBodyHtml(x.body)}</div></details>`).join('')
+      : '<div class="hint">아직 고친 적이 없어요.</div>' });
+}
+// 분야 관리: 한 줄에 하나씩. 줄 수가 같으면 같은 자리끼리 이름을 바꾼 것으로 보고, 없어진 분야의 매뉴얼은 '미분류'로 옮김
+async function manualEditCats(){
+  const r = await smForm('분야 관리', [{ label:'분야 (한 줄에 하나 · 위아래 순서대로 메뉴에 나와요)', type:'textarea', value: manualCats.join('\n'), rows:8 }], { okText:'저장', icon:'✎' });
+  if(!r) return;
+  const next = Array.from(new Set(String(r[0] || '').split('\n').map(x => x.trim()).filter(Boolean)));
+  if(!next.length){ smAlert('분야를 하나 이상 남겨 주세요'); return; }
+  const old = manualCats.slice();
+  if(next.length === old.length) manuals.forEach(m => { const i = old.indexOf(m.cat); if(i >= 0) m.cat = next[i]; });
+  const orphan = manuals.filter(m => !next.includes(m.cat));
+  if(orphan.length){
+    if(!(await smConfirm('없어지는 분야가 있어요', `매뉴얼 ${orphan.length}개는 '미분류'로 옮겨져요.`, { okText:'저장' }))) return;
+    orphan.forEach(m => { m.cat = '미분류'; });
+    if(!next.includes('미분류')) next.push('미분류');
+  }
+  if(manualCat && !next.includes(manualCat)) manualCat = '';
+  manualCats = next;
+  renderAll();
+  renderNav();   // 왼쪽 메뉴의 분야 하위메뉴도 바로 바꿈
+}
+function manualOnSearch(v){ manualSearch = v; renderManuals(); const el = document.getElementById('manualSearch'); if(el){ el.focus(); el.setSelectionRange(v.length, v.length); } }
+function renderManuals(){
+  const el = document.getElementById('tab-manuals');
+  if(!el) return;
+  const q = manualSearch.trim().toLowerCase();
+  const list = manuals.filter(m => (!manualCat || m.cat === manualCat) && (!q || [m.title, m.body, m.cat].some(v => String(v || '').toLowerCase().includes(q))))
+    .sort((a, b) => manualCats.indexOf(a.cat) - manualCats.indexOf(b.cat) || String(a.title).localeCompare(String(b.title), 'ko'));
+  if(!list.some(m => m.id === manualSel)) manualSel = list.length ? list[0].id : null;
+  const sel = manuals.find(m => m.id === manualSel);
+  const cnt = c => manuals.filter(m => !c || m.cat === c).length;
+  const when = iso => { const d = new Date(iso); return isNaN(d) ? '' : `${d.getFullYear()}.${d.getMonth()+1}.${d.getDate()}`; };
+  el.innerHTML = `
+    <div class="card">
+      <div class="cl-head">
+        <div class="cl-subtabs">${[''].concat(manualCats).map(c => `<button class="cl-subtab ${manualCat === c ? 'on' : ''}" onclick="setManualCat(${c ? `manualCats[${manualCats.indexOf(c)}]` : "''"})">${c ? taxjEsc(c) : '전체'} <span>${cnt(c)}</span></button>`).join('')}</div>
+        <div style="display:flex; gap:6px; align-items:center;">
+          <button class="btn ghost xs" onclick="manualEditCats()">분야 관리</button>
+          <button class="btn primary xs" onclick="manualAdd()">매뉴얼 추가</button>
+        </div>
+      </div>
+      <div class="mn-layout">
+        <div class="mn-list">
+          <input type="text" id="manualSearch" placeholder="제목·내용 검색" value="${escapeAttr(manualSearch)}" oninput="manualOnSearch(this.value)">
+          ${list.length ? list.map(m => `<button class="mn-item ${m.id === manualSel ? 'on' : ''}" onclick="manualSel=${m.id}; renderManuals();">
+              <span class="mn-item-t">${taxjEsc(m.title)}</span><span class="mn-item-s">${manualCat ? '' : taxjEsc(m.cat) + ' · '}${when(m.at)}</span></button>`).join('')
+            : `<div class="empty">${manuals.length ? (q ? '검색과 맞는 매뉴얼이 없어요.' : '이 분야에는 아직 매뉴얼이 없어요.') : "아직 매뉴얼이 없어요. '매뉴얼 추가'로 정리해 보세요."}</div>`}
+        </div>
+        <div class="mn-view">
+          ${sel ? `
+            <div class="mn-view-head">
+              <div><div class="mn-view-cat">${taxjEsc(sel.cat)}</div><div class="mn-view-title">${taxjEsc(sel.title)}</div><div class="hint" style="margin:2px 0 0;">마지막 수정 ${when(sel.at)}</div></div>
+              <span class="row-actions" style="display:inline-flex; gap:2px;">
+                <button class="icon-btn" onclick="manualEdit(${sel.id})" title="수정" aria-label="수정">${ICON_EDIT}</button>
+                <button class="icon-btn" onclick="manualHistory(${sel.id})" title="이력" aria-label="이력">${ICON_HISTORY}</button>
+                <button class="icon-btn danger" onclick="manualDelete(${sel.id})" title="삭제" aria-label="삭제">${ICON_TRASH}</button>
+              </span>
+            </div>
+            <div class="mn-body">${sel.body.trim() ? manualBodyHtml(sel.body) : '<div class="hint">내용이 비어 있어요. 연필 아이콘으로 적어 주세요.</div>'}</div>`
+          : '<div class="empty">왼쪽에서 매뉴얼을 골라 주세요.</div>'}
+        </div>
+      </div>
+    </div>`;
+}
+
 // ===== 링크: 자주 쓰는 사이트 모음 =====
 // 요청 배경(2026.10.08): "대메뉴에 링크 하나 - 자주 쓰는 사이트 주소·사이트명·메모로 관리". 분류(선택)로 묶어 보여주고, 이름을 누르면 새 창으로 열림.
 // 저장은 다른 자료와 같이 Google 시트(data 탭의 links)·이 기기. 비밀번호는 넣지 않음(계정 메뉴 보관함 사용)
@@ -5398,7 +5562,7 @@ function renderAccounts(){
 
 function renderAllNoSave(){
   try{ ensurePayMonths(); ensureTaxRows(); generateRecurringTasks(); }catch(e){ console.warn(e); }
-  renderHome(); renderWorklist(); renderAccounts(); renderLinks(); renderVat(); renderPay(); renderCorp(); renderIndiv(); renderClients(); renderSettings();
+  renderHome(); renderWorklist(); renderAccounts(); renderLinks(); renderManuals(); renderVat(); renderPay(); renderCorp(); renderIndiv(); renderClients(); renderSettings();
   if(activeTab === 'review') renderReview();
   if(activeTab === 'taxj') renderTaxjFull();
 }
