@@ -3360,6 +3360,7 @@ const GOOGLE_DATA_KEYS = [
   'events','nextEventId',
   'clientsOther','clientsTerminated',
   'trashBin','nextTrashId',
+  'accountVault',   // [2026.10.08] 계정 보관함이 Google 시트에 저장되지 않아 다시 열면 "보관함 만들기"가 다시 뜨던 문제 수정(요청)
 ];
 
 function collectGoogleSnapshot(){
@@ -5147,6 +5148,55 @@ async function accImportTaxjExcel(input){
     smAlert('가져오지 못했어요', String(e && e.message || e), { tone:'danger' });
   }
 }
+// [2026.10.08] "개인 계정과 회사웹 계정을 한 곳에 모아 보고 싶다"(요청) - 엑셀 없이, Tax.J 메뉴에서 받아 둔 회사 자료(taxjFull)의
+// 사내정보(법인공용·팀총괄·팀원·개인)를 Tax.J 관리비밀번호로 풀어서 '회사(Tax.J)' 항목으로 가져옴. 관리비밀번호는 저장하지 않고 이번에만 씀.
+// 복호화 방식은 Tax.J와 같음: PBKDF2(관리비밀번호, s__manageSalt, 150000회, SHA-256) → AES-GCM 키, s__manageVerifier로 비밀번호 확인
+async function accImportTaxjLive(){
+  if(!accountItems) return;
+  accTouch();
+  const docs = (typeof taxjFull !== 'undefined' && taxjFull && taxjFull.docs) || null;
+  if(!docs || !docs.s__companyInfo){
+    if(await smConfirm('먼저 Tax.J 자료를 불러와 주세요', 'Tax.J 메뉴에서 "Tax.J에서 불러오기"(또는 새로고침)를 한 번 누르면 회사 계정을 가져올 수 있어요.', { okText:'Tax.J 메뉴로' })) switchTab('taxj');
+    return;
+  }
+  const r = await smForm('Tax.J 관리비밀번호', [{ label:'회사웹 정보조회(관리) 비밀번호', type:'password', value:'' }], { okText:'가져오기', icon:'🔒' });
+  if(!r || !r[0]) return;
+  try{
+    const b64 = v => Uint8Array.from(atob(v), ch => ch.charCodeAt(0));
+    const base = await crypto.subtle.importKey('raw', new TextEncoder().encode(r[0]), 'PBKDF2', false, ['deriveKey']);
+    const key = await crypto.subtle.deriveKey({ name:'PBKDF2', salt: b64(docs.s__manageSalt), iterations:150000, hash:'SHA-256' }, base, { name:'AES-GCM', length:256 }, false, ['decrypt']);
+    const dec = async p => JSON.parse(new TextDecoder().decode(await crypto.subtle.decrypt({ name:'AES-GCM', iv: b64(p.iv) }, key, b64(p.data))));
+    let ok = false; try{ ok = docs.s__manageVerifier && (await dec(docs.s__manageVerifier)).check === 'ok'; }catch(e){}
+    if(!ok){ smAlert('비밀번호가 맞지 않아요', 'Tax.J 관리비밀번호를 다시 확인해 주세요. 회사웹에서 최근에 바꿨다면 Tax.J 메뉴에서 새로고침한 뒤 다시 해 보세요.', { tone:'danger' }); return; }
+    const ci = docs.s__companyInfo || {}, list = [];
+    let failed = 0;
+    const push = async (cat, target, it) => {
+      if(!it) return;
+      let v = { idVal: it.idVal || '', pwVal: it.pwVal || '', content: it.content || '' };
+      if(it.sensitiveEnc){ try{ v = Object.assign(v, await dec(it.sensitiveEnc)); }catch(e){ failed++; } }
+      const isInfo = (it.type || 'account') === 'info';
+      list.push({ site: it.label || '', url: it.noteIsLink ? (it.note || '') : '', user: isInfo ? (v.content || '') : (v.idVal || ''), pw: isInfo ? '' : (v.pwVal || ''),
+        memo: it.noteIsLink ? '' : (it.note || ''), group: [cat, target].filter(Boolean).join(' · '), kind: isInfo ? '정보' : '계정' });
+    };
+    for(const it of (ci.corp || [])) await push('법인공용', docs.s__companyName || '', it);
+    for(const it of (ci.teamGeneral || [])) await push('팀총괄', '', it);
+    for(const person of (ci.team || [])) for(const it of ((person && person.items) || [])) await push('팀원', person.person || '', it);
+    for(const it of (ci.personal || [])) await push('개인', it.owner || '', it);
+    const items = list.filter(x => x.site || x.user);
+    if(!items.length){ smAlert('가져올 항목이 없어요', 'Tax.J 사내정보가 비어 있어요.'); return; }
+    const had = accountItems.filter(a => a.src === 'taxj').length;
+    if(!(await smConfirm(`회사(Tax.J) 계정 ${items.length}건을 가져올까요?`, had ? `지금 있는 회사 항목 ${had}건은 Tax.J 최신 내용으로 바뀌어요. 내 개인 항목은 그대로예요.` : '내 개인 항목과 구분해서 "회사(Tax.J)"로 보관해요.', { icon:'↓', okText:'가져오기' }))) return;
+    const today = todayStr();
+    accountItems = accountItems.filter(a => a.src !== 'taxj').concat(items.map(x => Object.assign({ id: accountNextId++, src:'taxj', at: today }, x)));
+    settings.taxjAccountsImportedAt = today;
+    accountView = 'all';
+    await accSave();
+    if(failed) smAlert(`${failed}건은 풀지 못했어요`, '그 항목은 ID/PW가 비어 있어요. 회사웹에서 관리비밀번호가 바뀐 뒤 다시 저장되지 않은 항목일 수 있어요.');
+  }catch(e){
+    console.error('Tax.J 회사 계정 가져오기 실패', e);
+    smAlert('가져오지 못했어요', String(e && e.message || e), { tone:'danger' });
+  }
+}
 function accSetView(v){ accountView = v; accTouch(); renderAccounts(); }
 function accHref(u){ if(!u) return ''; return /^https?:\/\//i.test(u) ? u : 'https://' + u; }
 function renderAccounts(){
@@ -5190,6 +5240,7 @@ function renderAccounts(){
             .map(([k, l, n]) => `<button class="cl-subtab ${accountView === k ? 'on' : ''}" onclick="accSetView('${k}')">${l} <span>${n}</span></button>`).join('')}
         </div>
         <div style="text-align:right;">
+          <button class="btn primary xs" onclick="accImportTaxjLive()" title="Tax.J 메뉴에서 받아 둔 회사 자료의 사내정보를 관리비밀번호로 풀어서 가져와요">Tax.J에서 불러오기</button>
           <button class="btn ghost xs" onclick="document.getElementById('accTaxjXlsx').click()" title="Tax.J → 엑셀 일괄 다운로드 → 회사정보 파일">Tax.J 엑셀 가져오기</button>
           <input type="file" id="accTaxjXlsx" accept=".xlsx,.xls" style="display:none;" onchange="accImportTaxjExcel(this)">
           <div class="hint" style="margin-top:4px;">${settings.taxjAccountsImportedAt ? '마지막 가져오기: ' + settings.taxjAccountsImportedAt : 'Tax.J에서 잠금 해제 후 받은 회사정보 엑셀을 올려주세요'}</div>
