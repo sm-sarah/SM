@@ -4141,9 +4141,16 @@ async function runSmDeploy(){
   try {
     setSmDeployMsg('파일 읽는 중...');
     const content = await smDeploySelectedFile.text();
-    // [2026.10.08] 다른 파일(회사웹 Tax.J 등)이 SM 저장소에 잘못 올라가지 않게(요청) - 첫 <title>이 works 것이 아니면 배포하지 않음
-    const pickedTitle = ((/<title>([^<]*)<\/title>/i.exec(content) || [])[1] || '').trim();
-    if(pickedTitle !== "Sunmin's Works") throw new Error(`works 파일이 아니에요(제목: ${pickedTitle || '없음'}). SM.html을 골라 주세요. 회사웹 index.html은 Tax.J에서 배포해요.`);
+    // [2026.10.08] 다른 파일(회사웹 Tax.J 등)이 SM 저장소에 잘못 올라가지 않게(요청: "이름만이 아니라 안의 내용까지 보고 판단") -
+    // 파일 이름과 상관없이 내용으로 판단: works에만 있는 표시가 모두 있어야 하고, Tax.J에만 있는 표시가 하나라도 있으면 배포하지 않음.
+    // (표시 글자를 그대로 적으면 이 코드 자체가 그 글자를 품게 되므로 잘라서 이어 붙임)
+    {
+      const has = t => content.indexOf(t) >= 0;
+      const mustHave = [['<ti' + "tle>Sunmin's Works</ti" + 'tle>', 'works 제목'], ["GITHUB_DEPLOY_REPO_NAME = 'S" + "M'", 'works 배포 설정'], ['function render' + 'Worklist', 'To do 화면']];
+      const mustNot = [['<ti' + 'tle>Tax.J</ti' + 'tle>', 'Tax.J 제목'], ["FS_COLLECTION = 'ta" + "xj'", 'Tax.J 저장소 설정'], ["GITHUB_DEPLOY_REPO_NAME = 'Ta" + "x.J'", 'Tax.J 배포 설정']];
+      const miss = mustHave.filter(([t]) => !has(t)).map(x => x[1]), bad = mustNot.filter(([t]) => has(t)).map(x => x[1]);
+      if(miss.length || bad.length) throw new Error(`works 파일이 아니에요(${bad.length ? bad.join('·') + ' 들어 있음' : miss.join('·') + ' 없음'}). SM.html을 골라 주세요. 회사웹 index.html은 Tax.J에서 배포해요.`);
+    }
     const apiBase = `https://api.github.com/repos/${GITHUB_DEPLOY_REPO_OWNER}/${GITHUB_DEPLOY_REPO_NAME}/contents/${GITHUB_DEPLOY_FILE_PATH}`;
     const headers = { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json' };
     setSmDeployMsg('기존 파일 정보 확인 중...');
@@ -4154,6 +4161,14 @@ async function runSmDeploy(){
       throw new Error(`GitHub 조회 실패 (${getRes.status})`);
     }
     const cur = await getRes.json();
+    // 지금 올라가 있는 파일과 크기가 30% 넘게 다르면(통째로 다른 파일일 가능성) 한 번 더 확인
+    {
+      const newSize = new Blob([content]).size, oldSize = Number(cur.size) || 0;
+      if(oldSize && Math.abs(newSize - oldSize) / oldSize > 0.3){
+        const kb = n => Math.round(n / 1024).toLocaleString() + 'KB';
+        if(!(await smConfirm('크기가 많이 달라요', `지금 올라가 있는 파일과 크기가 많이 달라요 (${kb(oldSize)} → ${kb(newSize)}).\n다른 파일일 수 있어요. 그래도 배포할까요?`, { tone:'danger', icon:'!', okText:'그래도 배포' }))) throw new Error('크기가 많이 달라서 배포를 멈췄어요.');
+      }
+    }
     setSmDeployMsg('GitHub에 커밋하는 중...');
     const putRes = await fetch(apiBase, {
       method: 'PUT',
