@@ -1613,6 +1613,25 @@ function addTask(){
   if(noteEl) noteEl.value = '';
   renderAll();
 }
+// 요청 배경(2026.10.08): 스프레드시트에서 줄바꿈된 할 일 목록을 복사해 붙여넣으면 한 줄씩 건별로 등록되게 함.
+// 체크박스 칸까지 같이 복사되면 딸려오는 TRUE/FALSE·빈 칸은 빼고 내용만 사용. 한 줄만 붙여넣으면 평소처럼 입력칸에 들어감.
+function pasteTasks(e){
+  const raw = (e.clipboardData || window.clipboardData)?.getData('text') || '';
+  const lines = raw.split(/\r?\n/).map(line =>
+    line.split('\t').map(c => c.trim()).filter(c => c && !/^(TRUE|FALSE|☐|☑|✓|✔)$/i.test(c)).join(' ').trim()
+  ).filter(Boolean);
+  if(lines.length < 2) return;   // 한 줄이면 기본 붙여넣기
+  e.preventDefault();
+  const date = document.getElementById('newTaskDate').value || todayStr();
+  lines.forEach(text => {
+    const nt = {id: nextTaskId++, date, text, done:false};
+    pushHist(nt, '추가');
+    tasks.push(nt);
+  });
+  e.target.value = '';
+  renderAll();
+  smAlert('할 일을 추가했어요', `${date} 날짜로 ${lines.length}건을 등록했어요.`, { icon:'✓' });
+}
 function toggleTask(id){
   const t = tasks.find(x => x.id === id);
   if(t){ t.done = !t.done; pushHist(t, t.done ? '완료' : '완료 취소'); }
@@ -2169,7 +2188,7 @@ function renderWorklist(){
       <div class="wl-agenda" id="worklistAgenda"></div>
       <div class="toolbar" style="margin-top:12px;">
         <input type="date" id="newTaskDate" value="${worklistViewDate}">
-        <input type="text" id="newTaskText" placeholder="할 일을 입력하세요 (Enter로 추가)" style="flex:1; min-width:200px;" onkeydown="if(event.key==='Enter' && !event.isComposing) addTask()">
+        <input type="text" id="newTaskText" placeholder="할 일을 입력하세요 (Enter로 추가)" style="flex:1; min-width:200px;" onkeydown="if(event.key==='Enter' && !event.isComposing) addTask()" onpaste="pasteTasks(event)">
         <input type="text" id="newTaskNote" placeholder="메모 (선택)" style="flex:0 1 220px; min-width:120px;" onkeydown="if(event.key==='Enter' && !event.isComposing) addTask()">
         <button class="btn primary" onclick="addTask()">추가</button>
       </div>
