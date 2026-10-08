@@ -1032,6 +1032,19 @@
   .mn-body ul, .mn-body ol{ margin:2px 0; padding-left:22px; }
   .mn-body .mn-gap{ height:8px; }
   .mn-body a{ color:var(--primary-dark); }
+  .mn-refs{ display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin:-2px 0 14px; }
+  .mn-refs-l{ font-size:11.5px; font-weight:700; color:var(--muted); margin-right:2px; }
+  .mn-ref{ font-size:12.5px; font-weight:700; color:var(--primary-dark); background:var(--primary-soft); border-radius:999px; padding:3px 10px; text-decoration:none; }
+  .mn-ref:hover{ filter:brightness(.97); text-decoration:underline; }
+  /* 첨부파일(링크 메뉴) */
+  .att-list{ display:flex; flex-wrap:wrap; gap:4px; align-items:center; }
+  .att-chip{ display:inline-flex; align-items:center; gap:2px; background:#f6f1f4; border-radius:8px; padding:2px 4px 2px 8px; font-size:12px; max-width:100%; }
+  .att-chip a{ color:var(--text); text-decoration:none; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:170px; }
+  .att-chip a:hover{ color:var(--primary-dark); text-decoration:underline; }
+  .att-chip button{ border:none; background:transparent; color:var(--muted); cursor:pointer; font-size:14px; line-height:1; padding:0 3px; }
+  .att-chip button:hover{ color:#e2445c; }
+  .att-add{ font-family:inherit; font-size:11.5px; font-weight:700; color:var(--muted); background:transparent; border:1px dashed var(--border); border-radius:8px; padding:2px 8px; cursor:pointer; }
+  .att-add:hover{ color:var(--primary-dark); border-color:var(--primary); }
   @media (max-width:900px){ .mn-layout{ grid-template-columns:1fr; } .mn-list{ border-right:none; padding-right:0; min-height:0; } }
   /* 요청 배경(2026.10.08): "메뉴·하위메뉴가 회사웹(Tax.J)과 너무 똑같다" → '가로형 사이드바'로 바꿈.
      아이콘 옆에 이름을 나란히, 고른 메뉴는 핑크→골드 알약, 하위메뉴는 고른 메뉴 바로 아래 점 목록으로 펼침(옆으로 뜨던 방식 대신).
@@ -1057,6 +1070,9 @@
   .nav-flyout-item::before{ left:6px; width:5px; height:5px; border-radius:50%; background:#e6cfdb; }
   .nav-flyout-item:hover{ color:var(--primary-dark); background:#fdf3f7; }
   .nav-flyout-item:hover::before{ background:var(--primary); }
+  /* 요청 배경(2026.10.08): 퀵배포 아이콘이 고른 메뉴(핑크→골드 알약)와 같은 색이라 같이 눌린 것처럼 보임 → 연한 골드 바탕 + 골드 테두리로 구분 */
+  .quick-btn.accent{ background:#fff8ea; color:#d08a1e; box-shadow:inset 0 0 0 1.5px #f3cf8e; }
+  .quick-btn.accent:hover{ background:#fdeccb; filter:none; }
   /* 좁은 화면에서는 이름을 숨기고 아이콘만 */
   @media (max-width:900px){
     aside.sidebar{ width:auto; margin-right:8px; }
@@ -5091,13 +5107,22 @@ function manualFields(x){
   return [
     { label:'분야', options: cats, value: x.cat || manualCat || cats[0] },
     { label:'제목', value:x.title || '', placeholder:'예: 원천세 반기 신고 순서' },
+    { label:'참고 사이트 (한 줄에 하나 · "이름 | 주소" 또는 주소만)', type:'textarea', value:(x.refs || []).map(r => r.name && r.name !== r.url ? `${r.name} | ${r.url}` : r.url).join('\n'), rows:3, placeholder:'홈택스 | hometax.go.kr\nhttps://www.wehago.com' },
     { label:'내용 (# 제목, - 목록, 1. 순서, **굵게** · Enter 줄바꿈, Ctrl+Enter 저장)', type:'textarea', value:x.body || '', rows:16, placeholder:'# 준비물\n- 급여대장\n- 지급명세서\n\n# 순서\n1. 홈택스 로그인\n2. 원천세 신고 메뉴' },
   ];
+}
+// 참고 사이트 칸: 한 줄에 하나, "이름 | 주소" 또는 주소만
+function manualParseRefs(t){
+  return String(t || '').split('\n').map(x => x.trim()).filter(Boolean).map(x => {
+    const i = x.lastIndexOf('|');
+    const name = i >= 0 ? x.slice(0, i).trim() : '', url = (i >= 0 ? x.slice(i + 1) : x).trim();
+    return url ? { name: name || url.replace(/^https?:\/\//, '').replace(/\/$/, ''), url } : null;
+  }).filter(Boolean);
 }
 async function manualAdd(){
   const r = await smForm('매뉴얼 추가', manualFields(), { okText:'추가', wide:true });
   if(!r || !(r[1] || '').trim()) return;
-  const m = { id: nextManualId++, cat: r[0], title: r[1].trim(), body: r[2] || '', at: new Date().toISOString(), history: [] };
+  const m = { id: nextManualId++, cat: r[0], title: r[1].trim(), refs: manualParseRefs(r[2]), body: r[3] || '', at: new Date().toISOString(), history: [] };
   manuals.push(m); manualSel = m.id; manualCat = manualCat && manualCat !== m.cat ? m.cat : manualCat;
   renderAll();
 }
@@ -5106,10 +5131,11 @@ async function manualEdit(id){
   if(!m) return;
   const r = await smForm('매뉴얼 수정', manualFields(m), { okText:'저장', icon:'✎', wide:true });
   if(!r || !(r[1] || '').trim()) return;
-  if(r[0] === m.cat && r[1].trim() === m.title && (r[2] || '') === m.body) return;
-  (m.history = m.history || []).unshift({ at: m.at, cat: m.cat, title: m.title, body: m.body });
+  const refs = manualParseRefs(r[2]);
+  if(r[0] === m.cat && r[1].trim() === m.title && (r[3] || '') === m.body && JSON.stringify(refs) === JSON.stringify(m.refs || [])) return;
+  (m.history = m.history || []).unshift({ at: m.at, cat: m.cat, title: m.title, body: m.body, refs: m.refs || [] });
   if(m.history.length > 20) m.history.length = 20;   // 예전 내용은 최근 20번까지만 보관
-  Object.assign(m, { cat: r[0], title: r[1].trim(), body: r[2] || '', at: new Date().toISOString() });
+  Object.assign(m, { cat: r[0], title: r[1].trim(), refs, body: r[3] || '', at: new Date().toISOString() });
   renderAll();
 }
 async function manualDelete(id){
@@ -5151,7 +5177,7 @@ function renderManuals(){
   const el = document.getElementById('tab-manuals');
   if(!el) return;
   const q = manualSearch.trim().toLowerCase();
-  const list = manuals.filter(m => (!manualCat || m.cat === manualCat) && (!q || [m.title, m.body, m.cat].some(v => String(v || '').toLowerCase().includes(q))))
+  const list = manuals.filter(m => (!manualCat || m.cat === manualCat) && (!q || [m.title, m.body, m.cat, ...(m.refs || []).map(r => r.name + ' ' + r.url)].some(v => String(v || '').toLowerCase().includes(q))))
     .sort((a, b) => manualCats.indexOf(a.cat) - manualCats.indexOf(b.cat) || String(a.title).localeCompare(String(b.title), 'ko'));
   if(!list.some(m => m.id === manualSel)) manualSel = list.length ? list[0].id : null;
   const sel = manuals.find(m => m.id === manualSel);
@@ -5183,6 +5209,7 @@ function renderManuals(){
                 <button class="icon-btn danger" onclick="manualDelete(${sel.id})" title="삭제" aria-label="삭제">${ICON_TRASH}</button>
               </span>
             </div>
+            ${(sel.refs || []).length ? `<div class="mn-refs"><span class="mn-refs-l">참고 사이트</span>${sel.refs.map(r => `<a class="mn-ref" href="${escapeAttr(linkHref(r.url))}" target="_blank" rel="noopener" title="${escapeAttr(r.url)}">${taxjEsc(r.name)} ↗</a>`).join('')}</div>` : ''}
             <div class="mn-body">${sel.body.trim() ? manualBodyHtml(sel.body) : '<div class="hint">내용이 비어 있어요. 연필 아이콘으로 적어 주세요.</div>'}</div>`
           : '<div class="empty">왼쪽에서 매뉴얼을 골라 주세요.</div>'}
         </div>
@@ -5194,6 +5221,61 @@ function renderManuals(){
 // 요청 배경(2026.10.08): "대메뉴에 링크 하나 - 자주 쓰는 사이트 주소·사이트명·메모로 관리". 분류(선택)로 묶어 보여주고, 이름을 누르면 새 창으로 열림.
 // 저장은 다른 자료와 같이 Google 시트(data 탭의 links)·이 기기. 비밀번호는 넣지 않음(계정 메뉴 보관함 사용)
 let linkSearch = '';
+// [2026.10.08] 링크마다 첨부파일(요청) - 파일은 내 Google 드라이브의 'SM_첨부파일' 폴더에 올리고, 링크에는 {id, name, url}만 저장(시트가 무거워지지 않게).
+// 누르면 드라이브에서 열림. 첨부를 빼면 드라이브 파일은 휴지통으로(30일 안에 되살릴 수 있음)
+const SM_ATTACH_FOLDER = 'SM_첨부파일';
+let smAttachFolderId = null;
+async function smDriveFetch(url, opt){
+  if(!googleAccessToken) throw new Error('Google에 연결된 뒤에 할 수 있어요. 위쪽 "Google 연결하고 불러오기"를 먼저 눌러 주세요.');
+  const res = await fetch(url, Object.assign({}, opt, { headers: Object.assign({ Authorization: 'Bearer ' + googleAccessToken }, (opt && opt.headers) || {}) }));
+  if(!res.ok){ const t = await res.text().catch(() => ''); throw new Error(`드라이브 응답 ${res.status} ${t.slice(0, 120)}`); }
+  return res.status === 204 ? null : res.json();
+}
+async function smAttachFolder(){
+  if(smAttachFolderId) return smAttachFolderId;
+  const q = encodeURIComponent(`name='${SM_ATTACH_FOLDER}' and mimeType='application/vnd.google-apps.folder' and trashed=false`);
+  const r = await smDriveFetch(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id)&spaces=drive`);
+  if(r.files && r.files.length) return (smAttachFolderId = r.files[0].id);
+  const c = await smDriveFetch('https://www.googleapis.com/drive/v3/files?fields=id', { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ name: SM_ATTACH_FOLDER, mimeType:'application/vnd.google-apps.folder' }) });
+  return (smAttachFolderId = c.id);
+}
+async function smDriveUpload(file){
+  const folder = await smAttachFolder();
+  const fd = new FormData();
+  fd.append('metadata', new Blob([JSON.stringify({ name: file.name, parents: [folder] })], { type:'application/json' }));
+  fd.append('file', file);
+  const r = await smDriveFetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webViewLink,size', { method:'POST', body: fd });
+  return { id: r.id, name: r.name || file.name, url: r.webViewLink || `https://drive.google.com/file/d/${r.id}/view`, size: Number(r.size) || file.size || 0 };
+}
+async function smDriveTrash(id){
+  try{ await smDriveFetch(`https://www.googleapis.com/drive/v3/files/${id}`, { method:'PATCH', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ trashed:true }) }); }catch(e){ console.warn('첨부 휴지통 이동 실패', e); }
+}
+let linkUploadTarget = null;
+function linkPickFiles(id){ linkUploadTarget = id; const inp = document.getElementById('linkFileInput'); if(inp){ inp.value = ''; inp.click(); } }
+async function linkUploadFiles(input){
+  const x = links.find(l => l.id === linkUploadTarget);
+  const files = Array.from((input && input.files) || []);
+  if(!x || !files.length) return;
+  const big = files.find(f => f.size > 50 * 1024 * 1024);
+  if(big){ smAlert('파일이 너무 커요', `${big.name}: 50MB 이하만 올릴 수 있어요.`); return; }
+  x._uploading = files.length; renderLinks();
+  try{
+    for(const f of files){ (x.files = x.files || []).push(await smDriveUpload(f)); }
+    x.at = todayStr();
+  }catch(e){ console.error(e); smAlert('첨부하지 못했어요', String(e && e.message || e), { tone:'danger' }); }
+  finally{ delete x._uploading; renderAll(); }
+}
+async function linkRemoveFile(id, fid){
+  const x = links.find(l => l.id === id);
+  const f = x && (x.files || []).find(a => a.id === fid);
+  if(!f || !(await smConfirm('첨부파일을 뺄까요?', `${f.name}\n드라이브에서는 휴지통으로 옮겨져요(30일 안에 되살릴 수 있어요).`, { tone:'danger', icon:'!', okText:'빼기' }))) return;
+  x.files = x.files.filter(a => a.id !== fid);
+  renderAll();
+  smDriveTrash(fid);
+}
+function smFilesHtml(files, removeJs){
+  return (files || []).map(f => `<span class="att-chip"><a href="${escapeAttr(f.url)}" target="_blank" rel="noopener" title="드라이브에서 열기">📎 ${taxjEsc(f.name)}</a>${removeJs ? `<button onclick="${removeJs(f)}" title="첨부 빼기" aria-label="첨부 빼기">×</button>` : ''}</span>`).join('');
+}
 function linkHref(u){ u = String(u || '').trim(); if(!u) return ''; return /^[a-z][a-z0-9+.-]*:/i.test(u) ? u : 'https://' + u; }
 function linkFields(x){
   x = x || {};
@@ -5233,7 +5315,7 @@ function renderLinks(){
   const el = document.getElementById('tab-links');
   if(!el) return;
   const q = linkSearch.trim().toLowerCase();
-  const list = links.filter(l => !q || [l.name, l.url, l.group, l.memo].some(v => String(v || '').toLowerCase().includes(q)));
+  const list = links.filter(l => !q || [l.name, l.url, l.group, l.memo, ...(l.files || []).map(f => f.name)].some(v => String(v || '').toLowerCase().includes(q)));
   const groups = {};
   list.forEach(l => { const g = l.group || '기타'; (groups[g] = groups[g] || []).push(l); });
   const names = Object.keys(groups).sort((a, b) => (a === '기타') - (b === '기타') || a.localeCompare(b, 'ko'));
@@ -5242,18 +5324,20 @@ function renderLinks(){
       <div class="toolbar">
         <input type="text" id="linkSearch" placeholder="사이트명·주소·메모 검색" value="${escapeAttr(linkSearch)}" oninput="linkOnSearch(this.value)" style="flex:1; min-width:200px;">
         <button class="btn primary" onclick="linkAdd()">링크 추가</button>
+        <input type="file" id="linkFileInput" multiple style="display:none;" onchange="linkUploadFiles(this)">
       </div>
       ${!links.length ? `<div class="empty">아직 등록한 링크가 없어요. '링크 추가'로 넣어 주세요.</div>`
         : !list.length ? `<div class="empty">검색과 맞는 링크가 없어요.</div>`
         : names.map(g => `
         ${names.length > 1 || g !== '기타' ? `<div style="font-weight:800; font-size:13px; color:var(--primary-dark); margin:14px 0 4px;">${taxjEsc(g)} <span class="hint" style="margin:0; font-weight:600;">${groups[g].length}</span></div>` : ''}
         <div class="table-scroll"><table>
-          <thead><tr><th style="width:24%;">사이트명</th><th style="width:30%;">주소</th><th>메모</th><th style="width:70px;">수정일</th><th style="width:70px;"></th></tr></thead>
+          <thead><tr><th style="width:20%;">사이트명</th><th style="width:24%;">주소</th><th>메모</th><th style="width:22%;">첨부</th><th style="width:70px;">수정일</th><th style="width:70px;"></th></tr></thead>
           <tbody>${groups[g].sort((a, b) => String(a.name).localeCompare(String(b.name), 'ko')).map(l => `
             <tr>
               <td style="text-align:left; font-weight:700;">${l.url ? `<a href="${escapeAttr(linkHref(l.url))}" target="_blank" rel="noopener" style="color:var(--primary-dark); text-decoration:none;" title="새 창으로 열기">${taxjEsc(l.name)} ↗</a>` : taxjEsc(l.name)}</td>
               <td style="text-align:left; color:var(--muted); font-size:12.5px; word-break:break-all;">${taxjEsc(l.url || '')}</td>
               <td style="text-align:left; white-space:pre-wrap; font-size:13px;">${taxjEsc(l.memo || '')}</td>
+              <td style="text-align:left;"><div class="att-list">${smFilesHtml(l.files, f => `linkRemoveFile(${l.id}, '${f.id}')`)}${l._uploading ? `<span class="hint" style="margin:0;">올리는 중… (${l._uploading})</span>` : `<button class="att-add" onclick="linkPickFiles(${l.id})" title="파일 첨부">＋ 파일</button>`}</div></td>
               <td style="font-size:12px; color:var(--muted);">${l.at ? taxjEsc(l.at.slice(5).replace('-', '/')) : ''}</td>
               <td><span class="row-actions" style="display:inline-flex; gap:2px;">
                 <button class="icon-btn" onclick="linkEdit(${l.id})" title="수정" aria-label="수정">${ICON_EDIT}</button>
