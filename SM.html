@@ -1146,6 +1146,7 @@
     <div id="tab-accounts" class="tab"></div>
     <div id="tab-links" class="tab"></div>
     <div id="tab-manuals" class="tab"></div>
+    <div id="tab-attend" class="tab"></div>
     <div id="tab-vat" class="tab"></div>
     <div id="tab-pay" class="tab"></div>
     <div id="tab-corp" class="tab"></div>
@@ -1381,6 +1382,7 @@ let nextTrashId = 1;
 // 계정 보관함(아래 '계정' 부분 참고) - 다른 데이터와 같이 처음부터 선언해 둠
 let manuals = [], nextManualId = 1, manualCats = ['개인','회사','신고'];   // [2026.10.08] 매뉴얼 메뉴: [{id, cat, title, body, at, history}]
 let links = [], nextLinkId = 1;   // [2026.10.08] 링크 메뉴: 자주 쓰는 사이트 [{id, name, url, group, memo, at}]
+let attendMine = {};   // [2026.10.12] 근태경비 탭 내 확인·메모 { 'clock:날짜' | 'leave:id' | 'exp:종류:id' | 'month:YYYY-MM': { done, note } } - works에만 저장
 let submitMine = {};   // [2026.10.12] 제출 탭 내 확인·메모 { 기간키: { 거래처키(id 또는 id@nextMonth): { done:'YYYY-MM-DD', note } } } - works에만 저장
 let accountVault = null;   // { v:1, salt, iv, data } - 암호화된 상태로만 저장·동기화
 let accountItems = null;   // 잠금 해제 후 메모리에만: [{id, site, url, user, pw, memo, at}]
@@ -1473,6 +1475,7 @@ const ICONS = {
   indiv: '<circle cx="12" cy="8" r="4"/><path d="M4.2 20c0-4.3 3.6-6.8 7.8-6.8s7.8 2.5 7.8 6.8"/>',
   clients: '<circle cx="9" cy="8" r="3.2"/><path d="M2.8 19.5c0-3.6 2.8-5.8 6.2-5.8s6.2 2.2 6.2 5.8"/><circle cx="17" cy="8.6" r="2.4"/><path d="M15 13.9c2.9.2 4.7 2.2 4.9 5.3"/>',
   review: '<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 3.5h6v3H9z"/><path d="M8.5 11l1.5 1.5 3-3"/><path d="M8.5 16.5h7"/>',
+  attend: '<circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2"/><path d="M9 2h6"/>',
   submit: '<path d="M22 2 11 13"/><path d="M22 2 15 22 11 13 2 9z"/>',
   taxj: '<rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/><path d="M7 9.5h4M7 12.5h7"/>',
   settings: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>',
@@ -1484,6 +1487,7 @@ const TABS = [
   {id:'accounts', label:'계정'},
   {id:'links',    label:'링크'},
   {id:'manuals',  label:'매뉴얼'},
+  {id:'attend',   label:'근태경비'},
   {id:'vat',      label:'부가세'},
   {id:'pay',      label:'원천세'},
   {id:'corp',     label:'법인세'},
@@ -1504,6 +1508,7 @@ const TAB_TITLES = {
   pay:['원천세·급여','월별 급여·원천세 처리 현황입니다.'],
   corp:['법인세','법인 거래처의 결산~신고 단계를 추적합니다.'],
   indiv:['종합소득세','개인사업자 거래처의 신고 단계를 추적합니다.'],
+  attend:['근태경비','회사웹 출퇴근·휴가·재택·경비 기록을 실시간으로 보고, 내 확인·메모를 더해요.'],
   submit:['제출','회사웹 지급명세서 제출현황(매월·반기·연간)을 실시간으로 보고, 내 확인·메모를 더해요.'],
   clients:['거래처','모든 신고 탭이 참조하는 기준정보입니다.'],
   review:['검토표','Tax.J 원천세 검토표 계산식을 조회해요.'],
@@ -1518,6 +1523,12 @@ const NAV_SUBMENUS = {
     {js:"setTaxjFullView('work')",   label:'근태·경비·결재'},
     {js:"setTaxjFullView('info')",   label:'공지·세무일정·회사정보'},
     {js:"setTaxjFullView('remote')", label:'회사웹 화면'},
+  ],
+  // [2026.10.12] 회사웹 개인 메뉴와 같은 하위메뉴(요청 - 근태경비)
+  attend: [
+    {js:"setAttendView('clock')",   label:'출퇴근현황'},
+    {js:"setAttendView('leave')",   label:'근태현황'},
+    {js:"setAttendView('expense')", label:'경비정산'},
   ],
   // [2026.10.12] 회사웹 제출 메뉴와 같은 하위메뉴(요청)
   submit: [
@@ -3463,6 +3474,7 @@ const GOOGLE_DATA_KEYS = [
   'links','nextLinkId',
   'manuals','nextManualId','manualCats',
   'submitMine',     // [2026.10.12] 제출 탭 내 확인·메모
+  'attendMine',     // [2026.10.12] 근태경비 탭 내 확인·메모
   'accountVault',   // [2026.10.08] 계정 보관함이 Google 시트에 저장되지 않아 다시 열면 "보관함 만들기"가 다시 뜨던 문제 수정(요청)
 ];
 
@@ -3478,7 +3490,7 @@ function collectGoogleSnapshot(){
     trashBin, nextTrashId,
     links, nextLinkId,
     manuals, nextManualId, manualCats,
-    accountVault, submitMine,
+    accountVault, submitMine, attendMine,
   };
 }
 
@@ -3540,6 +3552,7 @@ async function loadFromGoogleSheet(){
     if(map.nextEventId)   nextEventId  = JSON.parse(map.nextEventId);
     if(map.accountVault)  accountVault = JSON.parse(map.accountVault);
     if(map.submitMine)    submitMine   = JSON.parse(map.submitMine);
+    if(map.attendMine)    attendMine   = JSON.parse(map.attendMine);
     if(map.links)         links        = JSON.parse(map.links);
     if(map.nextLinkId)    nextLinkId   = JSON.parse(map.nextLinkId);
     if(map.manuals)       manuals      = JSON.parse(map.manuals);
@@ -3732,6 +3745,7 @@ function applySnapshot(o){
   if(!o) return;
   if(o.accountVault) accountVault = o.accountVault;
   if(o.submitMine) submitMine = o.submitMine;
+  if(o.attendMine) attendMine = o.attendMine;
   if(o.links) links = o.links;
   if(o.nextLinkId) nextLinkId = o.nextLinkId;
   if(o.manuals) manuals = o.manuals;
@@ -4359,7 +4373,7 @@ async function resetAllData(){
   clients = [];
   tasks = [];
   vatData = {}; payData = {}; corpData = {}; indivData = {};
-  submitMine = {};
+  submitMine = {}; attendMine = {};
   worklistChecklist = {}; worklistSchedule = {};
   events = [];
   clientsOther = []; clientsTerminated = [];
@@ -4723,7 +4737,7 @@ function taxjLiveRerender(){
     if(!taxjLiveRenderPending){ taxjLiveRenderPending = true; document.addEventListener('focusout', () => { taxjLiveRenderPending = false; setTimeout(taxjLiveRerender, 50); }, { once:true }); }
     return;
   }
-  const fn = { vat: renderVat, pay: renderPay, corp: renderCorp, indiv: renderIndiv, submit: renderSubmit, taxj: renderTaxjFull }[activeTab];
+  const fn = { vat: renderVat, pay: renderPay, corp: renderCorp, indiv: renderIndiv, submit: renderSubmit, attend: renderAttend, taxj: renderTaxjFull }[activeTab];
   if(fn) try{ fn(); }catch(e){ console.error(e); }
 }
 // 첫 화면에서 조용히 다시 연결(전에 연결한 적이 있고, 회사 로그인이 기억돼 있을 때만 - 로그인 창은 띄우지 않음)
@@ -4921,6 +4935,107 @@ function renderSubmit(){
           <td class="note-cell"><input type="text" value="${escapeAttr(m.note)}" onchange="updateSubmitMine('${r.key}','note',this.value)" style="width:100%"></td>
         </tr>`; }).join('')}</tbody></table></div>`
       : `<div class="empty">${submitOnlyLeft && all.length ? '남은 제출이 없어요.' : '이 기간에 제출 대상이 없어요(회사웹 검토표에 그 소득 금액이 있는 거래처만 나와요).'}</div>`}`}
+    </div>`;
+}
+
+/* ── [2026.10.12] 근태경비 - 회사웹 개인 메뉴(출퇴근현황·근태현황·경비정산)를 실시간으로 보고 내 확인·메모를 더함(요청: "근태경비") ──
+   자료: Tax.J data__<직원id>.attendance {clockLog, leaveUsage, leaveGrants, remoteEntries} / .expense {lunchEntries, dinnerEntries, taxiEntries, otherExpenses, prepaidEntries}
+   (필드명은 Tax.J 엑셀 시트 정의 XLS_SHEET_CLOCK·LEAVE·REMOTE·EXPENSE와 같음). 회사 원본은 읽기만, 내 확인·메모는 attendMine(works)에만 저장.
+   식대 한도·휴가 잔여처럼 회사 규칙으로 계산하는 값은 여기서 다시 계산하지 않음(틀릴 수 있어서) - 회사웹 기록 그대로 보여줌 */
+let attendView = 'clock', attendMonth = '', attendPerson = '';
+const ATTEND_VIEWS = [['clock','출퇴근현황'], ['leave','근태현황'], ['expense','경비정산']];
+const ATTEND_EXP_KINDS = [['lunchEntries','점심식대'], ['dinnerEntries','저녁식대'], ['taxiEntries','택시비'], ['otherExpenses','경비'], ['prepaidEntries','차액정산']];
+const ATTEND_WEEK = ['일','월','화','수','목','금','토'];
+function setAttendView(v){ attendView = v; if(activeTab !== 'attend') switchTab('attend'); else renderAttend(); }
+function attendShiftMonth(n){ const [y, m] = attendMonth.split('-').map(Number); const d = new Date(y, m - 1 + n, 1); attendMonth = `${d.getFullYear()}-${pad2(d.getMonth() + 1)}`; renderAttend(); }
+function attendPeople(){ return ((taxjFull && taxjFull.docs && taxjFull.docs.profiles) || []).filter(p => p && p.id); }
+function updateAttendMine(key, field, value){
+  const r = attendMine[key] = attendMine[key] || { done:'', note:'' };
+  r[field] = value;
+  if(!r.done && !r.note) delete attendMine[key];
+  renderAttend(); scheduleGoogleSave();
+}
+function attendMin(t){ const m = /^(\d{1,2}):(\d{2})/.exec(t || ''); return m ? Number(m[1]) * 60 + Number(m[2]) : null; }
+function attendDur(e){
+  const a = attendMin(e.checkIn), b = attendMin(e.checkOut);
+  if(a == null || b == null) return '';
+  const d = b + (e.checkOutNextDay || b < a ? 1440 : 0) - a;
+  return d > 0 ? `${Math.floor(d / 60)}:${pad2(d % 60)}` : '';
+}
+function attendMineCells(key){
+  const m = attendMine[key] || { done:'', note:'' }, k = escapeAttr(key);
+  return `<td><input type="checkbox" ${m.done ? 'checked' : ''} title="${m.done ? '확인: ' + m.done : '내 확인'}" onchange="updateAttendMine('${k}','done',this.checked ? '${todayStr()}' : '')"></td>
+    <td class="note-cell"><input type="text" value="${escapeAttr(m.note)}" onchange="updateAttendMine('${k}','note',this.value)" style="width:100%"></td>`;
+}
+function attendDateTd(ds){ const d = new Date(ds + 'T00:00:00'); const w = d.getDay(); return `<td style="white-space:nowrap;${w === 0 ? 'color:#e11d48;' : w === 6 ? 'color:#2563eb;' : ''}">${Number(ds.slice(5,7))}/${Number(ds.slice(8,10))} (${ATTEND_WEEK[w]})</td>`; }
+function renderAttend(){
+  const el = document.getElementById('tab-attend');
+  if(!el) return;
+  if(!attendMonth){ const d = new Date(); attendMonth = `${d.getFullYear()}-${pad2(d.getMonth() + 1)}`; }
+  if(!taxjFull && !taxjFullRestoreTried) taxjRestoreFull();
+  const people = attendPeople();
+  if(taxjFull && (!attendPerson || !people.some(p => p.id === attendPerson)))
+    attendPerson = (people.find(p => String(p.email || '').toLowerCase() === String(taxjFull.email || '').toLowerCase()) || people[0] || {}).id || '';
+  const pd = (taxjFull && taxjFull.docs['data__' + attendPerson]) || {};
+  const att = pd.attendance || {}, ex = pd.expense || {}, mo = attendMonth;
+  const inMonth = e => e && String(e.date || '').startsWith(mo);
+  const na = '<span style="color:#d4c6cd;">-</span>';
+  const [yy, mm] = mo.split('-').map(Number);
+  let body = '', stats = '';
+  const emptyRow = cols => `<tr><td colspan="${cols}"><div class="empty" style="padding:18px;">${yy}년 ${mm}월 기록이 없어요.</div></td></tr>`;
+  if(attendView === 'clock'){
+    const list = (att.clockLog || []).filter(inMonth).sort((a, b) => a.date < b.date ? -1 : 1);
+    const remote = list.filter(e => e.status && e.status !== '사무실').length;
+    const missOut = list.filter(e => e.checkIn && !e.checkOut).length;
+    stats = `<div class="stat tone-blue"><div class="n">${list.filter(e => e.checkIn).length}</div><div class="label">출근 기록</div></div>
+      <div class="stat tone-violet"><div class="n">${remote}</div><div class="label">사무실 외 근무</div></div>
+      <div class="stat"><div class="n">${missOut}</div><div class="label">퇴근 기록 없음</div></div>`;
+    body = `<thead><tr><th>날짜</th><th>출근</th><th>퇴근</th><th>출퇴근 간격</th><th>근무지</th><th>내 확인</th><th>내 메모</th></tr></thead><tbody>${list.length ? list.map(e => `<tr>
+      ${attendDateTd(e.date)}<td>${taxjEsc(e.checkIn) || na}</td><td>${e.checkOut ? taxjEsc(e.checkOut) + (e.checkOutNextDay ? ' <span class="hint" style="margin:0;">다음날</span>' : '') : na}</td>
+      <td>${attendDur(e) || na}</td><td>${taxjEsc(e.status || '사무실')}</td>${attendMineCells('clock:' + e.date)}</tr>`).join('') : emptyRow(7)}</tbody>`;
+  }else if(attendView === 'leave'){
+    const rows = [].concat(
+      (att.leaveUsage || []).filter(inMonth).map(e => ({ e, kind:'휴가', txt: [e.type, e.subtype].filter(Boolean).join(' · ') + (e.days ? ` ${e.days}일` : ''), key:'leave:' + (e.id || e.date) })),
+      (att.remoteEntries || []).filter(inMonth).map(e => ({ e, kind:'재택', txt: [e.bonus ? '특별' : '정기', e.half ? (e.half === 'am' ? '오전' : e.half === 'pm' ? '오후' : e.half) : '', e.noLunch ? '식대 제외' : ''].filter(Boolean).join(' · '), key:'remote:' + (e.id || e.date) })),
+      (att.leaveGrants || []).filter(inMonth).map(e => ({ e, kind:'휴가 부여', txt: `${e.type ? e.type + ' ' : ''}${e.days != null ? e.days + '일' : ''}`, key:'grant:' + (e.id || e.date) }))
+    ).sort((a, b) => a.e.date < b.e.date ? -1 : a.e.date > b.e.date ? 1 : 0);
+    const yearUse = (att.leaveUsage || []).filter(e => String(e.date || '').startsWith(String(yy))).length;
+    stats = `<div class="stat tone-rose"><div class="n">${rows.filter(r => r.kind === '휴가').length}</div><div class="label">이번 달 휴가</div></div>
+      <div class="stat tone-violet"><div class="n">${rows.filter(r => r.kind === '재택').length}</div><div class="label">이번 달 재택</div></div>
+      <div class="stat"><div class="n">${yearUse}</div><div class="label">${yy}년 휴가 기록</div></div>`;
+    body = `<thead><tr><th>날짜</th><th>구분</th><th>내용</th><th>회사 메모</th><th>내 확인</th><th>내 메모</th></tr></thead><tbody>${rows.length ? rows.map(r => `<tr>
+      ${attendDateTd(r.e.date)}<td><span style="font-weight:700; color:${r.kind === '휴가' ? '#e11d48' : r.kind === '재택' ? '#7c3aed' : 'var(--muted)'};">${r.kind}</span></td>
+      <td>${taxjEsc(r.txt) || na}</td><td>${taxjEsc(r.e.memo) || na}</td>${attendMineCells(r.key)}</tr>`).join('') : emptyRow(6)}</tbody>`;
+  }else{
+    const rows = [];
+    ATTEND_EXP_KINDS.forEach(([f, label]) => (ex[f] || []).filter(inMonth).forEach(e => rows.push({ e, label, key:'exp:' + f + ':' + (e.id || e.date + '|' + e.amount) })));
+    rows.sort((a, b) => a.e.date < b.e.date ? -1 : a.e.date > b.e.date ? 1 : 0);
+    const sum = l => rows.filter(r => r.label === l).reduce((a, r) => a + (Number(r.e.amount) || 0), 0);
+    const total = rows.reduce((a, r) => a + (Number(r.e.amount) || 0), 0);
+    stats = `<div class="stat tone-mint"><div class="n">${total.toLocaleString()}</div><div class="label">이번 달 합계(원)</div></div>
+      <div class="stat tone-blue"><div class="n">${(sum('점심식대') + sum('저녁식대')).toLocaleString()}</div><div class="label">식대</div></div>
+      <div class="stat"><div class="n">${(total - sum('점심식대') - sum('저녁식대')).toLocaleString()}</div><div class="label">택시·경비·차액</div></div>`;
+    body = `<thead><tr><th>날짜</th><th>구분</th><th style="text-align:right;">금액</th><th>회사 메모</th><th>내 확인</th><th>내 메모</th></tr></thead><tbody>${rows.length ? rows.map(r => `<tr>
+      ${attendDateTd(r.e.date)}<td>${r.label}</td><td style="text-align:right; font-weight:700;">${(Number(r.e.amount) || 0).toLocaleString()}</td>
+      <td>${taxjEsc(r.e.memo) || na}${r.e.settleTo ? ` <span class="hint" style="margin:0;">${taxjEsc(r.e.settleTo)}</span>` : ''}</td>${attendMineCells(r.key)}</tr>`).join('') : emptyRow(6)}</tbody>`;
+  }
+  const monthKey = 'month:' + mo, monthMemo = (attendMine[monthKey] || {}).note || '';
+  el.innerHTML = `
+    <div class="card">
+      ${taxjLiveBarHtml()}
+      <div class="toolbar">
+        <div class="cl-subtabs">${ATTEND_VIEWS.map(([k, l]) => `<button class="cl-subtab ${attendView === k ? 'on' : ''}" onclick="setAttendView('${k}')">${l}</button>`).join('')}</div>
+        <button class="btn ghost xs" onclick="attendShiftMonth(-1)" title="이전 달">‹</button>
+        <span style="font-weight:800;">${yy}년 ${mm}월</span>
+        <button class="btn ghost xs" onclick="attendShiftMonth(1)" title="다음 달">›</button>
+        <div class="spacer"></div>
+        ${people.length > 1 ? `<select onchange="attendPerson=this.value; renderAttend();">${people.map(p => `<option value="${escapeAttr(p.id)}" ${p.id === attendPerson ? 'selected' : ''}>${taxjEsc(p.name || p.email || p.id)}</option>`).join('')}</select>` : ''}
+      </div>
+      ${!taxjFull ? '<div class="empty">Tax.J에 연결하면 회사웹 근태·경비 기록이 여기에 채워져요.</div>' : `
+      <div class="summary-row">${stats}</div>
+      <div class="table-scroll" style="margin-top:16px;"><table>${body}</table></div>
+      <div style="margin-top:14px;"><div class="hint" style="margin:0 0 4px;">${mm}월 내 메모</div>
+        <input type="text" value="${escapeAttr(monthMemo)}" placeholder="이 달 근태·경비 관련 메모" onchange="updateAttendMine('${monthKey}','note',this.value)" style="width:100%"></div>`}
     </div>`;
 }
 
@@ -5924,6 +6039,7 @@ function renderAllNoSave(){
   if(activeTab === 'review') renderReview();
   if(activeTab === 'taxj') renderTaxjFull();
   if(activeTab === 'submit') renderSubmit();
+  if(activeTab === 'attend') renderAttend();
 }
 function renderAll(){
   renderAllNoSave();
