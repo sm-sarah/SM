@@ -1150,6 +1150,7 @@
     <div id="tab-pay" class="tab"></div>
     <div id="tab-corp" class="tab"></div>
     <div id="tab-indiv" class="tab"></div>
+    <div id="tab-submit" class="tab"></div>
     <div id="tab-clients" class="tab"></div>
     <div id="tab-review" class="tab"></div>
     <div id="tab-taxj" class="tab"></div>
@@ -1380,6 +1381,7 @@ let nextTrashId = 1;
 // 계정 보관함(아래 '계정' 부분 참고) - 다른 데이터와 같이 처음부터 선언해 둠
 let manuals = [], nextManualId = 1, manualCats = ['개인','회사','신고'];   // [2026.10.08] 매뉴얼 메뉴: [{id, cat, title, body, at, history}]
 let links = [], nextLinkId = 1;   // [2026.10.08] 링크 메뉴: 자주 쓰는 사이트 [{id, name, url, group, memo, at}]
+let submitMine = {};   // [2026.10.12] 제출 탭 내 확인·메모 { 기간키: { 거래처키(id 또는 id@nextMonth): { done:'YYYY-MM-DD', note } } } - works에만 저장
 let accountVault = null;   // { v:1, salt, iv, data } - 암호화된 상태로만 저장·동기화
 let accountItems = null;   // 잠금 해제 후 메모리에만: [{id, site, url, user, pw, memo, at}]
 let accountNextId = 1;
@@ -1471,6 +1473,7 @@ const ICONS = {
   indiv: '<circle cx="12" cy="8" r="4"/><path d="M4.2 20c0-4.3 3.6-6.8 7.8-6.8s7.8 2.5 7.8 6.8"/>',
   clients: '<circle cx="9" cy="8" r="3.2"/><path d="M2.8 19.5c0-3.6 2.8-5.8 6.2-5.8s6.2 2.2 6.2 5.8"/><circle cx="17" cy="8.6" r="2.4"/><path d="M15 13.9c2.9.2 4.7 2.2 4.9 5.3"/>',
   review: '<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 3.5h6v3H9z"/><path d="M8.5 11l1.5 1.5 3-3"/><path d="M8.5 16.5h7"/>',
+  submit: '<path d="M22 2 11 13"/><path d="M22 2 15 22 11 13 2 9z"/>',
   taxj: '<rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/><path d="M7 9.5h4M7 12.5h7"/>',
   settings: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>',
 };
@@ -1485,6 +1488,7 @@ const TABS = [
   {id:'pay',      label:'원천세'},
   {id:'corp',     label:'법인세'},
   {id:'indiv',    label:'종소세'},
+  {id:'submit',   label:'제출'},
   {id:'clients',  label:'거래처'},
   {id:'review',   label:'검토표'},
   {id:'taxj',     label:'Tax.J'},
@@ -1500,6 +1504,7 @@ const TAB_TITLES = {
   pay:['원천세·급여','월별 급여·원천세 처리 현황입니다.'],
   corp:['법인세','법인 거래처의 결산~신고 단계를 추적합니다.'],
   indiv:['종합소득세','개인사업자 거래처의 신고 단계를 추적합니다.'],
+  submit:['제출','회사웹 지급명세서 제출현황(매월·반기·연간)을 실시간으로 보고, 내 확인·메모를 더해요.'],
   clients:['거래처','모든 신고 탭이 참조하는 기준정보입니다.'],
   review:['검토표','Tax.J 원천세 검토표 계산식을 조회해요.'],
   taxj:['Tax.J','회사웹(Tax.J) 데이터를 받아 내 데이터로 보관해요.'],
@@ -1513,6 +1518,12 @@ const NAV_SUBMENUS = {
     {js:"setTaxjFullView('work')",   label:'근태·경비·결재'},
     {js:"setTaxjFullView('info')",   label:'공지·세무일정·회사정보'},
     {js:"setTaxjFullView('remote')", label:'회사웹 화면'},
+  ],
+  // [2026.10.12] 회사웹 제출 메뉴와 같은 하위메뉴(요청)
+  submit: [
+    {js:"setSubmitMode('월별')", label:'매월'},
+    {js:"setSubmitMode('반기')", label:'반기'},
+    {js:"setSubmitMode('연간')", label:'연간'},
   ],
   clients: [
     {js:"setClientsView('regular')",    label:'기장거래처'},
@@ -2731,6 +2742,7 @@ function renderVat(){
 
   el.innerHTML = `
     <div class="card">
+      ${taxjLiveBarHtml()}
       <div class="toolbar">
         <select onchange="currentVatPeriod=this.value; renderVat();">
           ${vatPeriods.map(p => `<option value="${p}" ${p===currentVatPeriod?'selected':''}>${p}</option>`).join('')}
@@ -2749,7 +2761,7 @@ function renderVat(){
       <table>
         <thead><tr>
           <th class="tx-seq">순번</th><th class="tx-type">구분</th><th>상호명</th><th>예정고지 대상</th><th>관할세무서/담당자</th>
-          <th>매출집계</th><th>매입집계</th><th>신고일</th><th>납부일</th><th>비고</th>
+          <th>매출집계</th><th>매입집계</th><th>신고일</th><th>납부일</th><th>회사 진행</th><th>비고</th>
         </tr></thead>
         <tbody>
           ${sortedClients().map(c => {
@@ -2771,6 +2783,7 @@ function renderVat(){
                 <input type="date" value="${r.paidDate}" onchange="updateVat(${c.id},'paidDate',this.value)">
                 ${r.paidDate ? pill('완료','ok') : `<button class="btn xs" onclick="updateVat(${c.id},'paidDate','${todayStr()}')">오늘</button>`}
               </div></td>
+              <td>${taxjStatusCellHtml('부가세', taxjVatPeriodKey(currentVatPeriod), c)}</td>
               <td class="note-cell"><input type="text" value="${r.note}" onchange="updateVat(${c.id},'note',this.value)" style="width:100%"></td>
             </tr>`;
           }).join('')}
@@ -2803,6 +2816,7 @@ function renderPay(){
 
   el.innerHTML = `
     <div class="card">
+      ${taxjLiveBarHtml()}
       <div class="toolbar">
         <select onchange="currentPayMonth=this.value; renderPay();">
           ${payMonths.map(m => `<option value="${m}" ${m===currentPayMonth?'selected':''}>${m}</option>`).join('')}
@@ -2818,7 +2832,7 @@ function renderPay(){
       <div class="table-scroll" style="margin-top:16px;">
       <table>
         <thead><tr>
-          <th class="tx-seq">순번</th><th class="tx-type">구분</th><th>상호명</th><th>급여유형</th><th>지급일</th><th>급여마감</th><th>원천세 신고일</th><th>납부서 발송일</th><th>비고</th>
+          <th class="tx-seq">순번</th><th class="tx-type">구분</th><th>상호명</th><th>급여유형</th><th>지급일</th><th>급여마감</th><th>원천세 신고일</th><th>납부서 발송일</th><th>회사 신고</th><th>비고</th>
         </tr></thead>
         <tbody>
           ${sortedClients().map(c => {
@@ -2843,6 +2857,7 @@ function renderPay(){
                 <input type="date" value="${r.paidSlipDate}" onchange="updatePay(${c.id},'paidSlipDate',this.value)">
                 ${r.paidSlipDate ? pill('발송','ok') : `<button class="btn xs" onclick="updatePay(${c.id},'paidSlipDate','${todayStr()}')">오늘</button>`}
               </div></td>
+              <td>${taxjPayFiledCellHtml(c)}</td>
               <td class="note-cell"><input type="text" value="${r.note}" onchange="updatePay(${c.id},'note',this.value)" style="width:100%"></td>
             </tr>`;
           }).join('')}
@@ -2879,6 +2894,7 @@ function renderCorp(){
 
   el.innerHTML = `
     <div class="card">
+      ${taxjLiveBarHtml()}
       <div class="toolbar">
         <select onchange="currentCorpYear=this.value; renderCorp();">
           ${corpYears.map(y => `<option value="${y}" ${y===currentCorpYear?'selected':''}>${y}년 귀속</option>`).join('')}
@@ -2891,7 +2907,7 @@ function renderCorp(){
       </div>
       <div class="table-scroll" style="margin-top:16px;">
       <table>
-        <thead><tr><th class="tx-seq">순번</th><th class="tx-type">구분</th><th>상호명</th><th>진행 단계</th><th>비고</th></tr></thead>
+        <thead><tr><th class="tx-seq">순번</th><th class="tx-type">구분</th><th>상호명</th><th>진행 단계</th><th>회사 진행</th><th>비고</th></tr></thead>
         <tbody>
           ${sortedClients().filter(x => rows.includes(x)).map(c => {
             const r = data[c.id] || {steps:Object.fromEntries(corpSteps.map(s=>[s,''])), note:''};
@@ -2907,6 +2923,7 @@ function renderCorp(){
                   `).join('')}
                 </div>
               </td>
+              <td>${taxjStatusCellHtml('법인세', currentCorpYear, c)}</td>
               <td class="note-cell"><input type="text" value="${r.note}" onchange="updateCorpNote(${c.id}, this.value)" style="width:100%"></td>
             </tr>`;
           }).join('')}
@@ -2943,6 +2960,7 @@ function renderIndiv(){
 
   el.innerHTML = `
     <div class="card">
+      ${taxjLiveBarHtml()}
       <div class="toolbar">
         <select onchange="currentIndivYear=this.value; renderIndiv();">
           ${indivYears.map(y => `<option value="${y}" ${y===currentIndivYear?'selected':''}>${y}년 귀속</option>`).join('')}
@@ -2955,7 +2973,7 @@ function renderIndiv(){
       </div>
       <div class="table-scroll" style="margin-top:16px;">
       <table>
-        <thead><tr><th class="tx-seq">순번</th><th class="tx-type">구분</th><th>상호명</th><th>성실신고</th><th>진행 단계</th><th>비고</th></tr></thead>
+        <thead><tr><th class="tx-seq">순번</th><th class="tx-type">구분</th><th>상호명</th><th>성실신고</th><th>진행 단계</th><th>회사 진행</th><th>비고</th></tr></thead>
         <tbody>
           ${sortedClients().filter(x => rows.includes(x)).map(c => {
             const r = data[c.id] || {honest:false, steps:Object.fromEntries(indivSteps.map(s=>[s,''])), note:''};
@@ -2972,6 +2990,7 @@ function renderIndiv(){
                   `).join('')}
                 </div>
               </td>
+              <td>${taxjStatusCellHtml('종소세', currentIndivYear, c)}</td>
               <td class="note-cell"><input type="text" value="${r.note}" onchange="updateIndivNote(${c.id}, this.value)" style="width:100%"></td>
             </tr>`;
           }).join('')}
@@ -3443,6 +3462,7 @@ const GOOGLE_DATA_KEYS = [
   'trashBin','nextTrashId',
   'links','nextLinkId',
   'manuals','nextManualId','manualCats',
+  'submitMine',     // [2026.10.12] 제출 탭 내 확인·메모
   'accountVault',   // [2026.10.08] 계정 보관함이 Google 시트에 저장되지 않아 다시 열면 "보관함 만들기"가 다시 뜨던 문제 수정(요청)
 ];
 
@@ -3458,7 +3478,7 @@ function collectGoogleSnapshot(){
     trashBin, nextTrashId,
     links, nextLinkId,
     manuals, nextManualId, manualCats,
-    accountVault,
+    accountVault, submitMine,
   };
 }
 
@@ -3519,6 +3539,7 @@ async function loadFromGoogleSheet(){
     if(map.clientsTerminated) clientsTerminated = JSON.parse(map.clientsTerminated);
     if(map.nextEventId)   nextEventId  = JSON.parse(map.nextEventId);
     if(map.accountVault)  accountVault = JSON.parse(map.accountVault);
+    if(map.submitMine)    submitMine   = JSON.parse(map.submitMine);
     if(map.links)         links        = JSON.parse(map.links);
     if(map.nextLinkId)    nextLinkId   = JSON.parse(map.nextLinkId);
     if(map.manuals)       manuals      = JSON.parse(map.manuals);
@@ -3710,6 +3731,7 @@ function hasUnsavedChanges(){
 function applySnapshot(o){
   if(!o) return;
   if(o.accountVault) accountVault = o.accountVault;
+  if(o.submitMine) submitMine = o.submitMine;
   if(o.links) links = o.links;
   if(o.nextLinkId) nextLinkId = o.nextLinkId;
   if(o.manuals) manuals = o.manuals;
@@ -4337,6 +4359,7 @@ async function resetAllData(){
   clients = [];
   tasks = [];
   vatData = {}; payData = {}; corpData = {}; indivData = {};
+  submitMine = {};
   worklistChecklist = {}; worklistSchedule = {};
   events = [];
   clientsOther = []; clientsTerminated = [];
@@ -4430,7 +4453,7 @@ async function loadTaxjLive(parts){
 }
 // Tax.J 거래처 → 이 앱 거래처 모양. 순서는 Tax.J와 같게(법인 → 개인, 기장대행 → 신고대리, 그다음 등록 순)
 function taxjLiveClientRows(){
-  const list = ((taxjLive && taxjLive.data && taxjLive.data.clients) || {}).list || [];
+  const list = taxjClientsList().length ? taxjClientsList() : (((taxjLive && taxjLive.data && taxjLive.data.clients) || {}).list || []);   // [2026.10.12] 실시간 연결 자료가 있으면 그걸 먼저
   const isReg = c => ['기장대행','신고대리'].includes(c.taxType);
   const w1 = c => c.entityType === '법인' ? 0 : c.entityType === '개인' ? 1 : 2;
   const w2 = c => c.taxType === '기장대행' ? 0 : c.taxType === '신고대리' ? 1 : 2;
@@ -4465,10 +4488,10 @@ function payMonthPeriod(key){
 }
 function taxjPayPanelHtml(){
   const head = `<div style="display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap; margin-bottom:10px;">
-      <div style="font-weight:800;">Tax.J 원천세 진행 <span class="hint" style="font-weight:600;">${taxjLive ? '· ' + taxjWhen(taxjLive.at) + ' 기준 · 조회만 돼요' : '· 회사앱에 입력한 날짜를 조회해요'}</span></div>
-      <button class="btn primary xs" onclick="refreshTaxjPayPanel(this)">${taxjLive && taxjLive.data.itFilingStatus ? '새로고침' : 'Tax.J에서 불러오기'}</button>
+      <div style="font-weight:800;">Tax.J 원천세 진행 <span class="hint" style="font-weight:600;">${taxjFull ? '· ' + taxjWhen(taxjFull.at) + ' 기준 · 조회만 돼요' : taxjLive ? '· ' + taxjWhen(taxjLive.at) + ' 기준 · 조회만 돼요' : '· 회사앱에 입력한 날짜를 조회해요'}</span></div>
+      ${taxjFull ? '' : `<button class="btn primary xs" onclick="refreshTaxjPayPanel(this)">${taxjLive && taxjLive.data.itFilingStatus ? '새로고침' : 'Tax.J에서 불러오기'}</button>`}
     </div>`;
-  const d = taxjLive && taxjLive.data;
+  const d = taxjFull ? { itFilingStatus: taxjDoc('itFilingStatus') || {}, filingTargets: taxjDoc('filingTargets') || {} } : (taxjLive && taxjLive.data);   // [2026.10.12] 실시간 연결 자료 우선
   if(!d || !d.itFilingStatus) return head;
   const period = payMonthPeriod(currentPayMonth);
   const st = (d.itFilingStatus || {})[period] || {}, tg = d.filingTargets || {};
@@ -4629,27 +4652,278 @@ async function loadTaxjFull(relogin){
     }
     if(!String(user.email || '').toLowerCase().endsWith(TAXJ_COMPANY_DOMAIN)){ await auth.signOut(); throw new Error(`회사 계정(${TAXJ_COMPANY_DOMAIN})으로 로그인해야 해요`); }
     const snap = await app.firestore().collection('taxj').get();
-    const mains = {}, parts = {};
-    snap.forEach(d => {
-      const id = d.id;
-      if(id === '_meta' || id.startsWith('_presence__')) return;
-      const m = id.match(/^(.*)~p(\d+)$/);
-      if(m) (parts[m[1]] = parts[m[1]] || {})[Number(m[2])] = d.data(); else mains[id] = d.data();
-    });
-    const docs = {};
-    Object.keys(mains).forEach(k => {
-      const m = mains[k], n = m.n || 1; let json = m.j || 'null';
-      for(let i = 1; i < n; i++){ const p = parts[k] && parts[k][i]; if(!p || p.w !== m.w){ json = null; break; } json += p.j; }
-      if(json != null){ try{ docs[k] = JSON.parse(json); }catch(e){} }
-    });
+    const docs = taxjParseSnap(snap);
     taxjFull = { at: Date.now(), email: user.email, docs };
+    taxjMatchCache = null;
     taxjFullSaveMsg = '저장하는 중…'; renderTaxjFull();
     await taxjSaveFull(taxjFull);
+    taxjLiveSheetAt = Date.now();
+    taxjLiveStart(app);   // [2026.10.12] 이어서 실시간으로 듣기
+    taxjLiveRerender();
   }catch(e){
     console.error(e);
     taxjFullErr = e && e.code === 'permission-denied' ? '이 계정은 Tax.J 저장소를 읽을 권한이 없어요(회사 계정인지 확인해 주세요).' : (e && (e.message || e.code)) || String(e);
-  }finally{ taxjFullBusy = false; renderTaxjFull(); }
+  }finally{ taxjFullBusy = false; renderTaxjFull(); if(activeTab !== 'taxj') taxjLiveRerender(); }
 }
+// Tax.J 저장 구조(fsAssembleSnapshot과 같음) → { 문서키: 값 }. 조각(~p1..)은 같은 저장(w)끼리만 이어붙임
+function taxjParseSnap(snap){
+  const mains = {}, parts = {};
+  snap.forEach(d => {
+    const id = d.id;
+    if(id === '_meta' || id.startsWith('_presence__')) return;
+    const m = id.match(/^(.*)~p(\d+)$/);
+    if(m) (parts[m[1]] = parts[m[1]] || {})[Number(m[2])] = d.data(); else mains[id] = d.data();
+  });
+  const docs = {};
+  Object.keys(mains).forEach(k => {
+    const m = mains[k], n = m.n || 1; let json = m.j || 'null';
+    for(let i = 1; i < n; i++){ const p = parts[k] && parts[k][i]; if(!p || p.w !== m.w){ json = null; break; } json += p.j; }
+    if(json != null){ try{ docs[k] = JSON.parse(json); }catch(e){} }
+    else if(taxjFull && taxjFull.docs && k in taxjFull.docs) docs[k] = taxjFull.docs[k];   // 조각이 덜 모였으면 직전 값 유지
+  });
+  return docs;
+}
+// ── [2026.10.12] 회사웹 신고·제출 실시간 연동(요청: "회사웹 메뉴와 데이터를 개인웹으로 연동해서 필요한 개인업무를 더해 작업") ──
+// 회사 계정으로 한 번 연결하면 Tax.J 저장소(Firestore)를 실시간으로 듣고(onSnapshot) 바뀔 때마다 taxjFull을 갱신 → 부가세·원천세·법인세·종소세 탭의
+// '회사 진행' 칸과 제출 탭에 바로 반영. 읽기만 하고 회사 원본은 고치지 않음. 내 확인·메모는 works 저장 공간(submitMine)에만 저장.
+// 다음에 열면 Firebase가 기억한 회사 로그인으로 창 없이 다시 연결(sm_taxj_live). 큰 자료라 이 기기 저장은 몇 초 모아서, Google 시트는 10분에 한 번만
+let taxjLiveUnsub = null, taxjLiveOn = false, taxjLiveErr = '', taxjLiveIdbTimer = null, taxjLiveSheetAt = 0, taxjLiveRenderPending = false;
+let taxjMatchCache = null;
+function taxjLiveStart(app){
+  if(taxjLiveUnsub) return;
+  taxjLiveErr = '';
+  taxjLiveUnsub = app.firestore().collection('taxj').onSnapshot(snap => {
+    if(snap.metadata && snap.metadata.fromCache) return;
+    const changed = !taxjLiveOn || snap.docChanges().some(ch => ch.doc.id !== '_meta' && !ch.doc.id.startsWith('_presence__'));
+    taxjLiveOn = true; taxjLiveErr = '';
+    if(!changed) return;
+    const user = app.auth().currentUser;
+    taxjFull = { at: Date.now(), email: (user && user.email) || (taxjFull && taxjFull.email) || '', docs: taxjParseSnap(snap) };
+    taxjMatchCache = null;
+    taxjLiveRerender();
+    taxjLivePersist();
+  }, err => {
+    console.error('Tax.J 실시간 수신 오류', err);
+    taxjLiveOn = false; taxjLiveUnsub = null;
+    taxjLiveErr = err && err.code === 'permission-denied' ? '읽기 권한이 없어요(회사 계정인지 확인해 주세요)' : (err && (err.code || err.message)) || String(err);
+    taxjLiveRerender();
+  });
+  try{ localStorage.setItem('sm_taxj_live', '1'); }catch(e){}
+}
+function taxjLivePersist(){
+  clearTimeout(taxjLiveIdbTimer);
+  taxjLiveIdbTimer = setTimeout(async () => {
+    if(Date.now() - taxjLiveSheetAt > 10 * 60 * 1000){ taxjLiveSheetAt = Date.now(); await taxjSaveFull(taxjFull); }
+    else { try{ await taxjIdbSet(taxjFull); }catch(e){ console.error('Tax.J 자료 기기 저장 실패', e); } }
+  }, 4000);
+}
+// 회사 자료가 바뀌면 지금 보고 있는 화면만 다시 그림. 입력 중이면 입력이 끝난 뒤(포커스가 빠질 때) 그림
+function taxjLiveRerender(){
+  if(typeof isEditingNow === 'function' && isEditingNow()){
+    if(!taxjLiveRenderPending){ taxjLiveRenderPending = true; document.addEventListener('focusout', () => { taxjLiveRenderPending = false; setTimeout(taxjLiveRerender, 50); }, { once:true }); }
+    return;
+  }
+  const fn = { vat: renderVat, pay: renderPay, corp: renderCorp, indiv: renderIndiv, submit: renderSubmit, taxj: renderTaxjFull }[activeTab];
+  if(fn) try{ fn(); }catch(e){ console.error(e); }
+}
+// 첫 화면에서 조용히 다시 연결(전에 연결한 적이 있고, 회사 로그인이 기억돼 있을 때만 - 로그인 창은 띄우지 않음)
+async function taxjLiveAutoStart(){
+  try{ if(localStorage.getItem('sm_taxj_live') !== '1') return; }catch(e){ return; }
+  try{
+    if(!taxjFullRestoreTried) taxjRestoreFull();
+    const app = await taxjCompanyApp();
+    const auth = app.auth();
+    const user = auth.currentUser || await new Promise(res => { let off = null; const t = setTimeout(() => { try{ off && off(); }catch(e){} res(null); }, 5000); off = auth.onAuthStateChanged(u => { clearTimeout(t); try{ off(); }catch(e){} res(u); }); });
+    if(!user || !String(user.email || '').toLowerCase().endsWith(TAXJ_COMPANY_DOMAIN)) return;
+    taxjLiveStart(app);
+  }catch(e){ console.warn('Tax.J 실시간 연결 건너뜀', e); }
+}
+// 각 화면 위 연결 상태 줄
+function taxjLiveBarHtml(){
+  const btn = taxjFullBusy ? `<button class="btn ghost xs" disabled>연결 중…</button>`
+    : taxjLiveOn ? '' : `<button class="btn primary xs" onclick="loadTaxjFull()">${taxjFull ? '실시간 연결' : 'Tax.J 연결'}</button>`;
+  const txt = taxjLiveOn ? `회사웹 실시간 연결됨 · ${taxjEsc(taxjFull.email)} · ${taxjWhen(taxjFull.at)} 반영`
+    : taxjFull ? `저장해 둔 회사 자료 · ${taxjWhen(taxjFull.at)} 기준${taxjLiveErr ? ' · 연결 끊김: ' + taxjEsc(taxjLiveErr) : ''}`
+    : `회사 계정(${TAXJ_COMPANY_DOMAIN})으로 연결하면 회사웹 진행 상황이 실시간으로 채워져요`;
+  return `<div style="display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap; margin-bottom:10px;">
+    <span class="hint" style="margin:0;">${taxjLiveOn ? '<span style="color:#059669;">●</span> ' : ''}${txt}</span>${btn}</div>`;
+}
+function taxjDoc(key){ return taxjFull && taxjFull.docs ? taxjFull.docs['s__' + key] : undefined; }
+function taxjClientsList(){ const v = taxjDoc('clients'); return (v && v.list) || []; }
+// works 거래처 ↔ Tax.J 거래처 id: 가져올 때 남긴 taxjId → 사업자번호 → 상호(공백·주식회사 빼고)
+function taxjNormName(v){ return String(v || '').replace(/\s+/g, '').replace(/주식회사|\(주\)|㈜|^주\)/g, '').toLowerCase(); }
+function taxjIdOf(c){
+  if(!taxjFull) return null;
+  if(!taxjMatchCache){
+    const byBiz = {}, byName = {}, ids = new Set();
+    taxjClientsList().forEach(t => { ids.add(String(t.id)); const b = String(t.bizNo || '').replace(/\D/g, ''); if(b) byBiz[b] = t.id; const n = taxjNormName(t.name); if(n && !(n in byName)) byName[n] = t.id; });
+    taxjMatchCache = { byBiz, byName, ids };
+  }
+  if(c.taxjId != null && taxjMatchCache.ids.has(String(c.taxjId))) return c.taxjId;
+  const b = String(c.biz || '').replace(/\D/g, '');
+  return (b && taxjMatchCache.byBiz[b]) || taxjMatchCache.byName[taxjNormName(c.name)] || null;
+}
+function taxjFsEntry(type, period, cid){ const fs = taxjDoc('filingStatus') || {}; return (((fs[type] || {})[period]) || {})[cid] || null; }
+const TAXJ_ST_COLOR = { 신고완료:'#059669', 결산완료:'#059669', 기안완료:'#b45309', 검토중:'#b45309', 미대상:'#d4c6cd' };
+// 신고현황(sharedFilingStatus) 한 칸 → '회사 진행' 칸. 글자색만, 완료일은 옆에 작게, 메모는 마우스를 올리면
+function taxjStatusCellHtml(type, period, c){
+  const na = '<span style="color:#d4c6cd;">-</span>';
+  if(!taxjFull || !period) return na;
+  const cid = taxjIdOf(c);
+  if(cid == null) return `<span class="hint" style="margin:0;" title="Tax.J 거래처 목록에서 같은 사업자번호·상호를 찾지 못했어요">연결 안 됨</span>`;
+  const e = taxjFsEntry(type, period, cid);
+  const st = (e && e.status) || '미확인';
+  const d = e && e.completedAt ? String(e.completedAt).slice(5, 10).replace('-', '/') : '';
+  return `<span style="font-weight:700; color:${TAXJ_ST_COLOR[st] || 'var(--muted)'};" title="${taxjEsc(e && e.memo ? '회사 메모: ' + e.memo : '')}">${taxjEsc(st)}</span>${d ? ` <span class="hint" style="margin:0;">${d}</span>` : ''}${e && e.memo ? ' <span class="hint" style="margin:0;">✎</span>' : ''}`;
+}
+// works 부가세 기간 이름("2026년 2기 예정") → Tax.J 저장 키("2026-Q3")
+function taxjVatPeriodKey(label){
+  const y = /(\d{4})/.exec(label || ''), m = /([12])\s*기\s*(예정|확정)/.exec(label || '');
+  if(!y || !m) return '';
+  return `${y[1]}-Q${(m[1] === '1' ? 0 : 2) + (m[2] === '예정' ? 1 : 2)}`;
+}
+// 원천세 화면 '회사 신고' 칸 - Tax.J 원천세 진행 일자(itFilingStatus)의 국세 신고일(당월·익월 줄 중 있는 것)
+function taxjPayFiledCellHtml(c){
+  const na = '<span style="color:#d4c6cd;">-</span>';
+  if(!taxjFull) return na;
+  const cid = taxjIdOf(c);
+  if(cid == null) return `<span class="hint" style="margin:0;" title="Tax.J 거래처 목록에서 같은 사업자번호·상호를 찾지 못했어요">연결 안 됨</span>`;
+  const e = ((taxjDoc('itFilingStatus') || {})[payMonthPeriod(currentPayMonth)] || {})[cid] || {};
+  const ds = ['sameMonth', 'nextMonth'].map(k => (e[k] || {}).national).filter(Boolean);
+  return ds.length ? `<span style="font-weight:700; color:#059669;">${ds.map(d => taxjEsc(String(d).slice(5).replace('-', '/'))).join(' · ')}</span>` : na;
+}
+
+/* ── 제출(지급명세서 매월·반기·연간) - Tax.J 제출현황(sharedFilingStatus['원천세'])을 그대로 보고 내 확인·메모를 더함 ──
+   아래 세 표는 Tax.J의 FILING_STATUS_SUBITEMS / SUBMIT_AUTO_MAP / SUBMIT_DUE_RULE과 같게 둠(Tax.J에서 칸이 바뀌면 여기도 맞춰야 함) */
+const SUBMIT_ITEMS = {
+  월별: [['사업간이','사업(간이)'], ['기타간이','기타(간이)'], ['일용지급','일용(지급)'], ['일용근확','일용(근확)'], ['특고','특고(월보수액)'], ['학자금상환','학자금상환']],
+  반기: [['근로간이','근로(간이)']],
+  연간: [['근로연간','근로'], ['사업연간','사업'], ['기타연간','기타(간이외)'], ['퇴직연간','퇴직'], ['이자배당연간','이자/배당']],
+};
+const SUBMIT_INCOME_MAP = {
+  사업간이:['사업'], 기타간이:['기타간이대상'], 일용지급:['일용'], 일용근확:['일용'],
+  근로간이:['근로과세','근로제출비과세','근로미제출비과세','중도과세','중도제출비과세','중도미제출비과세'],
+  근로연간:['근로과세','근로제출비과세','근로미제출비과세','중도과세','중도제출비과세','중도미제출비과세','연말'],
+  사업연간:['사업'], 기타연간:['기타간이미대상'], 퇴직연간:['퇴직'], 이자배당연간:['이자'],
+};
+const SUBMIT_DUE = { 사업간이:'pay', 기타간이:'pay', 일용지급:'pay', 일용근확:'att15', 특고:'att15', 학자금상환:'pay10' };
+const SUBMIT_MODE_LABEL = { 월별:'매월', 반기:'반기', 연간:'연간' };
+let submitMode = '월별', submitYear = '', submitMonth = '', submitHalf = 'H1', submitOnlyLeft = false;
+// submitMine(내 확인·메모)은 다른 저장 항목과 함께 위쪽에 선언
+function submitInit(){
+  if(submitYear) return;
+  const d = new Date(); d.setMonth(d.getMonth() - 1);   // 기본: 지난달 귀속(이번 달 제출분)
+  submitYear = String(d.getFullYear()); submitMonth = String(d.getMonth() + 1);
+  submitHalf = new Date().getMonth() < 6 ? 'H1' : 'H2';
+}
+function setSubmitMode(m){ submitMode = m; if(activeTab !== 'submit') switchTab('submit'); else renderSubmit(); }
+function submitPeriodKey(){ return submitMode === '연간' ? submitYear : submitMode === '반기' ? `${submitYear}-${submitHalf}` : `${submitYear}-${pad2(submitMonth)}`; }
+function submitMonths(){ return submitMode === '연간' ? [1,2,3,4,5,6,7,8,9,10,11,12] : submitMode === '반기' ? (submitHalf === 'H1' ? [1,2,3,4,5,6] : [7,8,9,10,11,12]) : [Number(submitMonth)]; }
+function submitAddMonth(ym, n){ let y = Number(ym.slice(0,4)), m = Number(ym.slice(5,7)) + n; while(m > 12){ m -= 12; y++; } while(m < 1){ m += 12; y--; } return `${y}-${pad2(m)}`; }
+function submitDueOf(item, period, payMonth){
+  const rule = SUBMIT_DUE[item];
+  if(!rule || !/^\d{4}-\d{2}$/.test(period)) return '';
+  const base = submitAddMonth(rule === 'att15' ? period : payMonth, 1);
+  if(rule === 'att15') return `${base}-15`;
+  if(rule === 'pay10') return `${base}-10`;
+  return `${base}-${pad2(new Date(Number(base.slice(0,4)), Number(base.slice(5,7)), 0).getDate())}`;
+}
+// 검토표(급여검증)에 이 기간 그 소득 금액이 있으면 제출대상(Tax.J submitAutoApplicable과 같은 기준)
+function submitHasPay(key, fields){
+  const yd = ((taxjDoc('reviewFigures') || {})[key] || {})[submitYear] || {};
+  return submitMonths().some(m => fields.some(f => Number((((yd[String(m)] || {}).income) || {})[f])));
+}
+function submitRows(){
+  const period = submitPeriodKey(), pd = ((taxjDoc('filingStatus') || {})['원천세'] || {})[period] || {};
+  const items = SUBMIT_ITEMS[submitMode], modeFields = [...new Set(items.flatMap(([k]) => SUBMIT_INCOME_MAP[k] || []))];
+  const isReg = c => ['기장대행','신고대리'].includes(c.taxType) && c.status !== '해지';
+  const w1 = c => c.entityType === '법인' ? 0 : c.entityType === '개인' ? 1 : 2, w2 = c => c.taxType === '기장대행' ? 0 : 1;
+  const list = taxjClientsList().map((c, i) => ({ c, i })).filter(x => isReg(x.c)).sort((a, b) => (w1(a.c) - w1(b.c)) || (w2(a.c) - w2(b.c)) || (a.i - b.i)).map(x => x.c);
+  const rows = [];
+  list.forEach((c, idx) => {
+    const lanes = [[String(c.id), 'sameMonth'], [c.id + '@nextMonth', 'nextMonth']].filter(([k, lane]) => {
+      const e = pd[k];
+      const recorded = e && items.some(([it]) => (e.itemDates || {})[it] || (e.itemNotes || {})[it]);
+      return recorded || submitHasPay(k, modeFields) || (lane === 'sameMonth' && e && items.some(([it]) => (e.items || {})[it]));
+    });
+    lanes.forEach(([k, lane]) => {
+      const e = pd[k] || {};
+      const payMonth = /^\d{4}-\d{2}$/.test(e.payMonth || '') ? e.payMonth : lane === 'nextMonth' && submitMode === '월별' ? submitAddMonth(period, 1) : period;
+      const cells = items.map(([it]) => {
+        const date = (e.itemDates || {})[it], note = (e.itemNotes || {})[it];
+        if(date) return { st:'done', txt: String(date).slice(5).replace('-', '/') };
+        if(note) return { st:'done', txt: note };
+        if((e.itemNA || {})[it]) return { st:'na' };
+        const auto = SUBMIT_INCOME_MAP[it] ? submitHasPay(k, SUBMIT_INCOME_MAP[it]) : !!(e.items || {})[it];
+        return auto || (e.items || {})[it] ? { st:'todo', due: submitMode === '월별' ? submitDueOf(it, period, payMonth) : '' } : { st:'na' };
+      });
+      rows.push({ seq: idx + 1, c, key: k, dual: lanes.length > 1, lane, payMonth, cells, memo: e.memo || '' });
+    });
+  });
+  return rows;
+}
+function updateSubmitMine(key, field, value){
+  const pk = submitPeriodKey();
+  const per = submitMine[pk] = submitMine[pk] || {};
+  const r = per[key] = per[key] || { done:'', note:'' };
+  r[field] = value;
+  if(!r.done && !r.note) delete per[key];
+  if(!Object.keys(per).length) delete submitMine[pk];
+  renderSubmit(); scheduleGoogleSave();
+}
+function renderSubmit(){
+  const el = document.getElementById('tab-submit');
+  if(!el) return;
+  submitInit();
+  if(!taxjFull && !taxjFullRestoreTried) taxjRestoreFull();
+  const nowY = new Date().getFullYear(), years = [];
+  for(let y = nowY + 1; y >= nowY - 4; y--) years.push(String(y));
+  if(!years.includes(submitYear)) years.push(submitYear);
+  const period = submitPeriodKey(), mine = submitMine[period] || {};
+  const sub = submitMode === '연간' ? '' : submitMode === '반기'
+    ? `<select onchange="submitHalf=this.value; renderSubmit();"><option value="H1" ${submitHalf==='H1'?'selected':''}>상반기 귀속</option><option value="H2" ${submitHalf==='H2'?'selected':''}>하반기 귀속</option></select>`
+    : `<select onchange="submitMonth=this.value; renderSubmit();">${Array.from({length:12}, (_, i) => `<option value="${i+1}" ${String(i+1)===String(submitMonth)?'selected':''}>${i+1}월 귀속</option>`).join('')}</select>`;
+  const items = SUBMIT_ITEMS[submitMode];
+  const all = taxjFull ? submitRows() : [];
+  const isDone = r => r.cells.every(x => x.st !== 'todo');
+  const rows = submitOnlyLeft ? all.filter(r => !isDone(r) || !(mine[r.key] && mine[r.key].done)) : all;
+  const doneN = all.filter(isDone).length, mineN = all.filter(r => mine[r.key] && mine[r.key].done).length;
+  const pct = all.length ? Math.round(doneN / all.length * 100) : 0;
+  const today = todayStr();
+  const cellHtml = x => x.st === 'done' ? `<span style="font-weight:700; color:#059669;">${taxjEsc(x.txt)}</span>`
+    : x.st === 'todo' ? `<span style="font-weight:700; color:${x.due && x.due < today ? '#e11d48' : '#b45309'};">미제출</span>${x.due ? `<div class="hint" style="margin:0;">~${Number(x.due.slice(5,7))}/${Number(x.due.slice(8,10))}</div>` : ''}`
+    : '<span style="color:#d4c6cd;">-</span>';
+  el.innerHTML = `
+    <div class="card">
+      ${taxjLiveBarHtml()}
+      <div class="toolbar">
+        <div class="cl-subtabs">${['월별','반기','연간'].map(m => `<button class="cl-subtab ${submitMode === m ? 'on' : ''}" onclick="setSubmitMode('${m}')">${SUBMIT_MODE_LABEL[m]}</button>`).join('')}</div>
+        <select onchange="submitYear=this.value; renderSubmit();">${years.map(y => `<option value="${y}" ${y===submitYear?'selected':''}>${y}년${submitMode === '연간' ? ' 귀속' : ''}</option>`).join('')}</select>
+        ${sub}
+        <div class="spacer"></div>
+        <label class="hint" style="margin:0; display:inline-flex; align-items:center; gap:4px; cursor:pointer;"><input type="checkbox" ${submitOnlyLeft ? 'checked' : ''} onchange="submitOnlyLeft=this.checked; renderSubmit();"> 남은 것만</label>
+      </div>
+      ${!taxjFull ? '<div class="empty">Tax.J에 연결하면 회사웹 제출현황이 여기에 채워져요.</div>' : `
+      <div class="summary-row">
+        <div class="stat tone-blue"><div class="n">${all.length}</div><div class="label">제출 대상</div></div>
+        <div class="stat tone-mint"><div class="n">${doneN}</div><div class="label">회사 제출 완료</div></div>
+        <div class="stat"><div class="n">${mineN}</div><div class="label">내 확인</div></div>
+      </div>
+      <div class="progress-bar"><div class="fill tone-mint" style="width:${pct}%"></div></div>
+      ${rows.length ? `<div class="table-scroll" style="margin-top:16px;"><table>
+        <thead><tr><th class="tx-seq">순번</th><th>상호명</th>${submitMode === '월별' ? '<th>지급월</th>' : ''}${items.map(([, l]) => `<th>${l}</th>`).join('')}<th>내 확인</th><th>내 메모</th></tr></thead>
+        <tbody>${rows.map(r => { const m = mine[r.key] || { done:'', note:'' }; return `<tr>
+          <td class="tx-seq">${r.seq}</td>
+          <td class="tx-name" title="${taxjEsc(r.memo ? '회사 메모: ' + r.memo : '')}">${taxjEsc(r.c.name)}${r.dual ? ` <span class="hint" style="margin:0; font-weight:700; color:${r.lane === 'sameMonth' ? '#047857' : '#be123c'};">${r.lane === 'sameMonth' ? '당월' : '익월'}</span>` : ''}${r.memo ? ' <span class="hint" style="margin:0;">✎</span>' : ''}</td>
+          ${submitMode === '월별' ? `<td>${Number(r.payMonth.slice(5,7))}월</td>` : ''}
+          ${r.cells.map(x => `<td>${cellHtml(x)}</td>`).join('')}
+          <td><div class="date-cell"><input type="date" value="${m.done}" onchange="updateSubmitMine('${r.key}','done',this.value)">${m.done ? pill('확인','ok') : `<button class="btn xs" onclick="updateSubmitMine('${r.key}','done','${today}')">오늘</button>`}</div></td>
+          <td class="note-cell"><input type="text" value="${escapeAttr(m.note)}" onchange="updateSubmitMine('${r.key}','note',this.value)" style="width:100%"></td>
+        </tr>`; }).join('')}</tbody></table></div>`
+      : `<div class="empty">${submitOnlyLeft && all.length ? '남은 제출이 없어요.' : '이 기간에 제출 대상이 없어요(회사웹 검토표에 그 소득 금액이 있는 거래처만 나와요).'}</div>`}`}
+    </div>`;
+}
+
 function setTaxjFullView(v){ taxjFullView = v; if(activeTab !== 'taxj') switchTab('taxj'); else renderTaxjFull(); }
 function setTaxjFullPerson(id){ taxjFullPerson = id; renderTaxjFull(); }
 function taxjIsLocked(v){ return v && typeof v === 'object' && !Array.isArray(v) && typeof v.iv === 'string' && typeof v.data === 'string' && Object.keys(v).length <= 3; }
@@ -5649,6 +5923,7 @@ function renderAllNoSave(){
   renderHome(); renderWorklist(); renderAccounts(); renderLinks(); renderManuals(); renderVat(); renderPay(); renderCorp(); renderIndiv(); renderClients(); renderSettings();
   if(activeTab === 'review') renderReview();
   if(activeTab === 'taxj') renderTaxjFull();
+  if(activeTab === 'submit') renderSubmit();
 }
 function renderAll(){
   renderAllNoSave();
@@ -5704,6 +5979,7 @@ function startAppAfterAuth(){
   let last = 'home';
   try{ last = localStorage.getItem('sm_last_tab') || 'home'; }catch(e){}
   switchTab(TABS.some(t => t.id === last) ? last : 'home');
+  setTimeout(taxjLiveAutoStart, 1200);   // [2026.10.12] 전에 연결했으면 회사웹 실시간 연결 다시 켜기
 }
 
 // gapi/GIS는 게이트 버튼(로그인+Sheets 연동을 한 번에 처리)이 쓸 수 있어야 하므로
