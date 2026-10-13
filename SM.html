@@ -1545,6 +1545,7 @@ const NAV_SUBMENUS = {
     {js:"setAttendView('clock')",   label:'출퇴근현황'},
     {js:"setAttendView('leave')",   label:'근태현황'},
     {js:"setAttendView('expense')", label:'경비정산'},
+    {js:"setAttendView('cal')",     label:'개인캘린더'},   // [2026.10.13] 회사웹 개인캘린더 연동(요청)
   ],
   // [2026.10.12] 회사웹 제출 메뉴와 같은 하위메뉴(요청)
   // [2026.10.13] 원천세를 회사웹처럼 총괄·신고현황·일용직·제출(매월·반기·연간)로 나눔(요청). 따로 있던 제출 메뉴는 여기로 옮김
@@ -4749,6 +4750,7 @@ function taxjLiveStart(app){
     console.error('Tax.J 실시간 수신 오류', err);
     taxjLiveOn = false; taxjLiveUnsub = null;
     taxjLiveErr = err && err.code === 'permission-denied' ? '읽기 권한이 없어요(회사 계정인지 확인해 주세요)' : (err && (err.code || err.message)) || String(err);
+    if(!(err && err.code === 'permission-denied')) taxjLiveRetrySoon();   // [2026.10.13] 끊기면 1분 뒤 저절로 다시 연결
     taxjLiveRerender();
   });
   try{ localStorage.setItem('sm_taxj_live', '1'); }catch(e){}
@@ -4770,20 +4772,35 @@ function taxjLiveRerender(){
   if(fn) try{ fn(); }catch(e){ console.error(e); }
 }
 // 첫 화면에서 조용히 다시 연결(전에 연결한 적이 있고, 회사 로그인이 기억돼 있을 때만 - 로그인 창은 띄우지 않음)
+// [2026.10.13] "실시간 동기화 버튼을 매번 눌러야 하나?"(요청) → 처음 한 번만 누르면 됨. 다만 연결이 끊긴 뒤(절전·네트워크 끊김·로그인 확인이 늦을 때)
+//   다시 붙는 길이 첫 화면 한 번뿐이라 버튼을 다시 눌러야 했음 → 화면으로 돌아올 때·인터넷이 다시 연결될 때·끊긴 뒤 1분마다 조용히 다시 시도(로그인 창은 안 띄움).
+//   다시 붙는 동안엔 버튼 대신 '자동 연결 중…'을 보여 줌. 권한 없음(다른 계정) 오류는 다시 시도하지 않음
+let taxjLiveAutoBusy = false, taxjLiveRetryTimer = null, taxjLiveAutoReady = false;   // Ready: 첫 화면이 뜬 뒤에만 다시 시도
+function taxjLiveRetrySoon(){
+  clearTimeout(taxjLiveRetryTimer);
+  taxjLiveRetryTimer = setTimeout(() => { if(!taxjLiveOn) taxjLiveAutoStart(); }, 60 * 1000);
+}
+window.addEventListener('online', () => { if(taxjLiveAutoReady && !taxjLiveOn) taxjLiveAutoStart(); });
+document.addEventListener('visibilitychange', () => { if(taxjLiveAutoReady && document.visibilityState === 'visible' && !taxjLiveOn) taxjLiveAutoStart(); });
 async function taxjLiveAutoStart(){
   try{ if(localStorage.getItem('sm_taxj_live') !== '1') return; }catch(e){ return; }
+  if(taxjLiveAutoBusy || taxjFullBusy || taxjLiveOn || taxjLiveUnsub) return;
+  taxjLiveAutoBusy = true; taxjLiveRerender();
   try{
     if(!taxjFullRestoreTried) taxjRestoreFull();
     const app = await taxjCompanyApp();
     const auth = app.auth();
-    const user = auth.currentUser || await new Promise(res => { let off = null; const t = setTimeout(() => { try{ off && off(); }catch(e){} res(null); }, 5000); off = auth.onAuthStateChanged(u => { clearTimeout(t); try{ off(); }catch(e){} res(u); }); });
+    // [2026.10.13] 휴대폰에서 로그인 확인이 늦으면 5초로는 모자라서 15초까지 기다림
+    const user = auth.currentUser || await new Promise(res => { let off = null; const t = setTimeout(() => { try{ off && off(); }catch(e){} res(null); }, 15000); off = auth.onAuthStateChanged(u => { clearTimeout(t); try{ off(); }catch(e){} res(u); }); });
     if(!user || !String(user.email || '').toLowerCase().endsWith(TAXJ_COMPANY_DOMAIN)) return;
     taxjLiveStart(app);
-  }catch(e){ console.warn('Tax.J 실시간 연결 건너뜀', e); }
+  }catch(e){ console.warn('Tax.J 실시간 연결 건너뜀', e); taxjLiveRetrySoon(); }
+  finally{ taxjLiveAutoBusy = false; taxjLiveRerender(); }
 }
 // 각 화면 위 연결 상태 줄
 function taxjLiveBarHtml(){
   const btn = taxjFullBusy ? `<button class="btn ghost xs" disabled>연결 중…</button>`
+    : taxjLiveAutoBusy ? `<button class="btn ghost xs" disabled>자동 연결 중…</button>`
     : taxjLiveOn ? '' : `<button class="btn primary xs" onclick="loadTaxjFull()">${taxjFull ? '실시간 연결' : 'Tax.J 연결'}</button>`;
   const txt = taxjLiveOn ? `회사웹 실시간 연결됨 · ${taxjEsc(taxjFull.email)} · ${taxjWhen(taxjFull.at)} 반영`
     : taxjFull ? `저장해 둔 회사 자료 · ${taxjWhen(taxjFull.at)} 기준${taxjLiveErr ? ' · 연결 끊김: ' + taxjEsc(taxjLiveErr) : ''}`
@@ -4977,7 +4994,7 @@ function renderSubmit(){
    (필드명은 Tax.J 엑셀 시트 정의 XLS_SHEET_CLOCK·LEAVE·REMOTE·EXPENSE와 같음). 회사 원본은 읽기만, 내 확인·메모는 attendMine(works)에만 저장.
    식대 한도·휴가 잔여처럼 회사 규칙으로 계산하는 값은 여기서 다시 계산하지 않음(틀릴 수 있어서) - 회사웹 기록 그대로 보여줌 */
 let attendView = 'clock', attendMonth = '', attendPerson = '';
-const ATTEND_VIEWS = [['clock','출퇴근현황'], ['leave','근태현황'], ['expense','경비정산']];
+const ATTEND_VIEWS = [['clock','출퇴근현황'], ['leave','근태현황'], ['expense','경비정산'], ['cal','개인캘린더']];   // [2026.10.13] 개인캘린더 추가(요청)
 const ATTEND_EXP_KINDS = [['lunchEntries','점심식대'], ['dinnerEntries','저녁식대'], ['taxiEntries','택시비'], ['otherExpenses','경비'], ['prepaidEntries','차액정산']];
 const ATTEND_WEEK = ['일','월','화','수','목','금','토'];
 function setAttendView(v){ attendView = v; if(activeTab !== 'attend') switchTab('attend'); else renderAttend(); }
@@ -5040,6 +5057,50 @@ function renderAttend(){
     body = `<thead><tr><th>날짜</th><th>구분</th><th>내용</th><th>회사 메모</th><th>내 확인</th><th>내 메모</th></tr></thead><tbody>${rows.length ? rows.map(r => `<tr>
       ${attendDateTd(r.e.date)}<td><span style="font-weight:700; color:${r.kind === '휴가' ? '#e11d48' : r.kind === '재택' ? '#7c3aed' : 'var(--muted)'};">${r.kind}</span></td>
       <td>${taxjEsc(r.txt) || na}</td><td>${taxjEsc(r.e.memo) || na}</td>${attendMineCells(r.key)}</tr>`).join('') : emptyRow(6)}</tbody>`;
+  }else if(attendView === 'cal'){
+    // [2026.10.13] 회사웹 개인캘린더 연동(요청: "개인웹 근태경비에서 개인캘린더 회사웹이랑 연동하자") - Tax.J renderCalendar와 같은 자료를 읽기만 함:
+    //   data__<직원id>.attendance.leaveUsage(휴가)·remoteEntries(재택), data__<직원id>.schedule.events(일정), s__exclusionDays(공휴일·회식 등), s__specialPeriods·s__workHourExceptions(특별기간)
+    //   새 디자인 없이 홈 달력의 칸·표시(cal-grid / tj-att / cal-task)를 그대로 씀
+    const map = {}, put = (d, html) => { (map[d] = map[d] || []).push(html); }, hol = {};
+    const chip = (cls, label, title) => `<span class="tj-att ${cls}" title="${escapeAttr(title || label)}">${taxjEsc(label)}</span>`;
+    const exc = taxjDoc('exclusionDays'), sps = taxjDoc('specialPeriods'), whx = taxjDoc('workHourExceptions');
+    (Array.isArray(exc) ? exc : []).filter(x => x && !x.deleted && inMonth(x)).forEach(x => {
+      if(x.reason === '공휴일') hol[x.date] = hol[x.date] || x.name || '공휴일';
+      else put(x.date, chip('etc', x.name || x.reason || '제외일', [x.reason, x.name].filter(Boolean).join(' · ')));
+    });
+    const spRows = [].concat(Array.isArray(sps) ? sps : [], (Array.isArray(whx) ? whx : []).filter(e => !e.specialPeriodId || !(Array.isArray(sps) ? sps : []).some(p => p && p.id === e.specialPeriodId)));
+    spRows.filter(p => p && !p.deleted && p.startDate && p.endDate && p.startDate <= mo + '-31' && p.endDate >= mo + '-01').forEach(p => {
+      const ex2 = (Array.isArray(whx) ? whx : []).find(e => e && e.specialPeriodId && e.specialPeriodId === p.id) || p;
+      const times = [ex2.startTime ? ex2.startTime + ' 출근' : '', ex2.endTime ? ex2.endTime + ' 퇴근' : ''].filter(Boolean).join(' · ');
+      const label = '특별기간' + ((p.content || p.memo) ? ') ' + (p.content || p.memo) : '');
+      for(let d = new Date(p.startDate + 'T00:00:00'); ; d.setDate(d.getDate() + 1)){
+        const ds = `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+        if(ds > p.endDate) break;
+        if(ds.startsWith(mo)) put(ds, chip('etc', label, [label, times].filter(Boolean).join(' · ')));
+      }
+    });
+    (att.leaveUsage || []).filter(u => u && !u.deleted && inMonth(u)).forEach(u => put(u.date, chip('leave', [u.type || '휴가', u.subtype].filter(Boolean).join('·'), [u.type, u.subtype, u.days ? u.days + '일' : '', u.memo].filter(Boolean).join(' · '))));
+    (att.remoteEntries || []).filter(r => r && !r.deleted && inMonth(r)).forEach(r => put(r.date, chip('remote', r.bonus ? '특별재택' : r.half === 'am' ? '오전재택' : r.half === 'pm' ? '오후재택' : '정기재택', [r.bonus ? '특별재택' : '정기재택', r.memo].filter(Boolean).join(' · '))));
+    const evs = ((pd.schedule || {}).events || []).filter(e => e && !e.deleted && inMonth(e));
+    evs.forEach(e => {
+      const tm = e.startTime ? e.startTime + (e.endTime ? '~' + e.endTime : '') : (e.allDay ? '종일' : '');
+      put(e.date, `<div class="cal-task cal-deadline cd-etc" title="${escapeAttr([tm, e.memo || e.title || ''].filter(Boolean).join(' · ') || (e.type || '일정'))}">${taxjEsc(e.type || '일정')}${e.title ? ' ' + taxjEsc(e.title) : ''}</div>`);
+    });
+    stats = `<div class="stat tone-rose"><div class="n">${(att.leaveUsage || []).filter(inMonth).length}</div><div class="label">이번 달 휴가</div></div>
+      <div class="stat tone-violet"><div class="n">${(att.remoteEntries || []).filter(inMonth).length}</div><div class="label">이번 달 재택</div></div>
+      <div class="stat"><div class="n">${evs.length}</div><div class="label">이번 달 일정</div></div>`;
+    const startDow = new Date(yy, mm - 1, 1).getDay(), days = new Date(yy, mm, 0).getDate(), todayS = todayStr();
+    let cells = '';
+    for(let i = 0; i < startDow; i++) cells += '<div class="cal-day other"></div>';
+    for(let d = 1; d <= days; d++){
+      const ds = `${mo}-${pad2(d)}`, it = map[ds] || [];
+      const chips = it.filter(h => h.startsWith('<span')), tasks = it.filter(h => !h.startsWith('<span'));
+      cells += `<div class="cal-day ${ds === todayS ? 'today' : ''}">
+        <div class="cal-daynum ${hol[ds] ? 'tj-hol' : ''}">${d}${hol[ds] ? `<span class="tj-holname">${taxjEsc(hol[ds])}</span>` : ''}</div>
+        ${chips.length ? `<div class="tj-atts">${chips.join('')}</div>` : ''}${tasks.length ? `<div class="cal-tasks">${tasks.join('')}</div>` : ''}</div>`;
+    }
+    for(let i = (startDow + days) % 7; i && i < 7; i++) cells += '<div class="cal-day other"></div>';
+    body = `<div class="cal-grid">${ATTEND_WEEK.map(x => `<div class="cal-dow">${x}</div>`).join('')}${cells}</div>`;
   }else{
     const rows = [];
     ATTEND_EXP_KINDS.forEach(([f, label]) => (ex[f] || []).filter(inMonth).forEach(e => rows.push({ e, label, key:'exp:' + f + ':' + (e.id || e.date + '|' + e.amount) })));
@@ -5067,7 +5128,7 @@ function renderAttend(){
       </div>
       ${!taxjFull ? '<div class="empty">Tax.J에 연결하면 회사웹 근태·경비 기록이 여기에 채워져요.</div>' : `
       <div class="summary-row">${stats}</div>
-      <div class="table-scroll" style="margin-top:16px;"><table>${body}</table></div>
+      ${attendView === 'cal' ? `<div style="margin-top:16px;">${body}</div>` : `<div class="table-scroll" style="margin-top:16px;"><table>${body}</table></div>`}
       <div style="margin-top:14px;"><div class="hint" style="margin:0 0 4px;">${mm}월 내 메모</div>
         <input type="text" value="${escapeAttr(monthMemo)}" placeholder="이 달 근태·경비 관련 메모" onchange="updateAttendMine('${monthKey}','note',this.value)" style="width:100%"></div>`}
     </div>`;
@@ -6508,7 +6569,7 @@ function startAppAfterAuth(){
   let last = 'home';
   try{ last = localStorage.getItem('sm_last_tab') || 'home'; }catch(e){}
   switchTab(TABS.some(t => t.id === last) ? last : 'home');
-  setTimeout(taxjLiveAutoStart, 1200);   // [2026.10.12] 전에 연결했으면 회사웹 실시간 연결 다시 켜기
+  setTimeout(() => { taxjLiveAutoReady = true; taxjLiveAutoStart(); }, 1200);   // [2026.10.12] 전에 연결했으면 회사웹 실시간 연결 다시 켜기
 }
 
 // gapi/GIS는 게이트 버튼(로그인+Sheets 연동을 한 번에 처리)이 쓸 수 있어야 하므로
