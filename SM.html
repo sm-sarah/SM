@@ -4771,8 +4771,9 @@ function taxjLiveBarHtml(){
   const txt = taxjLiveOn ? `회사웹 실시간 연결됨 · ${taxjEsc(taxjFull.email)} · ${taxjWhen(taxjFull.at)} 반영`
     : taxjFull ? `저장해 둔 회사 자료 · ${taxjWhen(taxjFull.at)} 기준${taxjLiveErr ? ' · 연결 끊김: ' + taxjEsc(taxjLiveErr) : ''}`
     : `회사 계정(${TAXJ_COMPANY_DOMAIN})으로 연결하면 회사웹 진행 상황이 실시간으로 채워져요`;
-  return `<div style="display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap; margin-bottom:10px;">
-    <span class="hint" style="margin:0;">${taxjLiveOn ? '<span style="color:#059669;">●</span> ' : ''}${txt}</span>${btn}</div>`;
+  // [2026.10.13] 연결 상태 줄은 오른쪽 정렬(요청)
+  return `<div style="display:flex; align-items:center; justify-content:flex-end; gap:8px; flex-wrap:wrap; margin-bottom:10px;">
+    <span class="hint" style="margin:0; text-align:right;">${taxjLiveOn ? '<span style="color:#059669;">●</span> ' : ''}${txt}</span>${btn}</div>`;
 }
 function taxjDoc(key){ return taxjFull && taxjFull.docs ? taxjFull.docs['s__' + key] : undefined; }
 function taxjClientsList(){ const v = taxjDoc('clients'); return (v && v.list) || []; }
