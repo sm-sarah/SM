@@ -1525,8 +1525,8 @@ const TAB_TITLES = {
 const NAV_SUBMENUS = {
   taxj: [
     {js:"setTaxjFullView('filing')", label:'신고 진행 현황'},
-    {js:"setTaxjFullView('pay')",    label:'급여·일용직'},
-    {js:"setTaxjFullView('work')",   label:'근태·경비·결재'},
+    {js:"setTaxjFullView('pay')",    label:'급여'},
+    {js:"setTaxjFullView('work')",   label:'결재·근무기준'},
     {js:"setTaxjFullView('info')",   label:'공지·세무일정·회사정보'},
     {js:"setTaxjFullView('remote')", label:'회사웹 화면'},
   ],
@@ -4642,11 +4642,12 @@ async function taxjRestoreFull(){
 }
 const TAXJ_FULL_GROUPS = [
   { id:'filing', label:'신고 진행 현황', keys:[
-    ['filingTargets','신고대상 (원천세)'], ['filingCycles','신고구분 (매월·반기)'], ['itFilingStatus','원천세 진행 일자'], ['itOverview','원천세 총괄'],
+    ['filingTargets','신고대상 (원천세)'], ['filingCycles','신고구분 (매월·반기)'],
     ['reviewFigures','원천세 검토 수치'], ['reviewMeta','검토 메모·상태'], ['reviewStatus','검토 현황'], ['filingStatus','신고·제출 현황'],
     ['vatFilingTargets','부가세 신고대상'], ['vatReviewFigures','부가세 검토 수치'], ['profitLossReports','손익보고서'], ['filingHelp','신고 도움말'] ] },
-  { id:'pay', label:'급여·일용직', keys:[ ['payroll','급여'], ['dailyWorkers','일용직'] ] },
-  { id:'work', label:'근태·경비·결재', keys:[
+  // [2026.10.13] "옮긴 것만 지워도 되겠다"(요청) - 일용직은 원천세 › 일용직, 근태·경비는 근태경비 메뉴, 원천세 진행·총괄은 원천세 › 신고현황·총괄로 옮겨서 여기서 뺌(나머지는 옮길 때마다 뺄 예정)
+  { id:'pay', label:'급여', keys:[ ['payroll','급여'] ] },
+  { id:'work', label:'결재·근무기준', keys:[
     ['approvals','결재 문서'], ['exclusionDays','근무 제외일'], ['workHourExceptions','근무시간 예외'], ['specialPeriods','특별 기간'],
     ['specialPeriodHistory','특별 기간 이력'], ['lunchLimitHistory','점심 한도 이력'] ] },
   { id:'info', label:'공지·세무일정·회사정보', keys:[
@@ -4655,7 +4656,7 @@ const TAXJ_FULL_GROUPS = [
     ['clients','거래처'], ['personalInfo','거래처 개인정보'], ['autoPhrases','자주 쓰는 문구'],
     ['teamPolicyHistory','팀 지침 이력'], ['opsPolicyHistory','운영 지침 이력'], ['quickGuideHistory','빠른 안내 이력'] ] },
 ];
-const TAXJ_PERSON_PARTS = [['attendance','근태'], ['expense','경비'], ['schedule','일정'], ['settings','개인 설정']];
+const TAXJ_PERSON_PARTS = [['schedule','일정'], ['settings','개인 설정']];   // [2026.10.13] 근태·경비는 근태경비 메뉴로 옮겨서 뺌(요청)
 // 자주 나오는 안쪽 항목 이름만 한글로(나머지는 원래 이름 그대로)
 const TAXJ_KEY_KO = { id:'ID', name:'이름', title:'제목', content:'내용', body:'내용', text:'내용', memo:'메모', note:'메모', date:'날짜', month:'월', amount:'금액',
   status:'상태', type:'유형', author:'작성자', createdAt:'작성', updatedAt:'수정', at:'시각', email:'이메일', position:'직급', start:'시작', end:'종료',
@@ -5393,7 +5394,7 @@ function renderTaxjFull(){
     if(!taxjFullPerson || !people.some(p => p.id === taxjFullPerson)) taxjFullPerson = (people.find(p => String(p.email || '').toLowerCase() === String(taxjFull.email).toLowerCase()) || people[0] || {}).id || '';
     const pd = docs['data__' + taxjFullPerson] || {};
     body = `<div class="card" style="margin-bottom:12px;">
-        <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;"><b>직원별 근태·경비·일정</b>
+        <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;"><b>직원별 일정·개인 설정</b>
           <select onchange="setTaxjFullPerson(this.value)">${people.map(p => `<option value="${escapeAttr(p.id)}" ${p.id === taxjFullPerson ? 'selected' : ''}>${taxjEsc(p.name || p.email || p.id)}${p.position ? ' · ' + taxjEsc(p.position) : ''}</option>`).join('')}</select>
         </div></div>`
       + TAXJ_PERSON_PARTS.map(([k, label]) => taxjSectionHtml(label, pd[k])).join('') + body;
@@ -5408,10 +5409,10 @@ function renderTaxjFull(){
 
 // ── [2026.10.08] Tax.J › 신고 진행 현황을 보기 좋게 정리(요청: "보기좋게 정리해도 좋아") ──
 // 저장해 둔 Tax.J 자료(taxjFull)를 Tax.J 화면과 같은 기준으로 표로 보여줌. 자료 구조는 Tax.J index.html의 shared* 변수 주석과 같음.
-let taxjFilingSub = 'it';     // it(원천세 진행) | itReview(원천세 검토) | itOverview(원천세 총괄) | vat(부가세) | pl(손익보고서) | raw(원본 자료)
+let taxjFilingSub = 'itReview';     // [2026.10.13] 원천세 진행·총괄은 원천세 메뉴로 옮겨서 뺌(요청) · it(원천세 진행) | itReview(원천세 검토) | itOverview(원천세 총괄) | vat(부가세) | pl(손익보고서) | raw(원본 자료)
 let taxjFilingMonth = '', taxjFilingYear = '';
 const TAXJ_IT_STAGES_FULL = [['payslip','급여명세서 전달'], ['payroll','급여마감'], ['returnClose','원천세 신고서 마감'], ['returnCloseLocal','지방세 신고서 마감'], ['national','원천세 신고'], ['local','지방세 신고']];
-const TAXJ_FILING_SUBS = [['it','원천세 진행'], ['itReview','원천세 검토'], ['itOverview','원천세 총괄'], ['vat','부가세'], ['pl','손익보고서'], ['raw','원본 자료']];
+const TAXJ_FILING_SUBS = [['itReview','원천세 검토'], ['vat','부가세'], ['pl','손익보고서'], ['raw','원본 자료']];
 const TAXJ_VAT_PERIODS = ['1기예정','1기확정','2기예정','2기확정'];
 const TAXJ_VAT_LABEL = { filing:'예정신고', notice:'예정고지', 'notice-excluded':'고지제외', 'not-target':'미대상', target:'대상' };
 const TAXJ_REVIEW_SKIP_INCOME = new Set(['근로미제출비과세','중도미제출비과세']);
