@@ -1152,6 +1152,7 @@
     <div id="tab-accounts" class="tab"></div>
     <div id="tab-links" class="tab"></div>
     <div id="tab-manuals" class="tab"></div>
+    <div id="tab-inner" class="tab"></div>
     <div id="tab-attend" class="tab"></div>
     <div id="tab-vat" class="tab"></div>
     <div id="tab-pay" class="tab"></div>
@@ -1482,6 +1483,7 @@ const ICONS = {
   indiv: '<circle cx="12" cy="8" r="4"/><path d="M4.2 20c0-4.3 3.6-6.8 7.8-6.8s7.8 2.5 7.8 6.8"/>',
   clients: '<circle cx="9" cy="8" r="3.2"/><path d="M2.8 19.5c0-3.6 2.8-5.8 6.2-5.8s6.2 2.2 6.2 5.8"/><circle cx="17" cy="8.6" r="2.4"/><path d="M15 13.9c2.9.2 4.7 2.2 4.9 5.3"/>',
   review: '<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 3.5h6v3H9z"/><path d="M8.5 11l1.5 1.5 3-3"/><path d="M8.5 16.5h7"/>',
+  inner: '<path d="M3 21h18"/><path d="M5 21V7l7-4 7 4v14"/><path d="M9 21v-5h6v5"/><path d="M9 10h.01M15 10h.01"/>',
   attend: '<circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2"/><path d="M9 2h6"/>',
   submit: '<path d="M22 2 11 13"/><path d="M22 2 15 22 11 13 2 9z"/>',
   taxj: '<rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/><path d="M7 9.5h4M7 12.5h7"/>',
@@ -1494,6 +1496,7 @@ const TABS = [
   {id:'accounts', label:'계정'},
   {id:'links',    label:'링크'},
   {id:'manuals',  label:'매뉴얼'},
+  {id:'inner',    label:'내부'},
   {id:'attend',   label:'근태경비'},
   {id:'vat',      label:'부가세'},
   {id:'pay',      label:'원천세'},
@@ -1514,6 +1517,7 @@ const TAB_TITLES = {
   pay:['원천세·급여','회사웹 원천세(총괄·신고현황·일용직·제출)를 실시간으로 보고, 내 항목을 더해요.'],
   corp:['법인세','법인 거래처의 결산~신고 단계를 추적합니다.'],
   indiv:['종합소득세','개인사업자 거래처의 신고 단계를 추적합니다.'],
+  inner:['내부','회사웹 회사정보·팀정보·세무일정을 실시간으로 봐요.'],
   attend:['근태경비','회사웹 출퇴근·휴가·재택·경비 기록을 실시간으로 보고, 내 확인·메모를 더해요.'],
   submit:['제출','회사웹 지급명세서 제출현황(매월·반기·연간)을 실시간으로 보고, 내 확인·메모를 더해요.'],
   clients:['거래처','모든 신고 탭이 참조하는 기준정보입니다.'],
@@ -1527,8 +1531,14 @@ const NAV_SUBMENUS = {
     {js:"setTaxjFullView('filing')", label:'신고 진행 현황'},
     {js:"setTaxjFullView('pay')",    label:'급여'},
     {js:"setTaxjFullView('work')",   label:'결재·근무기준'},
-    {js:"setTaxjFullView('info')",   label:'공지·세무일정·회사정보'},
+    {js:"setTaxjFullView('info')",   label:'공지·조직·거래처'},
     {js:"setTaxjFullView('remote')", label:'회사웹 화면'},
+  ],
+  // [2026.10.13] 내부 메뉴(요청 - 회사정보·팀정보·세무일정)
+  inner: [
+    {js:"setInnerView('corp')",  label:'회사정보'},
+    {js:"setInnerView('team')",  label:'팀정보'},
+    {js:"setInnerView('sched')", label:'세무일정'},
   ],
   // [2026.10.12] 회사웹 개인 메뉴와 같은 하위메뉴(요청 - 근태경비)
   attend: [
@@ -4650,9 +4660,9 @@ const TAXJ_FULL_GROUPS = [
   { id:'work', label:'결재·근무기준', keys:[
     ['approvals','결재 문서'], ['exclusionDays','근무 제외일'], ['workHourExceptions','근무시간 예외'], ['specialPeriods','특별 기간'],
     ['specialPeriodHistory','특별 기간 이력'], ['lunchLimitHistory','점심 한도 이력'] ] },
-  { id:'info', label:'공지·세무일정·회사정보', keys:[
-    ['noticeHistory','공지사항'], ['taxScheduleOverrides','세무일정 수정분'], ['taxScheduleCustomItems','세무일정 추가 항목'],
-    ['companyName','회사명'], ['companyInfo','사내정보'], ['teamInfo','팀 정보'], ['hrTeamInfo','인사 팀 정보'], ['orgChart','조직도'], ['seatChart','자리 배치도'],
+  { id:'info', label:'공지·조직·거래처', keys:[
+    // [2026.10.13] 세무일정·회사명·사내정보·팀 정보는 내부 메뉴로 옮겨서 뺌(요청)
+    ['noticeHistory','공지사항'], ['hrTeamInfo','인사 팀 정보'], ['orgChart','조직도'], ['seatChart','자리 배치도'],
     ['clients','거래처'], ['personalInfo','거래처 개인정보'], ['autoPhrases','자주 쓰는 문구'],
     ['teamPolicyHistory','팀 지침 이력'], ['opsPolicyHistory','운영 지침 이력'], ['quickGuideHistory','빠른 안내 이력'] ] },
 ];
@@ -4756,7 +4766,7 @@ function taxjLiveRerender(){
     if(!taxjLiveRenderPending){ taxjLiveRenderPending = true; document.addEventListener('focusout', () => { taxjLiveRenderPending = false; setTimeout(taxjLiveRerender, 50); }, { once:true }); }
     return;
   }
-  const fn = { vat: renderVat, pay: renderPay, corp: renderCorp, indiv: renderIndiv, attend: renderAttend, taxj: renderTaxjFull }[activeTab];
+  const fn = { vat: renderVat, pay: renderPay, corp: renderCorp, indiv: renderIndiv, attend: renderAttend, inner: renderInner, taxj: renderTaxjFull }[activeTab];
   if(fn) try{ fn(); }catch(e){ console.error(e); }
 }
 // 첫 화면에서 조용히 다시 연결(전에 연결한 적이 있고, 회사 로그인이 기억돼 있을 때만 - 로그인 창은 띄우지 않음)
@@ -5311,6 +5321,135 @@ function renderPay(){
   const body = !docs ? '<div class="empty">Tax.J에 연결하면 회사웹 원천세 화면이 여기에 채워져요.</div>'
     : payView === 'overview' ? payOverviewHtml(docs) : payView === 'daily' ? payDailyHtml(docs) : payStatusHtml(docs);
   el.innerHTML = `<div class="card">${taxjLiveBarHtml()}${payViewTabsHtml()}${body}</div>`;
+}
+
+/* ── [2026.10.13] 내부 메뉴(요청: "내부 메뉴를 만들어서 회사정보, 팀정보, 세무일정이 연동되면 될 것 같다") ──
+   회사정보 = Tax.J 사내정보 › 회사 조회(s__companyName, s__companyInfo.corp) / 팀정보 = 사내정보 › 팀(s__teamInfo, s__companyInfo.teamGeneral·team)
+   세무일정 = Tax.J 세무일정(기본 규칙 TAX_SCHEDULE_ANNUAL·MONTHLY + s__taxScheduleCustomItems + 날짜 직접 수정 s__taxScheduleOverrides, 주말·공휴일이면 다음 영업일).
+   회사 원본은 읽기만. 암호화된 항목은 회사웹에서만 열림 */
+let innerView = 'corp', innerSchedMonth = '';
+const INNER_VIEWS = [['corp','회사정보'], ['team','팀정보'], ['sched','세무일정']];
+function setInnerView(v){ innerView = v; if(activeTab !== 'inner') switchTab('inner'); else renderInner(); }
+// Tax.J CORP_BASIC_INFO_ORDER와 같음
+const INNER_CORP_ORDER = ['사업자번호','법인등록번호','창립일','대표자','주민등록번호','주소','우편번호','조정반번호','대표번호','대표팩스','폴더 링크'];
+function innerBizNo(raw){ const d = String(raw || '').replace(/[^0-9]/g, ''); return d.length === 10 && d === String(raw || '').trim() ? `${d.slice(0,3)}-${d.slice(3,5)}-${d.slice(5)}` : raw; }
+function innerCopy(btn){ const v = btn.getAttribute('data-v') || ''; try{ navigator.clipboard.writeText(v).then(() => { const t = btn.textContent; btn.textContent = '복사됨'; setTimeout(() => { btn.textContent = t; }, 900); }); }catch(e){} }
+function innerCopyBtn(v){ return v ? ` <button class="btn ghost xs" data-v="${escapeAttr(v)}" onclick="innerCopy(this)" title="복사">복사</button>` : ''; }
+function innerLink(u){ return `<a href="${escapeAttr(u)}" target="_blank" rel="noopener">${taxjEsc(u)}</a>`; }
+// 왼쪽 등록증 카드: [항목명, 값] 목록
+function innerProfileCard(title, eyebrow, rows, empty){
+  return `<div class="card" style="flex:1 1 300px; min-width:280px;">
+    <div style="text-align:center; margin-bottom:12px;"><div style="font-size:20px; font-weight:800;">${taxjEsc(title)}</div><div class="hint" style="margin:2px 0 0; letter-spacing:.12em; font-weight:700;">${eyebrow}</div></div>
+    ${rows.length ? `<div style="display:grid; grid-template-columns:max-content 1fr; gap:8px 14px; font-size:13.5px;">${rows.map(([k, v]) => `<div style="color:var(--muted);">${taxjEsc(k)}</div><div style="font-weight:700; word-break:break-all;">${v}</div>`).join('')}</div>`
+      : `<div class="empty">${empty}</div>`}
+  </div>`;
+}
+// 오른쪽 공용정보 목록: 계정(ID·PW) / 정보(내용) 한 줄씩, 복사 버튼
+function innerKeysCard(title, list, empty){
+  const rows = (list || []).map(it => {
+    const acc = (it.type || 'account') === 'account';
+    const href = it.noteIsLink ? (it.note || it.link || '') : (it.link && !it.note ? it.link : '');
+    const note = href ? `<a href="${escapeAttr(href)}" target="_blank" rel="noopener">🔗 열기</a>` : (it.note ? taxjEsc(it.note) : '');
+    let val;
+    if(it.sensitiveEnc) val = '<span class="hint" style="margin:0;">🔒 암호화된 항목 · 회사웹에서 확인</span>';
+    else if(acc) val = `${it.idVal ? `<span class="hint" style="margin:0;">ID</span> <b>${taxjEsc(it.idVal)}</b>${innerCopyBtn(it.idVal)} &nbsp;` : ''}<span class="hint" style="margin:0;">PW</span> <b>${it.pwVal ? taxjEsc(it.pwVal) : '-'}</b>${innerCopyBtn(it.pwVal)}`;
+    else val = `<b>${it.content ? taxjEsc(it.content) : '-'}</b>${innerCopyBtn(it.content)}`;
+    return `<tr><td style="font-weight:700; white-space:nowrap; text-align:left;">${taxjEsc(it.label || '')}</td><td style="text-align:left;">${val}</td><td class="hint" style="margin:0; text-align:left; font-size:12.5px;">${note}</td></tr>`;
+  }).join('');
+  return `<div class="card" style="flex:2 1 460px; min-width:300px;">
+    <div style="font-weight:800; margin-bottom:8px;">${taxjEsc(title)} <span class="hint" style="margin:0; font-weight:600;">${(list || []).length}건</span></div>
+    ${rows ? `<div class="table-scroll"><table><tbody>${rows}</tbody></table></div>` : `<div class="empty">${empty}</div>`}
+  </div>`;
+}
+function innerCorpHtml(docs){
+  const ci = docs.s__companyInfo || {}, corp = ci.corp || [];
+  const info = corp.filter(it => (it.type || 'account') === 'info'), acc = corp.filter(it => (it.type || 'account') === 'account');
+  const by = {}; info.forEach(it => { if(!by[it.label]) by[it.label] = it; });
+  const rows = INNER_CORP_ORDER.filter(l => by[l] && String(by[l].content || '').trim() && !by[l].sensitiveEnc).map(l => {
+    const v = by[l].content;
+    return [l, l === '폴더 링크' ? innerLink(v) : taxjEsc(l === '사업자번호' ? innerBizNo(v) : v) + innerCopyBtn(l === '사업자번호' ? innerBizNo(v) : v)];
+  });
+  const extra = info.filter(it => !INNER_CORP_ORDER.includes(it.label) && it.label !== '회사명');
+  return `<div style="display:flex; gap:12px; flex-wrap:wrap; align-items:flex-start;">
+    ${innerProfileCard(docs.s__companyName || '회사명 미등록', 'CORPORATE PROFILE', rows, '회사웹 설정 › 회사정보에 등록된 기본정보가 없어요.')}
+    ${innerKeysCard('공용정보', acc.concat(extra), '등록된 계정이 없어요.')}</div>`;
+}
+function innerTeamHtml(docs){
+  const ti = docs.s__teamInfo || {}, ci = docs.s__companyInfo || {};
+  const rows = [['담당회계사', ti.accountant], ['세무관리번호', ti.taxMgmtNo], ['세무관리 비밀번호', ti.taxMgmtPw], ['내선번호', ti.extNo]]
+    .filter(([, v]) => String(v || '').trim()).map(([k, v]) => [k, taxjEsc(v) + innerCopyBtn(v)]);
+  if(String(ti.webUrl || '').trim()) rows.push(['웹주소', innerLink(ti.webUrl)]);
+  if(String(ti.note || '').trim()) rows.push(['메모', taxjEsc(ti.note)]);
+  const members = (ci.team || []).filter(p => p && p.person && (p.items || []).length);
+  return `<div style="display:flex; gap:12px; flex-wrap:wrap; align-items:flex-start;">
+      ${innerProfileCard(ti.teamName || '팀명 미등록', 'TEAM PROFILE', rows, '회사웹 설정 › 팀정보에 등록된 내용이 없어요.')}
+      ${innerKeysCard('팀 공용정보', ci.teamGeneral || [], '등록된 항목이 없어요.')}</div>
+    ${members.length ? `<div style="font-weight:800; margin:16px 0 8px;">팀원별 정보</div><div style="display:flex; gap:12px; flex-wrap:wrap; align-items:flex-start;">${members.map(p => innerKeysCard(`${p.person}${p.title ? ' · ' + p.title : ''}`, p.items, '')).join('')}</div>` : ''}`;
+}
+// ── 세무일정 (Tax.J getTaxScheduleForMonth와 같은 계산) ──
+const INNER_TAX_ANNUAL = [
+  { id:'vat2-final', month:1, day:25, title:'부가가치세 2기 확정신고·납부' }, { id:'exempt-biz-status', month:2, day:10, title:'면세사업자 사업장현황신고' },
+  { id:'yearend-settle', month:3, day:10, title:'근로소득 연말정산·지급명세서 제출' }, { id:'nhis-total-pay', month:3, day:10, title:'건강보험 보수총액신고' },
+  { id:'ei-total-pay', month:3, day:15, title:'고용·산재보험 보수총액신고' }, { id:'corp-tax', month:3, day:31, title:'법인세 신고·납부(12월 결산법인)' },
+  { id:'vat1-prelim', month:4, day:25, title:'부가가치세 1기 예정신고·납부(법인)' }, { id:'income-tax-final', month:5, day:31, title:'종합소득세 확정신고·납부' },
+  { id:'income-tax-sincere', month:6, day:30, title:'종합소득세 신고(성실신고확인대상자)' }, { id:'vat1-final', month:7, day:25, title:'부가가치세 1기 확정신고·납부' },
+  { id:'corp-tax-midterm', month:8, day:31, title:'법인세 중간예납' }, { id:'vat2-prelim', month:10, day:25, title:'부가가치세 2기 예정신고·납부(법인)' },
+  { id:'income-tax-midterm', month:11, day:30, title:'종합소득세 중간예납' },
+];
+const INNER_TAX_MONTHLY = { id:'withholding-monthly', day:10, title:'원천세·4대보험료 신고·납부(전월분)' };
+function innerBizDay(docs, ds){
+  const hol = new Set((docs.s__exclusionDays || []).filter(x => x && x.reason === '공휴일').map(x => x.date));
+  const d = new Date(ds + 'T00:00:00');
+  for(let i = 0; i < 10; i++){ const s = `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`; if(d.getDay() !== 0 && d.getDay() !== 6 && !hol.has(s)) return s; d.setDate(d.getDate() + 1); }
+  return ds;
+}
+function innerTaxMonth(docs, y, m){
+  const ov = docs.s__taxScheduleOverrides || {}, mm = pad2(m), key = id => `${id}:${y}-${mm}`, last = new Date(y, m, 0).getDate();
+  const out = [INNER_TAX_MONTHLY].concat(INNER_TAX_ANNUAL.filter(r => r.month === m)).map(it => {
+    const raw = `${y}-${mm}-${pad2(it.day)}`, o = ov[key(it.id)];
+    let title = it.title;
+    if(it.id === INNER_TAX_MONTHLY.id){ const ay = m === 1 ? y - 1 : y, am = m === 1 ? 12 : m - 1; title = title.replace('(전월분)', `(${String(ay).slice(2)}년 ${pad2(am)}월 귀속)`); }
+    const date = o || innerBizDay(docs, raw);
+    return { title, date, shifted: !o && date !== raw, overridden: !!o, custom:false };
+  });
+  (docs.s__taxScheduleCustomItems || []).forEach(it => {
+    let raw = null, shift = false;
+    if(it.recurrence === 'once'){ if(it.date && it.date.slice(0,7) === `${y}-${mm}`) raw = it.date; }
+    else if(it.recurrence === 'monthly'){ raw = `${y}-${mm}-${pad2(Math.min(it.day, last))}`; shift = true; }
+    else if(it.recurrence === 'annual' && it.month === m){ raw = `${y}-${mm}-${pad2(Math.min(it.day, last))}`; shift = true; }
+    if(!raw) return;
+    const o = ov[key('custom:' + it.id)], date = o || (shift ? innerBizDay(docs, raw) : raw);
+    out.push({ title: it.title, date, shifted: !o && shift && date !== raw, overridden: !!o, custom:true });
+  });
+  return out.sort((a, b) => a.date.localeCompare(b.date));
+}
+function innerShiftMonth(n){ const [y, m] = innerSchedMonth.split('-').map(Number); const d = new Date(y, m - 1 + n, 1); innerSchedMonth = `${d.getFullYear()}-${pad2(d.getMonth() + 1)}`; renderInner(); }
+function innerSchedHtml(docs){
+  if(!innerSchedMonth){ const d = new Date(); innerSchedMonth = `${d.getFullYear()}-${pad2(d.getMonth() + 1)}`; }
+  const [y, m] = innerSchedMonth.split('-').map(Number), today = todayStr();
+  const list = innerTaxMonth(docs, y, m);
+  const rows = list.map(it => {
+    const d = new Date(it.date + 'T00:00:00'), w = d.getDay(), dd = Math.round((d - new Date(today + 'T00:00:00')) / 86400000);
+    const dday = dd === 0 ? 'D-DAY' : dd > 0 ? `D-${dd}` : '지남';
+    return `<tr${dd < 0 ? ' style="opacity:.5;"' : ''}>
+      <td style="white-space:nowrap; font-weight:700;">${m}/${d.getDate()} (${'일월화수목금토'[w]})</td>
+      <td style="white-space:nowrap; font-weight:800; color:${dd < 0 ? 'var(--muted)' : dd <= 3 ? '#e11d48' : '#b45309'};">${dday}</td>
+      <td style="text-align:left; font-weight:700;">${taxjEsc(it.title)}${it.custom ? ' <span class="hint" style="margin:0;">회사 등록</span>' : ''}</td>
+      <td class="hint" style="margin:0; text-align:left;">${it.overridden ? '날짜 직접 수정됨' : it.shifted ? '주말·공휴일이라 다음 영업일로' : ''}</td></tr>`;
+  }).join('');
+  return `<div class="toolbar"><button class="btn ghost xs" onclick="innerShiftMonth(-1)" title="이전 달">‹</button><span style="font-weight:800;">${y}년 ${m}월</span><button class="btn ghost xs" onclick="innerShiftMonth(1)" title="다음 달">›</button><div class="spacer"></div><span class="hint" style="margin:0;">${list.length}건</span></div>
+    ${rows ? `<div class="table-scroll" style="margin-top:12px;"><table><thead><tr><th>기한</th><th></th><th style="text-align:left;">일정</th><th style="text-align:left;">비고</th></tr></thead><tbody>${rows}</tbody></table></div>` : '<div class="empty">이 달 세무일정이 없어요.</div>'}
+    <div class="hint" style="margin-top:8px;">회사웹 세무일정과 같은 기준이에요(국세청 기준 규칙 + 회사가 등록·수정한 일정). 정확한 기한은 홈택스에서 한 번 더 확인해 주세요.</div>`;
+}
+function renderInner(){
+  const el = document.getElementById('tab-inner');
+  if(!el) return;
+  if(!taxjFull && !taxjFullRestoreTried) taxjRestoreFull();
+  const docs = taxjFull && taxjFull.docs;
+  const tabs = `<div class="cl-subtabs pay-maintabs">${INNER_VIEWS.map(([k, l]) => `<button class="cl-subtab ${innerView === k ? 'on' : ''}" onclick="setInnerView('${k}')">${l}</button>`).join('')}</div>`;
+  const body = !docs ? '<div class="card"><div class="empty">Tax.J에 연결하면 회사웹 내부 정보가 여기에 채워져요.</div></div>'
+    : innerView === 'team' ? innerTeamHtml(docs) : innerView === 'sched' ? `<div class="card">${innerSchedHtml(docs)}</div>` : innerCorpHtml(docs);
+  el.innerHTML = `<div class="card" style="margin-bottom:12px;">${taxjLiveBarHtml()}${tabs.replace('pay-maintabs', 'pay-maintabs" style="margin-bottom:0 !important; border-bottom:none; padding-bottom:0;')}</div>${body}`;
 }
 
 function setTaxjFullView(v){ taxjFullView = v; if(activeTab !== 'taxj') switchTab('taxj'); else renderTaxjFull(); }
@@ -6313,6 +6452,7 @@ function renderAllNoSave(){
   if(activeTab === 'review') renderReview();
   if(activeTab === 'taxj') renderTaxjFull();
   if(activeTab === 'attend') renderAttend();
+  if(activeTab === 'inner') renderInner();
 }
 function renderAll(){
   renderAllNoSave();
