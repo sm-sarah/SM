@@ -974,6 +974,12 @@
   .cl-subtab span{ font-size:12px; font-weight:700; background:#f3eef1; color:var(--muted); border-radius:999px; padding:1px 8px; margin-left:4px; }
   .cl-subtab.on{ color:var(--primary-dark); background:var(--primary-soft); }
   .cl-subtab.on span{ background:#fff; color:var(--primary-dark); }
+  /* [2026.10.13] 원천세 메뉴 2단(요청 - "메뉴구성 스타일이 이상하다"): 윗줄(총괄·신고현황·일용직·제출)은 큰 탭 + 아래 구분선,
+     아랫줄(매월·반기·연간)은 옆 선택칸과 같은 높이의 작은 칸 묶음으로 구분 */
+  .pay-maintabs{ border-bottom:1px solid var(--border); padding-bottom:10px; margin-bottom:14px !important; }
+  .sm-seg{ display:inline-flex; align-items:stretch; gap:2px; padding:3px; height:37px; border:1px solid var(--border); border-radius:var(--radius-sm); background:#fff; box-sizing:border-box; }
+  .sm-seg button{ font-family:inherit; font-size:13px; font-weight:700; border:none; background:transparent; color:var(--muted); padding:0 14px; border-radius:7px; cursor:pointer; height:100%; }
+  .sm-seg button.on{ background:var(--primary-soft); color:var(--primary-dark); }
 
   #tab-clients .table-scroll th, #tab-clients .table-scroll td{ text-align:center; }
 
@@ -4874,7 +4880,7 @@ function submitRows(){
         const auto = SUBMIT_INCOME_MAP[it] ? submitHasPay(k, SUBMIT_INCOME_MAP[it]) : !!(e.items || {})[it];
         return auto || (e.items || {})[it] ? { st:'todo', due: submitMode === '월별' ? submitDueOf(it, period, payMonth) : '' } : { st:'na' };
       });
-      rows.push({ seq: idx + 1, c, key: k, dual: lanes.length > 1, lane, payMonth, cells, memo: e.memo || '' });
+      rows.push({ seq: 0, c, key: k, dual: lanes.length > 1, lane, payMonth, cells, memo: e.memo || '' });
     });
   });
   return rows;
@@ -4884,9 +4890,18 @@ function updateSubmitMine(key, field, value){
   const per = submitMine[pk] = submitMine[pk] || {};
   const r = per[key] = per[key] || { done:'', note:'' };
   r[field] = value;
-  if(!r.done && !r.note) delete per[key];
+  if(!r.done && !r.note && !(r.close && Object.keys(r.close).length)) delete per[key];
   if(!Object.keys(per).length) delete submitMine[pk];
   renderSubmit(); scheduleGoogleSave();
+}
+// [2026.10.13] "제출 항목마다 마감/신고일(회사연동)로 나누고 마감일자는 내가 입력"(요청) - 마감일은 submitMine[기간][줄].close[항목]에 works에만 저장
+function setSubmitClose(key, item, value){
+  const pk = submitPeriodKey();
+  const per = submitMine[pk] = submitMine[pk] || {};
+  const r = per[key] = per[key] || { done:'', note:'' };
+  r.close = r.close || {};
+  if(value) r.close[item] = value; else delete r.close[item];
+  updateSubmitMine(key, 'done', r.done);   // 빈 줄 정리 + 다시 그림 + 저장
 }
 function renderSubmit(){
   const el = document.getElementById('tab-pay');   // [2026.10.13] 제출은 원천세 › 제출로 옮김(요청)
@@ -4904,6 +4919,7 @@ function renderSubmit(){
   const all = taxjFull ? submitRows() : [];
   const isDone = r => r.cells.every(x => x.st !== 'todo');
   const rows = submitOnlyLeft ? all.filter(r => !isDone(r) || !(mine[r.key] && mine[r.key].done)) : all;
+  { let n = 0, prev = null; rows.forEach(r => { if(r.c !== prev){ n++; prev = r.c; } r.seq = n; }); }   // [2026.10.13] 순번은 보이는 거래처 차례대로(예전엔 전체 거래처 순번이라 1·3·5… 처럼 건너뛰었음)
   const doneN = all.filter(isDone).length, mineN = all.filter(r => mine[r.key] && mine[r.key].done).length;
   const pct = all.length ? Math.round(doneN / all.length * 100) : 0;
   const today = todayStr();
@@ -4914,7 +4930,7 @@ function renderSubmit(){
     <div class="card">
       ${taxjLiveBarHtml()}${payViewTabsHtml()}
       <div class="toolbar">
-        <div class="cl-subtabs">${['월별','반기','연간'].map(m => `<button class="cl-subtab ${submitMode === m ? 'on' : ''}" onclick="setSubmitMode('${m}')">${SUBMIT_MODE_LABEL[m]}</button>`).join('')}</div>
+        <div class="sm-seg" id="submitModeSeg">${['월별','반기','연간'].map(m => `<button class="${submitMode === m ? 'on' : ''}" onclick="setSubmitMode('${m}')">${SUBMIT_MODE_LABEL[m]}</button>`).join('')}</div>
         <select onchange="submitYear=this.value; renderSubmit();">${years.map(y => `<option value="${y}" ${y===submitYear?'selected':''}>${y}년${submitMode === '연간' ? ' 귀속' : ''}</option>`).join('')}</select>
         ${sub}
         <div class="spacer"></div>
@@ -4928,12 +4944,16 @@ function renderSubmit(){
       </div>
       <div class="progress-bar"><div class="fill tone-mint" style="width:${pct}%"></div></div>
       ${rows.length ? `<div class="table-scroll" style="margin-top:16px;"><table>
-        <thead><tr><th class="tx-seq">순번</th><th>상호명</th>${submitMode === '월별' ? '<th>지급월</th>' : ''}${items.map(([, l]) => `<th>${l}</th>`).join('')}<th>내 확인</th><th>내 메모</th></tr></thead>
+        <thead><tr><th class="tx-seq" rowspan="2">순번</th><th rowspan="2">상호명</th>${submitMode === '월별' ? '<th rowspan="2">지급월</th>' : ''}${items.map(([, l]) => `<th colspan="2">${l}</th>`).join('')}<th rowspan="2">내 확인</th><th rowspan="2">내 메모</th></tr>
+        <tr>${items.map(() => '<th>마감</th><th>신고일</th>').join('')}</tr></thead>
         <tbody>${rows.map(r => { const m = mine[r.key] || { done:'', note:'' }; return `<tr>
           <td class="tx-seq">${r.seq}</td>
           <td class="tx-name" title="${taxjEsc(r.memo ? '회사 메모: ' + r.memo : '')}">${taxjEsc(r.c.name)}${r.dual ? ` <span class="hint" style="margin:0; font-weight:700; color:${r.lane === 'sameMonth' ? '#047857' : '#be123c'};">${r.lane === 'sameMonth' ? '당월' : '익월'}</span>` : ''}${r.memo ? ' <span class="hint" style="margin:0;">✎</span>' : ''}</td>
           ${submitMode === '월별' ? `<td>${Number(r.payMonth.slice(5,7))}월</td>` : ''}
-          ${r.cells.map(x => `<td>${cellHtml(x)}</td>`).join('')}
+          ${r.cells.map((x, ci) => { const it = items[ci][0], cv = ((m.close || {})[it]) || '';
+            const closeTd = x.st === 'na' && !cv ? '<td><span style="color:#d4c6cd;">-</span></td>'
+              : `<td><input type="date" value="${escapeAttr(cv)}" title="내 마감일" onchange="setSubmitClose('${escapeAttr(r.key)}','${it}',this.value)" style="padding:6px 8px; font-size:12.5px;${cv ? ' color:#059669; font-weight:700;' : ''}"></td>`;
+            return closeTd + `<td>${cellHtml(x)}</td>`; }).join('')}
           <td><div class="date-cell"><input type="date" value="${m.done}" onchange="updateSubmitMine('${r.key}','done',this.value)">${m.done ? pill('확인','ok') : `<button class="btn xs" onclick="updateSubmitMine('${r.key}','done','${today}')">오늘</button>`}</div></td>
           <td class="note-cell"><input type="text" value="${escapeAttr(m.note)}" onchange="updateSubmitMine('${r.key}','note',this.value)" style="width:100%"></td>
         </tr>`; }).join('')}</tbody></table></div>`
@@ -5050,7 +5070,7 @@ function renderAttend(){
 let payView = 'status', payQuery = '', payMonth = '', dwYear = '', dwClient = '', dwShowLeft = false;
 const PAY_VIEWS = [['overview','총괄'], ['status','신고현황'], ['daily','일용직'], ['submit','제출']];
 function setPayView(v){ payView = v; if(activeTab !== 'pay') switchTab('pay'); else renderPay(); }
-function payViewTabsHtml(){ return `<div class="cl-subtabs" style="margin-bottom:12px;">${PAY_VIEWS.map(([k, l]) => `<button class="cl-subtab ${payView === k ? 'on' : ''}" onclick="setPayView('${k}')">${l}</button>`).join('')}</div>`; }
+function payViewTabsHtml(){ return `<div class="cl-subtabs pay-maintabs">${PAY_VIEWS.map(([k, l]) => `<button class="cl-subtab ${payView === k ? 'on' : ''}" onclick="setPayView('${k}')">${l}</button>`).join('')}</div>`; }
 const PAY_NA = '<span style="color:#d4c6cd;">-</span>';
 function payIsReg(c){ return ['기장대행','신고대리'].includes(c.taxType) && c.status !== '해지'; }
 // Tax.J filingCycleRecordsOf / filingCycleRecordAt / filingCycleRecApplicable와 같은 기준
