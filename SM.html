@@ -5163,7 +5163,7 @@ function payStatusHtml(docs){
   const half = cid => { const r = payCycleAt(docs, cid, p); return !!r && (r.cycle || '매월') === '반기'; };
   const halfOff = cid => half(cid) && mm !== 6 && mm !== 12;   // 반기 거래처의 6·12월 외 달 = 급여작업만(신고서 마감은 6·12월에)
   const rows = [];
-  let n = 0, cntPayroll = 0, cntClose = 0, total = 0;
+  let n = 0, cntPayroll = 0, cntClose = 0, cntFiled = 0, total = 0;
   idx.sorted.filter(payIsReg).filter(c => !q || String(c.name || '').toLowerCase().includes(q)).forEach(c => {
     const recs = payCycleRecs(docs, c.id), e = st[c.id] || {};
     const has = k => e[k] && ['payslip','payroll','returnClose','returnCloseLocal','national','local','memo'].some(f => e[k][f]);
@@ -5186,19 +5186,20 @@ function payStatusHtml(docs){
       if(v.payroll) cntPayroll++;
       const ho = halfOff(c.id);
       if(!ho && v.returnClose && v.returnCloseLocal) cntClose++;
+      if(!ho && v.national && v.local) cntFiled++;
       const slip = skipAll || v.payslipNA ? '<span class="hint" style="margin:0;">해당 없음</span>' : taxjMd(v.payslip);
-      let close;
-      if(ho) close = '<span class="hint" style="margin:0;" title="반기 신고 - 6·12월에 신고서 마감">반기</span>';
-      else if(v.returnClose && v.returnCloseLocal) close = v.returnClose === v.returnCloseLocal ? taxjMd(v.returnClose) : `${taxjMd(v.returnClose)} <span class="hint" style="margin:0;">지방 ${taxjMd(v.returnCloseLocal)}</span>`;
-      else if(v.returnClose) close = `${taxjMd(v.returnClose)} <span class="hint" style="margin:0;">국세만</span>`;
-      else if(v.returnCloseLocal) close = `${taxjMd(v.returnCloseLocal)} <span class="hint" style="margin:0;">지방만</span>`;
-      else close = PAY_NA;
+      // [2026.10.13] "신고서 마감을 국세·지방세 나눠서, 그리고 신고일자"(요청) - 신고서 마감(returnClose·returnCloseLocal)·신고일자(national·local)를 각각 국세·지방세 칸으로.
+      // 반기 거래처의 6·12월 외 달은 신고서 마감·신고가 없어서 두 칸을 합쳐 '반기'
+      const halfTd = what => `<td colspan="2"><span class="hint" style="margin:0;" title="반기 신고 - 6·12월에 ${what}">반기</span></td>`;
+      const taxTds = (a, b, what) => ho ? halfTd(what) : `<td>${taxjMd(a)}</td><td>${taxjMd(b)}</td>`;
       rows.push(`<tr>
         <td class="tx-seq">${li ? '' : n}</td><td class="tx-name">${li ? '' : taxjEsc(c.name)}</td>
         <td style="white-space:nowrap; font-weight:700;">${payCycleLabelHtml(base, dual ? k : '')}</td>
-        <td>${slip}</td><td>${taxjMd(v.payroll)}</td><td style="white-space:nowrap;">${close}</td>
+        <td>${slip}</td><td>${taxjMd(v.payroll)}</td>
+        ${taxTds(v.returnClose, v.returnCloseLocal, '신고서 마감')}${taxTds(v.national, v.local, '신고')}
+        ${payBillCellsHtml(key)}
         <td style="text-align:left; white-space:pre-wrap; min-width:140px; font-size:12.5px;">${v.memo ? taxjEsc(v.memo) : PAY_NA}</td>
-        ${payBillCellsHtml(key)}${payCustomCols.map(col => payCustomCellHtml(key, col)).join('')}</tr>`);
+        ${payCustomCols.map(col => payCustomCellHtml(key, col)).join('')}</tr>`);
     });
   });
   const pct = total ? Math.round(cntPayroll / total * 100) : 0;
@@ -5209,13 +5210,13 @@ function payStatusHtml(docs){
     <div class="summary-row">
       <div class="stat tone-blue"><div class="n">${total}</div><div class="label">신고 대상(줄)</div></div>
       <div class="stat tone-blue"><div class="n">${cntPayroll}</div><div class="label">급여마감 완료</div></div>
-      <div class="stat"><div class="n">${cntClose}</div><div class="label">신고서 마감 완료</div></div>
+      <div class="stat"><div class="n">${cntClose} · ${cntFiled}</div><div class="label">신고서 마감 · 신고 완료</div></div>
     </div>
     <div class="progress-bar"><div class="fill tone-blue" style="width:${pct}%"></div></div>
-    ${rows.length ? `<div class="table-scroll" style="margin-top:16px;"><table><thead><tr><th class="tx-seq">순번</th><th>상호명</th><th>신고</th><th>급여명세서 전달</th><th>급여마감</th><th>신고서 마감</th><th>메모</th><th>납부서 발송</th><th>납부마감</th>
-      ${payCustomCols.map(col => `<th><button class="btn ghost xs" onclick="editPayCustomCol('${col.id}')" title="눌러서 이름·입력 방식 수정 또는 삭제" style="font-weight:800;">${taxjEsc(col.label)} ✎</button></th>`).join('')}</tr></thead><tbody>${rows.join('')}</tbody></table></div>`
+    ${rows.length ? `<div class="table-scroll" style="margin-top:16px;"><table><thead><tr><th class="tx-seq" rowspan="2">순번</th><th rowspan="2">상호명</th><th rowspan="2">신고</th><th rowspan="2">급여명세서 전달</th><th rowspan="2">급여마감</th><th colspan="2">신고서 마감</th><th colspan="2">신고일자</th><th rowspan="2">납부서 발송</th><th rowspan="2">납부마감</th><th rowspan="2">메모</th>
+      ${payCustomCols.map(col => `<th rowspan="2"><button class="btn ghost xs" onclick="editPayCustomCol('${col.id}')" title="눌러서 이름·입력 방식 수정 또는 삭제" style="font-weight:800;">${taxjEsc(col.label)} ✎</button></th>`).join('')}</tr><tr><th>국세</th><th>지방세</th><th>국세</th><th>지방세</th></tr></thead><tbody>${rows.join('')}</tbody></table></div>`
       : `<div class="empty">${q ? '검색 결과가 없어요.' : `${yy}년 ${mm}월 귀속 신고대상이 없어요.`}</div>`}
-    <div class="hint" style="margin-top:8px;">급여명세서 전달·급여마감·신고서 마감·메모는 회사웹 값(조회만)이고, 납부서 발송·납부마감과 '+ 항목 추가'로 만든 칸은 내 데이터에만 저장돼요.</div>`;
+    <div class="hint" style="margin-top:8px;">급여명세서 전달·급여마감·신고서 마감·신고일자·메모는 회사웹 값(조회만)이고, 납부서 발송·납부마감과 '+ 항목 추가'로 만든 칸은 내 데이터에만 저장돼요.</div>`;
 }
 
 // ── 3. 일용직 ── (Tax.J dwInEmploy / dwSuggest와 같은 기준)
