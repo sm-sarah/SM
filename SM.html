@@ -898,6 +898,8 @@
 
   /* 본문 가로폭 제한: 큰 모니터에서도 가운데 1460px 안에서만 보이게 (Tax.J 비율) */
   main .page-head, main .tab, main .connect-banner{ max-width:1460px; margin-left:auto; margin-right:auto; }
+  /* [2026.10.14] 부가세 진행표는 가로로 길어서 화면 폭을 최대한 씀(요청) */
+  main #tab-vat.vat-wide{ max-width:none; }
 
   /* 행 관리 아이콘 공통 */
   .row-actions{ display:inline-flex; gap:2px; flex:none; margin-left:auto; }
@@ -3216,7 +3218,7 @@ async function vatProgEditCol(id){
 }
 function vatProgHtml(docs){
   const key = vatProgKey(), plab = vatProgKeyLabel(key), per = vatProg[key] || {}, pk = vatProgPrevKey();
-  const bar = `<div class="toolbar"><b>${plab} 진행</b><div class="spacer"></div>
+  const bar = `<div class="toolbar"><div class="spacer"></div>
     ${!vatProgHasData(key) && pk ? `<button class="btn primary xs" onclick="vatProgFromPrev()" title="이어받기 항목(↻)만 가져와요">${vatProgKeyLabel(pk)}에서 이어받기</button>` : ''}
     <button class="btn xs" onclick="vatProgAddCol()">+ 항목</button>
     ${vatProgHasData(key) ? '<button class="btn ghost xs" onclick="vatProgMove()" title="이 기수에 넣은 값을 다른 기수로 옮겨요">다른 기수로 옮기기</button><button class="btn ghost xs danger" onclick="vatProgClear()" title="이 기수에 적은 내 항목 값을 지워요">비우기</button>' : ''}
@@ -3253,7 +3255,22 @@ function vatProgHtml(docs){
   return bar + `<div class="table-scroll vat-prog" style="margin-top:8px;"><table><thead><tr><th class="tx-seq">순번</th>${linkHead}${head}</tr></thead>
     <tbody>${rows || `<tr><td colspan="${vatProgCols.length + 11}"><div class="empty" style="padding:18px;">${q ? '검색 결과가 없어요.' : '거래처가 없어요.'}</div></td></tr>`}</tbody></table></div>`;
 }
+// [2026.10.14] "스크롤이 끝으로 가면 다시 처음으로 온다"(요청) - 회사웹 실시간 연결이 바뀔 때마다 화면을 다시 그려 표 스크롤이 0으로 돌아갔음.
+// 다시 그릴 때 표 스크롤 위치를 그대로 두고, 진행표 칸에 입력 중이면 입력을 마친 뒤(blur)에 다시 그림
 function renderVat(){
+  const el = document.getElementById('tab-vat');
+  const a = document.activeElement;
+  if(el && a && el.contains(a) && a.classList && a.classList.contains('vp-in')){
+    if(!a._vatDefer){ a._vatDefer = true; a.addEventListener('blur', () => setTimeout(renderVat, 0), { once:true }); }
+    return;
+  }
+  const sig = `${vatView}|${vatYear}|${vatHalf}|${vatKind}`;   // 같은 화면·기수를 다시 그릴 때만 위치 유지(기수·탭을 바꾸면 처음부터)
+  const keep = el && el._vatSig === sig ? [...el.querySelectorAll('.table-scroll')].map(x => [x.scrollLeft, x.scrollTop]) : [];
+  renderVatInner();
+  if(el){ el._vatSig = sig; el.classList.toggle('vat-wide', vatView === 'prog'); }
+  if(el && keep.length) [...el.querySelectorAll('.table-scroll')].forEach((x, i) => { if(keep[i]){ x.scrollLeft = keep[i][0]; x.scrollTop = keep[i][1]; } });
+}
+function renderVatInner(){
   const el = document.getElementById('tab-vat');
   if(!el) return;
   if(!taxjFull && !taxjFullRestoreTried) taxjRestoreFull();
