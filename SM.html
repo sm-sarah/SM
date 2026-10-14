@@ -848,6 +848,7 @@
     .wl-layout > .wl-main{ height:100%; min-height:0; }
     .wl-main > #wlHistory{ flex:1 1 0; min-height:0; display:flex; flex-direction:column; }
     #wlHistory .wl-hist-agenda{ flex:1 1 0; max-height:none; min-height:80px; }
+    .wl-main > #wlHistory.wl-hist-closed{ flex:0 0 auto; } /* [2026.10.14] 접혀 있을 땐 제목 줄 높이만 */
   }
   /* ===== 계정(개인 아이디·비번 보관함) ===== */
   .acc-wrap input[type=password]{ font-family:inherit; font-size:13px; padding:8px 12px; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--bg); color:var(--text); }
@@ -979,6 +980,11 @@
   .pay-maintabs{ border-bottom:1px solid var(--border); padding-bottom:10px; margin-bottom:14px !important; }
   /* [2026.10.14] 부가세 진행표 - 항목이 70개 가까이라 칸을 촘촘하게, 상호 칸은 가로 스크롤해도 왼쪽에 고정 */
   .vat-prog th, .vat-prog td{ padding:4px 5px; }
+  /* [2026.10.14] "가로 스크롤이 잘 안 넘어간다"(요청) - 표가 길어 가로 스크롤바가 맨 아래에 있었음 → 표를 화면 높이 안에 넣어 스크롤바가 늘 보이게, 머리글은 위에 고정 */
+  .vat-prog{ max-height:calc(100vh - 230px); min-height:260px; overflow:auto; }
+  .vat-prog thead th{ position:sticky; top:0; z-index:2; background:var(--card); box-shadow:0 1px 0 var(--border); }
+  .vat-prog thead th.vp-link{ background:var(--slate-soft); }
+  .vat-prog thead th.vp-sticky{ left:0; z-index:3; }
   .vat-prog th{ vertical-align:bottom; }
   .vat-prog .vp-th{ font:inherit; color:inherit; background:transparent; border:none; padding:2px; cursor:pointer; text-align:inherit; line-height:1.3; }
   .vat-prog .vp-th:hover{ color:var(--primary-dark); }
@@ -2549,7 +2555,7 @@ function renderWlMonthCal(){
         const shown = list.slice(0, 2);   // 칸을 낮게(3단 배치) - 제목 2건까지
         const mk = (tjMarks || {})[ds];
         return `
-        <div class="cal-day ${ds === todayS ? 'today' : ''} ${ds.slice(0,7) !== wlCalYM ? 'other' : ''} ${ds === sel ? 'wl-sel' : ''}" onclick="setWlHistDay('${ds}')" title="${list.length ? `${list.length}건 · 남은 일 ${left}건` : ''}">
+        <div class="cal-day ${ds === todayS ? 'today' : ''} ${ds.slice(0,7) !== wlCalYM ? 'other' : ''} ${ds === sel ? 'wl-sel' : ''}" onclick="setWlHistDay('${ds}', true)" title="${list.length ? `${list.length}건 · 남은 일 ${left}건` : ''}">
           <div class="wl-mcal-top"><div class="cal-daynum ${mk && mk.hol ? 'tj-hol' : ''}">${parseInt(ds.slice(8), 10)}${mk && mk.hol ? `<span class="tj-holname">${taxjEsc(mk.hol)}</span>` : ''}</div>${list.length ? `<span class="wl-mcal-cnt ${left ? '' : 'all-done'}">${list.length}</span>` : ''}</div>
           ${taxjCalItemsHtml(mk)}
           <div class="cal-tasks" style="max-height:none;">
@@ -2592,9 +2598,13 @@ async function addTaskPopup(dateStr){
   wlHistDate = date;
   renderAll();
 }
-function setWlHistDay(dateStr){
+// [2026.10.14] "History는 평소엔 접혀 있다가 달력에서 날짜를 누르면 펼쳐지게"(요청) - 달력 날짜를 누르면(open) 펼침, 제목 옆 화살표로 접기·펼치기
+let wlHistOpen = false;
+function toggleWlHistory(){ wlHistOpen = !wlHistOpen; renderWlHistory(); }
+function setWlHistDay(dateStr, open){
   if(!dateStr) return;
   wlHistDate = dateStr;
+  if(open) wlHistOpen = true;
   renderWlMonthCal();
   renderWlHistory();
 }
@@ -2606,10 +2616,11 @@ function renderWlHistory(){
   const rel = date === todayS ? '오늘' : date === addDaysStr(todayS, -1) ? '어제' : date === addDaysStr(todayS, 1) ? '내일' : '';
   const list = tasks.filter(t => t.date === date).slice().sort((a, b) => (a.done - b.done));
   const left = list.filter(t => !t.done).length;
+  el.classList.toggle('wl-hist-closed', !wlHistOpen);
   el.innerHTML = `
-    <div class="notice-top"><span></span><div class="today-title">History</div>
-      <div style="display:flex; align-items:center; gap:6px; justify-self:end;"><button class="icon-btn" onclick="addTaskPopup('${date}')" title="할 일 추가" aria-label="할 일 추가">${ICON_PLUS}</button></div></div>
-    <div class="wl-daynav">
+    <div class="notice-top"><span></span><div class="today-title" onclick="toggleWlHistory()" style="cursor:pointer;" title="${wlHistOpen ? '접기' : '펼치기'}">History</div>
+      <div style="display:flex; align-items:center; gap:6px; justify-self:end;"><button class="icon-btn" onclick="addTaskPopup('${date}')" title="할 일 추가" aria-label="할 일 추가">${ICON_PLUS}</button><button class="icon-btn" onclick="toggleWlHistory()" title="${wlHistOpen ? '접기' : '펼치기'}" aria-label="${wlHistOpen ? '접기' : '펼치기'}"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="transition:transform .15s;${wlHistOpen ? ' transform:rotate(180deg);' : ''}"><path d="M6 9l6 6 6-6"/></svg></button></div></div>
+    ${!wlHistOpen ? '' : `<div class="wl-daynav">
       <button class="wl-navbtn" onclick="setWlHistDay(addDaysStr('${date}', -1))" title="이전 날" aria-label="이전 날">‹</button>
       <div class="wl-daynav-label">${worklistDayLabel(date)}${rel ? ` <span class="wl-rel">${rel}</span>` : ''}</div>
       <button class="wl-navbtn" onclick="setWlHistDay(addDaysStr('${date}', 1))" title="다음 날" aria-label="다음 날">›</button>
@@ -2619,7 +2630,7 @@ function renderWlHistory(){
         <div class="wl-day-head">${list.length}건 · 완료 ${list.length - left}건 · 못한 일 ${left}건</div>
         <ul class="task-list">${list.map(t => wlTaskItem(t)).join('')}</ul>`
       : `<div class="empty">이 날은 등록된 할 일이 없어요.</div>`}
-    </div>`;
+    </div>`}`;
 }
 
 // 세 칸 높이를 화면 맨 아래(24px 위)까지 맞춤. 너무 작은 창에서는 최소 560px
