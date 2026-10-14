@@ -3025,8 +3025,8 @@ function vatTableHtml(docs){
   }).join('');
   const plab = `${year}년 ${VAT_T_LABEL[period]}`;
   const cols = 15 + vatCustomCols.length;
-  return `<div style="font-weight:800; margin:4px 0 8px;">${pre ? '예정고지' : '확정신고'} 상세 <span class="hint" style="margin:0 0 0 4px; font-weight:700;">${plab}</span></div>
-    ${pre && !list.some(x => x.hasTb) ? '<div class="hint" style="margin:0 0 8px;">회사웹에 불러온 택스봇 예정고지가 없어요(회사웹 부가세 화면에서 가져오면 여기도 채워져요).</div>' : ''}
+  // [2026.10.14] "예정고지 상세 제목 삭제"(요청 - 회사웹과 같게)
+  return `${pre && !list.some(x => x.hasTb) ? '<div class="hint" style="margin:0 0 8px;">회사웹에 불러온 택스봇 예정고지가 없어요(회사웹 부가세 화면에서 가져오면 여기도 채워져요).</div>' : ''}
     <div class="toolbar"><div class="cl-subtabs">${segs.map(([k, l, c]) => `<button class="cl-subtab ${vatSeg === k ? 'on' : ''}" onclick="vatSeg='${k}'; renderVat();">${l} ${c}</button>`).join('')}</div>
       <div class="spacer"></div><button class="btn xs" onclick="addVatCustomCol()">+ 항목 추가</button></div>
     <div class="table-scroll" style="margin-top:12px;"><table><thead><tr><th class="tx-seq">순번</th><th>상호명</th><th>사업자번호</th><th>구분</th><th>제외사유</th><th>직전 과세기간<br>공급가액</th><th>예정고지세액</th><th>관할서</th><th>납부기한</th><th>안내문</th><th>납부서</th><th>메모</th><th>Tip</th><th>신고도움</th>
@@ -3052,6 +3052,9 @@ const VAT_PROG_LINK_RE = /^(순번|상호|개업일|사업자번호|예정고지
 // 처음 엑셀에서 항목을 만들 때 '다음 기수로 이어받기'를 켜 둘 항목(거래처 특이사항). 항목 수정에서 바꿀 수 있음
 const VAT_PROG_CARRY_RE = /^(★|필수확인서류|직원|차량|판매대행$|업종코드|비고)/;
 const VAT_PROG_NUM_RE = /(금액|^과표$)/;
+// [2026.10.14] "예정고지대상~담당자 칸은 엑셀 내용이 채워져야 하고, 회사앱에 입력된 기수는 회사앱 값"(요청) - 엑셀 올리기 때 이 칸들도 vatProg[기수][거래처].__link에 저장해 두고,
+// 그 기의 회사웹 택스봇 예정고지 값이 없을 때(예: 1기 확정) 대신 보여줌
+const VAT_PROG_LINK_FIELDS = [['noticeYn', /^예정고지대상$/], ['excludeReason', /제외사유$/], ['filingDuty', /^신고의무여부$/], ['prevSupply', /^직전과세기간공급가액합계액$/], ['noticeTax', /^예정$/], ['office', /^관할세무서$/], ['tel', /^담당자전화번호$/]];
 function vatProgNorm(s){ return String(s == null ? '' : s).replace(/\s+/g, ''); }
 function vatProgKey(){ return `${vatYear}-${vatTPeriod()}`; }
 function vatProgKeyLabel(k){ const [y, p] = k.split('-'); return `${y}년 ${VAT_T_LABEL[p] || p}`; }
@@ -3084,7 +3087,7 @@ function vatProgList(docs){
     if(needTb && !tb && !(vatTEntry(docs, c.id, year, period) || {}).taxbot) return;
     seen.add(c.id);
     const m = String((tb && tb.office) || '').match(/^(.*?)\s*\(([^)]*)\)\s*$/);
-    list.push({ c, tb: tb || {}, office: m ? m[1] : ((tb && tb.office) || ''), tel: m ? m[2] : '' });
+    list.push({ c, tb: tb || {}, hasTb: !!tb, office: m ? m[1] : ((tb && tb.office) || ''), tel: m ? m[2] : '' });
   };
   idx.sorted.filter(payIsReg).forEach(c => push(c, false));
   idx.sorted.forEach(c => push(c, true));
@@ -3104,6 +3107,7 @@ async function vatProgImport(input){
     const hdr = (aoa[0] || []).map(h => String(h == null ? '' : h).replace(/\r/g, '').trim());
     const body = aoa.slice(1);
     const jName = hdr.findIndex(h => /^상호/.test(vatProgNorm(h))), jBiz = hdr.findIndex(h => /^사업자번호/.test(vatProgNorm(h)));
+    const linkJ = VAT_PROG_LINK_FIELDS.map(([f, re]) => [f, hdr.findIndex(h => re.test(vatProgNorm(h)))]).filter(([, j]) => j >= 0);
     if(jName < 0 && jBiz < 0) return smAlert('거래처 칸을 못 찾았어요', '엑셀 첫 줄에 "상호" 또는 "사업자번호" 칸이 있어야 해요.');
     // 머리글 → 내 항목(회사웹 칸은 건너뜀. 같은 이름이 여러 번이면 순서대로 짝지음, 없으면 새 항목)
     const used = {}, map = [], newCols = [];
@@ -3131,6 +3135,9 @@ async function vatProgImport(input){
       if(!c){ unmatched.push(nm || bz); return; }
       const v = {};
       map.forEach(([j, col]) => { const x = vatProgCellVal(r[j], col.type); if(x !== null && x !== false && x !== '') v[col.id] = x; });
+      const lk = {};
+      linkJ.forEach(([f, j]) => { const x = vatProgCellVal(r[j], f === 'prevSupply' || f === 'noticeTax' ? 'num' : 'text'); if(x !== null && x !== '') lk[f] = x; });
+      if(Object.keys(lk).length) v.__link = lk;
       if(Object.keys(v).length) vals[c.id] = Object.assign(vals[c.id] || {}, v);
     });
     const n = Object.keys(vals).length, notInList = Object.keys(vals).filter(id => !list.some(x => x.c.id === id)).length;
@@ -3215,7 +3222,7 @@ function vatProgHtml(docs){
     ${vatProgHasData(key) ? '<button class="btn ghost xs" onclick="vatProgMove()" title="이 기수에 넣은 값을 다른 기수로 옮겨요">다른 기수로 옮기기</button><button class="btn ghost xs danger" onclick="vatProgClear()" title="이 기수에 적은 내 항목 값을 지워요">비우기</button>' : ''}
     <button class="btn ghost xs" onclick="document.getElementById('vatProgXlsx').click()" title="1행 = 항목 이름인 진행표 엑셀을 ${plab}에 넣어요">엑셀 올리기</button><input type="file" id="vatProgXlsx" accept=".xlsx,.xls" style="display:none;" onchange="vatProgImport(this)"></div>`;
   if(!docs) return bar + '<div class="empty">Tax.J에 연결하면 회사웹 거래처·예정고지 칸이 채워지고, 옆에 내 진행 칸을 적을 수 있어요.</div>';
-  const q = vatQuery.trim().toLowerCase(), na = PAY_NA, num = v => v == null || v === '' ? na : Number(v).toLocaleString('ko-KR');
+  const q = vatQuery.trim().toLowerCase(), na = PAY_NA, num = v => v == null || v === '' ? na : typeof v === 'number' ? v.toLocaleString('ko-KR') : taxjEsc(String(v));
   const list = vatProgList(docs).filter(x => !q || String(x.c.name || '').toLowerCase().includes(q));
   // 내 항목 칸 폭: 이름·값 길이에 맞춰(긴 글은 최대 240px, 마우스를 올리면 전체)
   const w = {};
@@ -3228,7 +3235,9 @@ function vatProgHtml(docs){
     .map((l, i) => `<th class="vp-link${i === 0 ? ' vp-sticky' : ''}" title="회사웹 값(조회만)">${l}</th>`).join('');
   const head = vatProgCols.map(c => `<th style="${c.type === 'check' ? 'text-align:center;' : ''}"><button class="vp-th" onclick="vatProgEditCol('${c.id}')" title="눌러서 이름·입력 방식·이어받기 수정 또는 삭제${c.carry ? '\n(다음 기수로 이어받는 항목)' : ''}">${taxjEsc(c.label).replace(/\n/g, '<br>')}${c.carry ? '<span class="vp-carry">↻</span>' : ''}</button></th>`).join('');
   const rows = list.map((x, n) => {
-    const cid = escapeAttr(x.c.id), v = per[x.c.id] || {}, tb = x.tb, t = s => s ? taxjEsc(s) : na;
+    const cid = escapeAttr(x.c.id), v = per[x.c.id] || {}, t = s => s || s === 0 ? taxjEsc(String(s)) : na;
+    const lk = v.__link || {}, tb = x.hasTb ? x.tb : lk;   // 회사웹 값이 있으면 회사웹, 없으면 엑셀에서 넣은 값
+    if(!x.hasTb){ x.office = lk.office || ''; x.tel = lk.tel || ''; }
     const link = `<td class="vp-sticky" style="font-weight:800; color:${x.c.entityType === '법인' ? '#0b5a78' : x.c.entityType === '개인' ? '#be185d' : 'inherit'};">${taxjEsc(x.c.name)}</td>
       <td>${t(x.c.openDate)}</td><td>${t(innerBizNo(x.c.bizNo || ''))}</td><td>${t(tb.noticeYn)}</td><td>${t(tb.excludeReason)}</td><td>${t(tb.filingDuty)}</td>
       <td style="text-align:right;">${num(tb.prevSupply)}</td><td style="text-align:right;">${tb.noticeTax == null || tb.noticeTax === '' ? na : num(tb.noticeTax)}</td><td>${t(x.office)}</td><td>${t(x.tel)}</td>`;
