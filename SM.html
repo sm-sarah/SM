@@ -900,6 +900,8 @@
   main .page-head, main .tab, main .connect-banner{ max-width:1460px; margin-left:auto; margin-right:auto; }
   /* [2026.10.14] 부가세 진행표는 가로로 길어서 화면 폭을 최대한 씀(요청) */
   main #tab-vat.vat-wide{ max-width:none; }
+  /* [2026.10.14] "가로 스크롤이 있는 정보 많은 메뉴는 화면 폭을 최대한 써서 스크롤이 없어지게"(요청) - 표 위주 화면은 폭 제한 없음 */
+  main #tab-vat, main #tab-close, main #tab-pay, main #tab-corp, main #tab-indiv, main #tab-review, main #tab-clients, main #tab-taxj{ max-width:none; }
 
   /* 행 관리 아이콘 공통 */
   .row-actions{ display:inline-flex; gap:2px; flex:none; margin-left:auto; }
@@ -980,6 +982,25 @@
   /* [2026.10.13] 원천세 메뉴 2단(요청 - "메뉴구성 스타일이 이상하다"): 윗줄(총괄·신고현황·일용직·제출)은 큰 탭 + 아래 구분선,
      아랫줄(매월·반기·연간)은 옆 선택칸과 같은 높이의 작은 칸 묶음으로 구분 */
   .pay-maintabs{ border-bottom:1px solid var(--border); padding-bottom:10px; margin-bottom:14px !important; }
+  /* [2026.10.14] 체크리스트 중요 표시(별) */
+  .notice-star{ flex:none; border:none; background:transparent; padding:0 1px; margin-top:-1px; font-size:15px; line-height:1.2; color:var(--muted-soft); cursor:pointer; opacity:.55; }
+  .notice-star:hover{ opacity:1; color:#f5b544; }
+  .notice-star.on{ color:#f5b544; opacity:1; }
+  .notice-item.imp:not(.done) .notice-text{ font-weight:700; }
+  /* [2026.10.14] 결산 날짜 칸·날짜 고르기 창 */
+  .cl-dt{ font:inherit; font-size:12.5px; min-width:46px; height:26px; padding:0 6px; border:1px solid transparent; border-radius:6px; background:transparent; color:var(--text); cursor:pointer; white-space:nowrap; }
+  .cl-dt:hover{ border-color:var(--border); background:#fff; }
+  .cl-dt:empty::before{ content:'＋'; color:var(--muted-soft); font-size:11px; }
+  .cl-dt.txt{ color:var(--muted); }
+  .cl-pop{ position:fixed; z-index:3000; background:#fff; border:1px solid var(--border); border-radius:12px; box-shadow:var(--shadow-md); padding:10px; display:flex; flex-direction:column; gap:8px; width:228px; }
+  .cl-pop input{ font:inherit; font-size:13px; border:1px solid var(--border); border-radius:8px; padding:6px 8px; width:100%; box-sizing:border-box; }
+  .cl-pop-row{ display:flex; gap:4px; flex-wrap:wrap; }
+  .cl-pop-row button{ font:inherit; font-size:12px; border:1px solid var(--border); background:var(--bg); color:var(--text); border-radius:7px; padding:4px 8px; cursor:pointer; }
+  .cl-pop-row button:hover{ border-color:var(--primary); color:var(--primary-dark); }
+  .cl-pop-row button.del{ color:var(--rose); }
+  .cl-gone td{ color:var(--muted); }
+  .cl-gone-tag{ font-size:10.5px; font-weight:700; color:var(--muted); border:1px solid var(--border); border-radius:5px; padding:0 4px; margin-left:3px; }
+  .cl-date-lab{ display:inline-flex; align-items:center; gap:6px; font-size:12.5px; color:var(--muted); font-weight:700; }
   /* [2026.10.14] 복사 아이콘(Tax.J .ci-kcopy와 같은 모양, works 색) */
   .sm-kcopy{ display:inline-flex; align-items:center; justify-content:center; width:22px; height:22px; margin-left:2px; vertical-align:middle; border-radius:6px; border:1px solid transparent; background:transparent; color:var(--muted); cursor:pointer; padding:0; opacity:.55; }
   tr:hover .sm-kcopy, div:hover > .sm-kcopy{ opacity:1; }
@@ -990,16 +1011,18 @@
   /* [2026.10.14] "가로 스크롤이 잘 안 넘어간다"(요청) - 표가 길어 가로 스크롤바가 맨 아래에 있었음 → 표를 화면 높이 안에 넣어 스크롤바가 늘 보이게, 머리글은 위에 고정 */
   .vat-prog{ max-height:calc(100vh - 230px); min-height:260px; overflow:auto; }
   .vat-prog thead th{ position:sticky; top:0; z-index:2; background:var(--card); box-shadow:0 1px 0 var(--border); }
-  .vat-prog thead th.vp-link{ background:var(--slate-soft); }
   .vat-prog thead th.vp-sticky{ left:0; z-index:3; }
-  .vat-prog th{ vertical-align:bottom; }
+  /* [2026.10.14] "머리글 디자인 자연스럽게"(요청) - 회색 덩어리·아래 정렬 대신 머리글을 한 가지 바탕·가운데 정렬로 통일하고,
+     회사웹 칸과 내 항목 사이는 세로 구분선 하나로만 나눔 */
+  .vat-prog thead th{ vertical-align:middle; text-align:center; padding:9px 6px; font-size:11.5px; font-weight:700; letter-spacing:0; text-transform:none; color:var(--muted); line-height:1.35; }
+  .vat-prog .vp-div{ box-shadow:inset -1px 0 0 var(--border); }
+  .vat-prog thead th.vp-div{ box-shadow:inset -1px 0 0 var(--border), 0 1px 0 var(--border); }
   .vat-prog .vp-th{ font:inherit; color:inherit; background:transparent; border:none; padding:2px; cursor:pointer; text-align:inherit; line-height:1.3; }
   .vat-prog .vp-th:hover{ color:var(--primary-dark); }
-  .vat-prog .vp-carry{ margin-left:3px; color:var(--primary); font-size:10px; }
+  .vat-prog .vp-carry{ margin-left:2px; color:var(--muted-soft); font-size:9.5px; font-weight:600; }
   .vat-prog .vp-in{ font:inherit; font-size:12.5px; color:var(--text); border:1px solid transparent; border-radius:6px; background:transparent; padding:4px 5px; text-overflow:ellipsis; text-align:left; }
   .vat-prog .vp-in:hover{ border-color:var(--border); }
   .vat-prog .vp-in:focus{ outline:none; border-color:var(--primary); background:#fff; }
-  .vat-prog th.vp-link{ color:var(--muted); background:var(--slate-soft); }
   .vat-prog .vp-sticky{ position:sticky; left:0; z-index:1; background:var(--card); box-shadow:1px 0 0 var(--border); }
   .sm-seg{ display:inline-flex; align-items:stretch; gap:2px; padding:3px; height:37px; border:1px solid var(--border); border-radius:var(--radius-sm); background:#fff; box-sizing:border-box; }
   .sm-seg button{ font-family:inherit; font-size:13px; font-weight:700; border:none; background:transparent; color:var(--muted); padding:0 14px; border-radius:7px; cursor:pointer; height:100%; }
@@ -1180,6 +1203,7 @@
     <div id="tab-attend" class="tab"></div>
     <div id="tab-vat" class="tab"></div>
     <div id="tab-pay" class="tab"></div>
+    <div id="tab-close" class="tab"></div><!-- [2026.10.14] 결산(요청) -->
     <div id="tab-corp" class="tab"></div>
     <div id="tab-indiv" class="tab"></div>
     <div id="tab-clients" class="tab"></div>
@@ -1416,6 +1440,8 @@ let payCustomCols = [];   // [2026.10.13] 원천세 신고현황 [{ id, label, t
 let vatCustomCols = [];   // [2026.10.13] 부가세 내가 만든 항목 [{ id, label, type }] - works에만 저장
 let vatProgCols = [];   // [2026.10.14] 부가세 진행 항목 [{ id, label, type, carry }] - works에만 저장
 let vatProg = {};       // { '연도-기수': { 회사웹 거래처id: { 항목id: 값 } } }
+let closeCols = [];     // [2026.10.14] 결산 항목 [{ id, label, type, carry }] - works에만 저장
+let closeData = {};     // { '연도-회차': { date, roster, snap, v } }
 let vatCustomVals = {};   // { '연도-기수(예: 2026-2기예정)': { 거래처id: { 항목id: 값 } } }
 let payCustomVals = {};   // { 'YYYY-MM': { '거래처id|sameMonth': { 항목id: 값 } } }
 let attendMine = {};   // [2026.10.12] 근태경비 탭 내 확인·메모 { 'clock:날짜' | 'leave:id' | 'exp:종류:id' | 'month:YYYY-MM': { done, note } } - works에만 저장
@@ -1507,6 +1533,7 @@ const ICONS = {
   accounts: '<circle cx="8" cy="15" r="4"/><path d="M10.8 12.2 20 3"/><path d="M16.5 6.5l2.5 2.5"/><path d="M14 9l2 2"/>',
   vat: '<path d="M6 2.5h12v18l-2.3-1.4L13.3 20.5 11 19.1 8.7 20.5 6.4 19.1z"/><path d="M9 8h6M9 12h6M9 16h3.5"/>',
   pay: '<rect x="3" y="6.5" width="18" height="12.5" rx="2.5"/><path d="M3 10.5h18"/><circle cx="16.5" cy="14.5" r="1.3" fill="currentColor" stroke="none"/>',
+  close: '<rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 7.5h8M8 11h8"/><path d="M8.5 15.5l2 2 4-4"/>',
   corp: '<rect x="4" y="3" width="12" height="18" rx="1"/><path d="M16 21V8l4 2v11z"/><path d="M7.5 7h1.6M11 7h1.6M7.5 11h1.6M11 11h1.6M7.5 15h1.6M11 15h1.6"/>',
   indiv: '<circle cx="12" cy="8" r="4"/><path d="M4.2 20c0-4.3 3.6-6.8 7.8-6.8s7.8 2.5 7.8 6.8"/>',
   clients: '<circle cx="9" cy="8" r="3.2"/><path d="M2.8 19.5c0-3.6 2.8-5.8 6.2-5.8s6.2 2.2 6.2 5.8"/><circle cx="17" cy="8.6" r="2.4"/><path d="M15 13.9c2.9.2 4.7 2.2 4.9 5.3"/>',
@@ -1526,8 +1553,9 @@ const TABS = [
   {id:'manuals',  label:'매뉴얼'},
   {id:'inner',    label:'내부'},
   {id:'attend',   label:'근태경비'},
+  {id:'pay',      label:'원천세'},   // [2026.10.14] 메뉴 순서 원천세 → 부가세(요청)
   {id:'vat',      label:'부가세'},
-  {id:'pay',      label:'원천세'},
+  {id:'close',    label:'결산'},   // [2026.10.14] 법인세 위에 결산(요청)
   {id:'corp',     label:'법인세'},
   {id:'indiv',    label:'종소세'},
   {id:'clients',  label:'거래처'},
@@ -1543,6 +1571,7 @@ const TAB_TITLES = {
   accounts:['계정','개인 사이트 아이디·비밀번호를 암호화해서 보관해요.'],
   vat:['부가가치세','총괄 = 회사웹 부가세(기수별 예정고지·확정신고)를 실시간으로 보고 내 항목을 더해요. 진행 = 기수별 내 진행표(엑셀 항목 그대로).'],   // [2026.10.13] 회사웹 부가세 화면 그대로(요청)
   pay:['원천세·급여','회사웹 원천세(총괄·신고현황·일용직·제출)를 실시간으로 보고, 내 항목을 더해요.'],
+  close:['결산',''],
   corp:['법인세','법인 거래처의 결산~신고 단계를 추적합니다.'],
   indiv:['종합소득세','개인사업자 거래처의 신고 단계를 추적합니다.'],
   inner:['내부','회사웹 회사정보·팀정보·세무일정을 실시간으로 봐요.'],
@@ -1646,8 +1675,7 @@ function renderNav(){
     document.getElementById('pageHead').innerHTML = `
       <div class="underline-bar"></div>
       <h1>${title}</h1>
-      <div class="subtitle">${subtitle}</div>
-    `;
+    `;   // [2026.10.14] 대메뉴 아래 설명 문구는 안 보이게(요청)
   }
 }
 
@@ -2225,6 +2253,12 @@ function checklistSearchHtml(){
     </div>`).join('');
 }
 
+// [2026.10.14] "체크리스트에서 중요한 것들 위로"(요청) - 별을 누르면 중요 표시, 중요 항목이 목록 맨 위로(나머지는 원래 순서)
+function toggleChecklistImportant(month, idx){
+  const item = worklistChecklist[month] && worklistChecklist[month][idx];
+  if(item){ item.important = !item.important; pushHist(item, item.important ? '중요 표시' : '중요 해제'); }
+  renderAll();
+}
 function toggleWorklistCheck(month, idx){
   const item = worklistChecklist[month] && worklistChecklist[month][idx];
   if(item){ item.done = !item.done; pushHist(item, item.done ? '완료' : '완료 취소'); }
@@ -2341,9 +2375,10 @@ function renderWorklist(){
       ${items.length ? `<div class="notice-progress"><span style="width:${Math.round(doneN / items.length * 100)}%"></span></div>
       <div class="notice-count">${doneN} / ${items.length} 완료</div>` : ''}
       <div class="notice-items" id="noticeItems">
-        ${checklistSearch.trim() ? checklistSearchHtml() : items.map((item, idx) => `
-          <div class="notice-item ${item.done ? 'done' : ''}">
+        ${checklistSearch.trim() ? checklistSearchHtml() : items.map((item, idx) => ({ item, idx })).sort((a, b) => (!!b.item.important - !!a.item.important) || (a.idx - b.idx)).map(({ item, idx }) => `
+          <div class="notice-item ${item.done ? 'done' : ''} ${item.important ? 'imp' : ''}">
             <input type="checkbox" ${item.done ? 'checked' : ''} onchange="toggleWorklistCheck('${m}', ${idx})">
+            <button type="button" class="notice-star ${item.important ? 'on' : ''}" onclick="toggleChecklistImportant('${m}', ${idx})" title="${item.important ? '중요 해제' : '중요 - 맨 위로'}" aria-label="중요">${item.important ? '★' : '☆'}</button>
             <span class="notice-text" onclick="toggleWorklistCheck('${m}', ${idx})">${item.text}</span>
             ${actionIcons(`editChecklistItem('${m}', ${idx})`, `showChecklistHistory('${m}', ${idx})`, `deleteChecklistItem('${m}', ${idx})`)}
           </div>`).join('') || '<div class="empty" style="padding:10px 0;">이 달의 체크리스트가 없어요.</div>'}
@@ -3016,6 +3051,7 @@ function vatTableHtml(docs){
       <td class="tx-seq">${i + 1}</td>
       <td class="tx-name" style="font-weight:800; color:${x.c.entityType === '법인' ? '#0b5a78' : x.c.entityType === '개인' ? '#be185d' : 'inherit'};">${taxjEsc(x.c.name)}</td>
       <td style="white-space:nowrap;">${taxjEsc(innerBizNo(x.c.bizNo || ''))}</td>
+      <td style="white-space:nowrap;">${x.c.bizTypeCode ? taxjEsc(x.c.bizTypeCode) : na}</td><td style="white-space:nowrap;">${x.c.bizType ? taxjEsc(x.c.bizType) : na}</td>
       ${stCell}<td>${reason}</td>
       <td style="text-align:right;">${num(x.tb.prevSupply)}</td><td style="text-align:right;">${num(x.tb.noticeTax)}</td>
       <td>${x.tb.office ? taxjEsc(x.tb.office) : na}</td><td style="white-space:nowrap;">${x.tb.dueDate ? taxjEsc(x.tb.dueDate) : na}</td>
@@ -3026,12 +3062,12 @@ function vatTableHtml(docs){
       ${vatCustomCols.map(col => vatCustomCellHtml(x.c.id, col)).join('')}</tr>`;
   }).join('');
   const plab = `${year}년 ${VAT_T_LABEL[period]}`;
-  const cols = 15 + vatCustomCols.length;
+  const cols = 17 + vatCustomCols.length;
   // [2026.10.14] "예정고지 상세 제목 삭제"(요청 - 회사웹과 같게)
   return `${pre && !list.some(x => x.hasTb) ? '<div class="hint" style="margin:0 0 8px;">회사웹에 불러온 택스봇 예정고지가 없어요(회사웹 부가세 화면에서 가져오면 여기도 채워져요).</div>' : ''}
     <div class="toolbar"><div class="cl-subtabs">${segs.map(([k, l, c]) => `<button class="cl-subtab ${vatSeg === k ? 'on' : ''}" onclick="vatSeg='${k}'; renderVat();">${l} ${c}</button>`).join('')}</div>
       <div class="spacer"></div><button class="btn xs" onclick="addVatCustomCol()">+ 항목 추가</button></div>
-    <div class="table-scroll" style="margin-top:12px;"><table><thead><tr><th class="tx-seq">순번</th><th>상호명</th><th>사업자번호</th><th>구분</th><th>제외사유</th><th>직전 과세기간<br>공급가액</th><th>예정고지세액</th><th>관할서</th><th>납부기한</th><th>안내문</th><th>납부서</th><th>메모</th><th>Tip</th><th>신고도움</th>
+    <div class="table-scroll" style="margin-top:12px;"><table><thead><tr><th class="tx-seq">순번</th><th>상호명</th><th>사업자번호</th><th>업종코드</th><th>업태</th><th>구분</th><th>제외사유</th><th>직전 과세기간<br>공급가액</th><th>예정고지세액</th><th>관할서</th><th>납부기한</th><th>안내문</th><th>납부서</th><th>메모</th><th>Tip</th><th>신고도움</th>
       ${vatCustomCols.map(col => `<th><button class="btn ghost xs" onclick="editVatCustomCol('${col.id}')" title="눌러서 이름·입력 방식 수정 또는 삭제" style="font-weight:800;">${taxjEsc(col.label)} ✎</button></th>`).join('')}</tr></thead>
       <tbody>${rows || `<tr><td colspan="${cols}"><div class="empty" style="padding:18px;">${q ? '검색 결과가 없어요.' : '거래처가 없어요.'}</div></td></tr>`}</tbody></table></div>`;
 }
@@ -3093,6 +3129,8 @@ function vatProgList(docs){
   };
   idx.sorted.filter(payIsReg).forEach(c => push(c, false));
   idx.sorted.forEach(c => push(c, true));
+  // [2026.10.14] 중간에 나간(해지) 거래처도 이 기수에 적어 둔 값이 있으면 계속 보이게(요청)
+  Object.keys(vatProg[`${year}-${period}`] || {}).forEach(id => { if(idx.byId[id]) push(idx.byId[id], false); });
   return list;
 }
 async function vatProgImport(input){
@@ -3234,7 +3272,7 @@ function vatProgHtml(docs){
     w[c.id] = Math.max(56, Math.min(240, len * 12 + 14));
   });
   const linkHead = ['상호','개업일','사업자번호','예정고지<br>대상','예정고지(부과)<br>제외사유','신고의무<br>여부','직전 과세기간<br>공급가액 합계액','예정','관할 세무서','담당자<br>전화번호']
-    .map((l, i) => `<th class="vp-link${i === 0 ? ' vp-sticky' : ''}" title="회사웹 값(조회만)">${l}</th>`).join('');
+    .map((l, i) => `<th class="vp-link${i === 0 ? ' vp-sticky' : ''}${i === 9 ? ' vp-div' : ''}" title="회사웹 값(조회만)">${l}</th>`).join('');
   const head = vatProgCols.map(c => `<th style="${c.type === 'check' ? 'text-align:center;' : ''}"><button class="vp-th" onclick="vatProgEditCol('${c.id}')" title="눌러서 이름·입력 방식·이어받기 수정 또는 삭제${c.carry ? '\n(다음 기수로 이어받는 항목)' : ''}">${taxjEsc(c.label).replace(/\n/g, '<br>')}${c.carry ? '<span class="vp-carry">↻</span>' : ''}</button></th>`).join('');
   const rows = list.map((x, n) => {
     const cid = escapeAttr(x.c.id), v = per[x.c.id] || {}, t = s => s || s === 0 ? taxjEsc(String(s)) : na;
@@ -3242,7 +3280,7 @@ function vatProgHtml(docs){
     if(!x.hasTb){ x.office = lk.office || ''; x.tel = lk.tel || ''; }
     const link = `<td class="vp-sticky" style="font-weight:800; color:${x.c.entityType === '법인' ? '#0b5a78' : x.c.entityType === '개인' ? '#be185d' : 'inherit'};">${taxjEsc(x.c.name)}</td>
       <td>${t(x.c.openDate)}</td><td>${t(innerBizNo(x.c.bizNo || ''))}</td><td>${t(tb.noticeYn)}</td><td>${t(tb.excludeReason)}</td><td>${t(tb.filingDuty)}</td>
-      <td style="text-align:right;">${num(tb.prevSupply)}</td><td style="text-align:right;">${tb.noticeTax == null || tb.noticeTax === '' ? na : num(tb.noticeTax)}</td><td>${t(x.office)}</td><td>${t(x.tel)}</td>`;
+      <td style="text-align:right;">${num(tb.prevSupply)}</td><td style="text-align:right;">${tb.noticeTax == null || tb.noticeTax === '' ? na : num(tb.noticeTax)}</td><td>${t(x.office)}</td><td class="vp-div">${t(x.tel)}</td>`;
     const mine = vatProgCols.map(c => {
       const val = v[c.id];
       if(c.type === 'check') return `<td style="text-align:center;"><input type="checkbox" ${val ? 'checked' : ''} onchange="vatProgSet('${cid}','${c.id}',this.checked)"></td>`;
@@ -3281,7 +3319,7 @@ function renderVatInner(){
   const f = vatTFocus(docs);
   const dday = f.dday === 0 ? 'D-DAY' : f.dday > 0 ? `D-${f.dday}` : (f.pending ? `기한 ${-f.dday}일 지남` : '');
   // 기간 선택은 회사웹과 같게: 귀속연도 · 1기/2기 · 예정/확정 + 거래처 검색(가운데)
-  el.innerHTML = `<div class="card">${taxjLiveBarHtml()}${vatViewTabsHtml()}
+  el.innerHTML = `<div class="card">${taxjLiveBarHtml()}
     <div class="toolbar" style="justify-content:center;">
       <select onchange="setVatPick('year', this.value)">${[...years].sort((a, b) => b - a).map(y => `<option value="${y}" ${y === vatYear ? 'selected' : ''}>${y}년</option>`).join('')}</select>
       <select onchange="setVatPick('half', this.value)"><option value="1" ${vatHalf === '1' ? 'selected' : ''}>1기</option><option value="2" ${vatHalf === '2' ? 'selected' : ''}>2기</option></select>
@@ -3291,6 +3329,314 @@ function renderVatInner(){
     ${vatView === 'prog' ? vatProgHtml(docs) : !docs ? '<div class="empty">Tax.J에 연결하면 회사웹 부가세 화면이 여기에 채워져요.</div>' : vatTableHtml(docs) + `
     <div class="hint" style="margin-top:10px; text-align:center;">${f.year}년 ${VAT_T_LABEL[f.period]} · ${f.due.getMonth() + 1}/${f.due.getDate()} 마감 <b style="color:${f.dday <= 3 ? '#e11d48' : 'inherit'};">${dday}</b> · 대상 <b>${f.total}</b> · 완료 <b style="color:#059669;">${f.done}</b> · 남음 <b style="color:${f.pending ? '#b45309' : 'inherit'};">${f.pending}</b></div>`}
   </div>`;
+}
+
+/* =========================================================
+   [2026.10.14] 결산(요청: "법인세 위에 결산 메뉴. 엑셀 항목을 부가세 진행처럼 구현하고 항목은 추가·수정 가능,
+   날짜 칸은 직접 치지 않고 날짜 선택 + 일괄로 오늘·특정 날짜 지정, 결산하는 날 기준 수임 거래처 전체가 나오고,
+   중간에 나간 거래처도 그동안 결산한 자료는 그대로 보이게")
+   회차 = 한 해 안에서 결산할 때마다 1차·2차… closeData['연도-회차'] = { date, roster:[거래처id], snap:{ id:{ name, bizNo, corpRegNo, openDate, entityType } }, v:{ id:{ 항목id: 값 } } }
+   - 회차를 만들 때 그날 수임 중인 거래처(기장대행·신고대리, 해지 아님)를 roster로 고정. 가장 최근 회차에는 새로 수임한 거래처를 자동으로 더함
+   - 거래처가 나가도(해지·삭제) roster·snap이 남아 그동안 적은 값이 그대로 보임(해지 표시)
+   - 앞쪽 상호명·법인등록번호·사업자번호·개업일은 회사웹 값(회사웹에서 없어졌으면 저장해 둔 snap)
+   항목 closeCols = [{ id, label, type:'date'|'text'|'check'|'num', carry }] - 모든 회차 공통. 값은 works에만 저장
+   ========================================================= */
+let closeYear = '', closeRound = '', closeQuery = '', closePicked = new Set();
+const CLOSE_TYPES = [['date','날짜'], ['text','글자'], ['check','체크'], ['num','숫자']];
+const CLOSE_LINK_RE = /^(순번|상호|상호명|법인등록번호|사업자번호|개업일)$/;
+const CLOSE_CARRY_RE = /^(차량|급여종류|비고)/;
+const CLOSE_QUICK = ['x', '-', '미해당'];
+const CLOSE_ISO_RE = /^\d{4}-\d{2}-\d{2}$/;
+function closeKey(){ return `${closeYear}-${closeRound}`; }
+function closeKeyLabel(k){ const [y, r] = String(k).split('-'); return `${y}년 ${r}차`; }
+function closeKeyCmp(a, b){ const [ya, ra] = a.split('-').map(Number), [yb, rb] = b.split('-').map(Number); return ya - yb || ra - rb; }
+function closeRounds(y){ return Object.keys(closeData).filter(k => k.split('-')[0] === String(y)).map(k => k.split('-')[1]).sort((a, b) => a - b); }
+function closeLatestKey(){ return Object.keys(closeData).sort(closeKeyCmp).pop() || ''; }
+function closeUid(p){ return p + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
+function closeSnapOf(c){ return { name: c.name || '', bizNo: c.bizNo || '', corpRegNo: c.corpRegNo || '', openDate: c.openDate || '', entityType: c.entityType || '' }; }
+function closeGet(cid, colId){ const d = closeData[closeKey()]; return d && d.v[cid] ? d.v[cid][colId] : undefined; }
+function closeSetVal(cid, colId, val){
+  const d = closeData[closeKey()]; if(!d) return;
+  const r = d.v[cid] = d.v[cid] || {};
+  if(val === '' || val == null || val === false) delete r[colId]; else r[colId] = val;
+  if(!Object.keys(r).length) delete d.v[cid];
+  scheduleGoogleSave();
+}
+function closeFmtDate(v){
+  if(v == null || v === '') return '';
+  if(CLOSE_ISO_RE.test(v)){ const [y, m, d] = v.split('-'); return `${y === String(closeYear) ? '' : y.slice(2) + '.'}${Number(m)}/${Number(d)}`; }
+  return String(v);
+}
+// 엑셀의 '09.29'·'9/29'·'2026.07.14' 같은 값 → YYYY-MM-DD (아니면 그대로 글자)
+function closeParseDate(v, year){
+  if(v instanceof Date){ const d = new Date(v.getTime() + 12 * 3600000); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; }
+  const s = String(v).trim();
+  let m = s.match(/^(\d{4})[.\-/](\d{1,2})[.\-/](\d{1,2})\.?$/);
+  if(m) return `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}`;
+  m = s.match(/^(\d{1,2})[./](\d{1,2})\.?$/);
+  if(m && +m[1] >= 1 && +m[1] <= 12 && +m[2] >= 1 && +m[2] <= 31) return `${year}-${m[1].padStart(2, '0')}-${m[2].padStart(2, '0')}`;
+  return s;
+}
+function closeIsDateish(v){ if(v instanceof Date) return true; const s = String(v).trim(); return /^(\d{4}[.\-/])?\d{1,2}[./]\d{1,2}\.?$/.test(s) || CLOSE_QUICK.includes(s); }
+// 가장 최근 회차는 새로 수임한 거래처를 자동으로 더함(나간 거래처는 빼지 않음)
+function closeSyncRoster(key, docs){
+  const d = closeData[key]; if(!d || !docs || key !== closeLatestKey()) return;
+  let changed = false;
+  taxjClientIndex(docs).sorted.filter(payIsReg).forEach(c => { if(!d.roster.includes(c.id)){ d.roster.push(c.id); d.snap[c.id] = closeSnapOf(c); changed = true; } });
+  if(changed) scheduleGoogleSave();
+}
+function closeRows(docs){
+  const d = closeData[closeKey()]; if(!d) return [];
+  const idx = docs ? taxjClientIndex(docs) : { byId: {} };
+  return d.roster.map(id => {
+    const live = idx.byId[id], snap = d.snap[id] || {};
+    const c = live ? Object.assign({}, snap, closeSnapOf(live)) : snap;
+    if(live) d.snap[id] = closeSnapOf(live);
+    return { id, c, gone: !live || !payIsReg(live), order: live ? live._order : 1e6 };
+  }).sort((a, b) => a.order - b.order);
+}
+async function closeNewRound(){
+  const docs = taxjFull && taxjFull.docs;
+  if(!docs) return smAlert('회사웹 연결이 필요해요', '결산하는 날 수임 중인 거래처를 회사웹에서 가져와서, 먼저 Tax.J에 연결해 주세요.');
+  const y = closeYear || String(new Date().getFullYear()), next = String((closeRounds(y).map(Number).pop() || 0) + 1);
+  const prev = closeLatestKey(), carry = closeCols.filter(c => c.carry);
+  const fields = [{ label:'결산일', type:'date', value: todayStr() }];
+  if(prev && carry.length) fields.push({ label:`${closeKeyLabel(prev)}에서 이어받기 (${carry.map(c => c.label.replace(/\s+/g, '')).join('·')})`, options:['이어받기','비워서 시작'], value:'이어받기' });
+  const r = await smForm(`${y}년 ${next}차 결산 만들기`, fields, { okText:'만들기' });
+  if(!r) return;
+  const active = taxjClientIndex(docs).sorted.filter(payIsReg), snap = {}, v = {};
+  active.forEach(c => { snap[c.id] = closeSnapOf(c); });
+  if(prev && carry.length && r[1] === '이어받기'){
+    Object.entries(closeData[prev].v || {}).forEach(([cid, vals]) => {
+      if(!snap[cid]) return;   // 이어받기는 지금 수임 중인 거래처만
+      const o = {}; carry.forEach(c => { if(vals[c.id] != null) o[c.id] = vals[c.id]; }); if(Object.keys(o).length) v[cid] = o;
+    });
+  }
+  closeData[`${y}-${next}`] = { date: r[0] || todayStr(), roster: active.map(c => c.id), snap, v };
+  closeYear = y; closeRound = next; closePicked = new Set();
+  renderClose(); scheduleGoogleSave();
+}
+async function closeDeleteRound(){
+  const k = closeKey(); if(!closeData[k]) return;
+  if(!(await smConfirm(`${closeKeyLabel(k)} 결산을 지울까요?`, '이 회차에 적은 값이 모두 지워져요(항목과 다른 회차는 그대로).', { tone:'danger', icon:'!', okText:'삭제' }))) return;
+  delete closeData[k]; closeRound = closeRounds(closeYear).pop() || ''; closePicked = new Set();
+  renderClose(); scheduleGoogleSave();
+}
+function closeSetDate(v){ const d = closeData[closeKey()]; if(d && v){ d.date = v; scheduleGoogleSave(); } }
+async function closeImport(input){
+  const file = input.files && input.files[0]; input.value = '';
+  if(!file) return;
+  const docs = taxjFull && taxjFull.docs;
+  if(!docs) return smAlert('회사웹 연결이 필요해요', '줄을 회사웹 거래처에 맞춰 넣어서, 먼저 Tax.J에 연결해 주세요.');
+  try{
+    if(typeof XLSX === 'undefined') await new Promise((res, rej) => { const el = document.createElement('script'); el.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js'; el.onload = res; el.onerror = rej; document.head.appendChild(el); });
+    const wb = XLSX.read(await file.arrayBuffer(), { type:'array', cellDates:true });
+    let sn = wb.SheetNames[0];
+    if(wb.SheetNames.length > 1){ const r = await smForm('어느 시트를 가져올까요?', [{ label:'시트', options: wb.SheetNames, value: sn }], { okText:'선택', icon:'↑' }); if(!r) return; sn = r[0]; }
+    const aoa = XLSX.utils.sheet_to_json(wb.Sheets[sn], { header:1, raw:true, defval:null });
+    const hdr = (aoa[0] || []).map(h => String(h == null ? '' : h).replace(/\r/g, '').trim()), norm = s => String(s == null ? '' : s).replace(/\s+/g, '');
+    const body = aoa.slice(1);
+    const jName = hdr.findIndex(h => /^상호/.test(norm(h))), jBiz = hdr.findIndex(h => /^사업자번호/.test(norm(h)));
+    const jCorp = hdr.findIndex(h => /^법인등록번호/.test(norm(h))), jOpen = hdr.findIndex(h => /^개업일/.test(norm(h)));
+    if(jName < 0 && jBiz < 0) return smAlert('거래처 칸을 못 찾았어요', '엑셀 첫 줄에 "상호명" 또는 "사업자번호" 칸이 있어야 해요.');
+    // 위쪽 회차 고르기: 고른 회차가 없으면 새 회차(결산일 = 오늘)로
+    let key = closeKey();
+    if(!closeData[key]){
+      const y = closeYear || String(new Date().getFullYear()), next = String((closeRounds(y).map(Number).pop() || 0) + 1);
+      key = `${y}-${next}`;
+    }
+    const year = key.split('-')[0];
+    const used = {}, map = [], newCols = [];
+    hdr.forEach((h, j) => {
+      const n = norm(h);
+      if(!n || CLOSE_LINK_RE.test(n)) return;
+      const occ = used[n] = (used[n] || 0) + 1;
+      let col = closeCols.filter(c => norm(c.label) === n)[occ - 1];
+      if(!col){
+        const vals = body.map(r => r[j]).filter(v => v != null && v !== '');
+        const type = vals.length && vals.every(v => typeof v === 'boolean' || /^(true|false)$/i.test(String(v))) ? 'check'
+          : vals.length && vals.every(closeIsDateish) && vals.some(v => !CLOSE_QUICK.includes(String(v).trim())) ? 'date' : 'text';
+        col = { id: closeUid('k'), label: h, type, carry: CLOSE_CARRY_RE.test(n) };
+        newCols.push(col);
+      }
+      map.push([j, col]);
+    });
+    const byBiz = {}, byName = {}, digits = s => String(s || '').replace(/[^0-9]/g, '');
+    taxjClientIndex(docs).sorted.forEach(c => { const d = digits(c.bizNo); if(d && !byBiz[d]) byBiz[d] = c; const n = norm(c.name); if(n && !byName[n]) byName[n] = c; });
+    const vals = {}, snapX = {}, ext = [];
+    body.forEach(r => {
+      const nm = jName >= 0 ? String(r[jName] == null ? '' : r[jName]).trim() : '', bz = jBiz >= 0 ? digits(r[jBiz]) : '';
+      if(!nm && !bz) return;
+      const c = (bz && byBiz[bz]) || byName[norm(nm)];
+      // 회사웹에 없는 거래처도 버리지 않고 엑셀 정보로 보관(나간 거래처의 예전 결산 자료)
+      const id = c ? c.id : `x:${bz || norm(nm)}`;
+      if(!c){ ext.push(nm || bz); snapX[id] = { name: nm, bizNo: jBiz >= 0 ? String(r[jBiz] || '') : '', corpRegNo: jCorp >= 0 ? String(r[jCorp] || '') : '', openDate: jOpen >= 0 && r[jOpen] ? closeParseDate(r[jOpen], year) : '', entityType: '' }; }
+      const v = {};
+      map.forEach(([j, col]) => {
+        let x = r[j]; if(x == null || x === '') return;
+        if(col.type === 'date') x = closeParseDate(x, year);
+        else if(col.type === 'check') x = x === true || /^(true|y|o|ㅇ|v|✓)$/i.test(String(x).trim());
+        else if(col.type === 'num'){ const t = String(x).replace(/,/g, '').trim(); x = /^-?\d+(\.\d+)?$/.test(t) ? Number(t) : String(x).trim(); }
+        else x = x instanceof Date ? closeParseDate(x, year) : typeof x === 'boolean' ? (x ? 'TRUE' : 'FALSE') : String(x).trim();
+        if(x !== '' && x !== false) v[col.id] = x;
+      });
+      vals[id] = Object.assign(vals[id] || {}, v);
+    });
+    const n = Object.keys(vals).length;
+    if(!n) return smAlert('넣을 거래처가 없어요', `'${sn}' 시트에서 거래처 줄을 찾지 못했어요.`);
+    const exists = !!closeData[key];
+    const msg = [`'${sn}' 시트 · 거래처 ${n}곳 · 항목 ${map.length}개${newCols.length ? `(새 항목 ${newCols.length}개)` : ''}`,
+      ext.length ? `회사웹 거래처에 없는 ${ext.length}곳은 엑셀 정보로 보관해요: ${ext.slice(0, 6).join(', ')}${ext.length > 6 ? ' 외' : ''}` : '',
+      exists ? '이 회차에 적어 둔 값은 엑셀 내용으로 바뀌어요.' : '새 회차(결산일 오늘)로 만들어요.'].filter(Boolean).join('\n');
+    if(!(await smConfirm(`${closeKeyLabel(key)} 결산에 넣을까요?`, msg, { okText:'넣기', icon:'↑' }))) return;
+    closeCols.push(...newCols);
+    const d = closeData[key] = closeData[key] || { date: todayStr(), roster: [], snap: {}, v: {} };
+    taxjClientIndex(docs).sorted.filter(payIsReg).forEach(c => { if(!d.roster.includes(c.id)){ d.roster.push(c.id); d.snap[c.id] = closeSnapOf(c); } });
+    const idx = taxjClientIndex(docs);
+    Object.keys(vals).forEach(id => { if(!d.roster.includes(id)) d.roster.push(id); d.snap[id] = idx.byId[id] ? closeSnapOf(idx.byId[id]) : snapX[id]; });
+    d.v = vals;
+    [closeYear, closeRound] = key.split('-'); closePicked = new Set();
+    renderClose(); scheduleGoogleSave();
+  }catch(e){
+    console.error('결산 엑셀 가져오기 실패', e);
+    smAlert('가져오지 못했어요', '엑셀 파일을 읽지 못했어요. 파일을 다시 확인해 주세요.');
+  }
+}
+// 날짜 칸: 누르면 작은 창(달력·오늘·x/-/미해당·지우기·직접 입력)
+function closeDatePopClose(){ const p = document.getElementById('closeDatePop'); if(p) p.remove(); document.removeEventListener('mousedown', closeDatePopOutside, true); }
+function closeDatePopOutside(e){ const p = document.getElementById('closeDatePop'); if(p && !p.contains(e.target) && !e.target.closest('.cl-dt')) closeDatePopClose(); }
+function closeDatePop(btn){
+  closeDatePopClose();
+  const { cid, col } = btn.dataset, cur = closeGet(cid, col), iso = CLOSE_ISO_RE.test(cur || '');
+  const pop = document.createElement('div');
+  pop.id = 'closeDatePop'; pop.className = 'cl-pop';
+  pop.innerHTML = `<input type="date" class="cl-pop-date" value="${iso ? cur : ''}">
+    <div class="cl-pop-row"><button type="button" data-v="__today">오늘</button>${CLOSE_QUICK.map(q => `<button type="button" data-v="${q}">${q}</button>`).join('')}<button type="button" data-v="__clear" class="del">지우기</button></div>
+    <input type="text" class="cl-pop-text" placeholder="직접 입력 후 Enter" value="${iso || cur == null ? '' : escapeAttr(String(cur))}">`;
+  document.body.appendChild(pop);
+  const r = btn.getBoundingClientRect(), pw = pop.offsetWidth, ph = pop.offsetHeight;
+  pop.style.left = Math.max(8, Math.min(window.innerWidth - pw - 8, r.left)) + 'px';
+  pop.style.top = (r.bottom + ph + 8 > window.innerHeight ? r.top - ph - 4 : r.bottom + 4) + 'px';
+  const set = v => { closeSetVal(cid, col, v); btn.textContent = closeFmtDate(v); btn.title = v || ''; btn.classList.toggle('txt', !!v && !CLOSE_ISO_RE.test(v)); closeDatePopClose(); };
+  const di = pop.querySelector('.cl-pop-date');
+  di.addEventListener('change', () => { if(di.value) set(di.value); });
+  pop.querySelectorAll('[data-v]').forEach(b => b.onclick = () => set(b.dataset.v === '__today' ? todayStr() : b.dataset.v === '__clear' ? '' : b.dataset.v));
+  const ti = pop.querySelector('.cl-pop-text');
+  ti.addEventListener('keydown', e => { if(e.key === 'Enter' && !e.isComposing){ e.preventDefault(); set(ti.value.trim()); } if(e.key === 'Escape') closeDatePopClose(); });
+  setTimeout(() => document.addEventListener('mousedown', closeDatePopOutside, true), 0);
+  try{ di.showPicker(); }catch(e){ di.focus(); }
+}
+function closePick(cid, on){ if(on) closePicked.add(cid); else closePicked.delete(cid); const n = document.getElementById('closePickN'); if(n) n.textContent = closePicked.size ? `${closePicked.size}곳 선택` : ''; }
+function closePickAll(on){ document.querySelectorAll('#tab-close .cl-pick').forEach(cb => { cb.checked = on; closePick(cb.dataset.cid, on); }); }
+// 일괄 입력: 날짜 항목 하나를 골라 체크한 거래처(없으면 지금 보이는 거래처 전체)에 오늘 또는 고른 날짜
+async function closeBulk(){
+  const dcols = closeCols.filter(c => c.type === 'date');
+  if(!dcols.length) return smAlert('날짜 항목이 없어요', '항목 이름을 눌러 입력 방식을 "날짜"로 바꾸거나, 날짜 항목을 추가해 주세요.');
+  const shown = [...document.querySelectorAll('#tab-close .cl-pick')].map(cb => cb.dataset.cid);
+  const picked = shown.filter(id => closePicked.has(id));
+  const targets = [];
+  if(picked.length) targets.push(`체크한 거래처 ${picked.length}곳`);
+  targets.push(`지금 보이는 거래처 전체 ${shown.length}곳`);
+  const r = await smForm('날짜 일괄 입력', [{ label:'항목', options: dcols.map(c => c.label.replace(/\s+/g, ' ')), value: dcols[0].label.replace(/\s+/g, ' ') }, { label:'날짜 (기본 오늘)', type:'date', value: todayStr() }, { label:'대상', options: targets, value: targets[0] }, { label:'이미 적힌 칸', options:['빈 칸만 채우기','모두 바꾸기'], value:'빈 칸만 채우기' }], { okText:'입력', icon:'✓' });
+  if(!r) return;
+  const col = dcols.find(c => c.label.replace(/\s+/g, ' ') === r[0]) || dcols[0], date = r[1] || todayStr();
+  const ids = r[2].startsWith('체크한') ? picked : shown, onlyEmpty = r[3] === '빈 칸만 채우기';
+  let n = 0;
+  ids.forEach(id => { const cur = closeGet(id, col.id); if(onlyEmpty && cur != null && cur !== '') return; closeSetVal(id, col.id, date); n++; });
+  renderClose();
+  smAlert('입력했어요', `${col.label.replace(/\s+/g, ' ')} · ${n}곳에 ${date}`, { icon:'✓' });
+}
+async function closeAddCol(){
+  const r = await smForm('결산 항목 추가', [{ label:'항목 이름', placeholder:'예: 재고 확인' }, { label:'입력 방식', options: CLOSE_TYPES.map(x => x[1]), value:'날짜' }, { label:'다음 회차로 이어받기', options:['아니오','예'], value:'아니오' }], { okText:'추가' });
+  if(!r || !r[0].trim()) return;
+  closeCols.push({ id: closeUid('k'), label: r[0].trim(), type: (CLOSE_TYPES.find(x => x[1] === r[1]) || CLOSE_TYPES[0])[0], carry: r[2] === '예' });
+  renderClose(); scheduleGoogleSave();
+}
+async function closeEditCol(id){
+  const col = closeCols.find(c => c.id === id); if(!col) return;
+  const r = await smForm('결산 항목 수정', [{ label:'항목 이름', type:'textarea', rows:2, value: col.label }, { label:'입력 방식', options: CLOSE_TYPES.map(x => x[1]), value: (CLOSE_TYPES.find(x => x[0] === col.type) || CLOSE_TYPES[0])[1] }, { label:'다음 회차로 이어받기', options:['아니오','예'], value: col.carry ? '예' : '아니오' }], { okText:'저장', cancelText:'삭제', icon:'✎' });
+  if(r === null){
+    if(!(await smConfirm(`'${col.label.replace(/\s+/g, ' ')}' 항목을 지울까요?`, '모든 회차에서 이 항목에 적어 둔 값도 지워져요.', { tone:'danger', icon:'!', okText:'삭제' }))) return;
+    closeCols = closeCols.filter(c => c.id !== id);
+    Object.values(closeData).forEach(d => Object.values(d.v || {}).forEach(v => { delete v[id]; }));
+  }else{
+    if(r[0].trim()) col.label = r[0].trim();
+    col.type = (CLOSE_TYPES.find(x => x[1] === r[1]) || CLOSE_TYPES[0])[0];
+    col.carry = r[2] === '예';
+  }
+  renderClose(); scheduleGoogleSave();
+}
+function closeNumInput(el, cid, colId){ const t = el.value.replace(/,/g, '').trim(); const v = /^-?\d+(\.\d+)?$/.test(t) ? Number(t) : el.value.trim(); el.value = typeof v === 'number' ? v.toLocaleString('ko-KR') : v; closeSetVal(cid, colId, v); }
+function closeTableHtml(docs){
+  const key = closeKey(), d = closeData[key];
+  closeSyncRoster(key, docs);
+  const q = closeQuery.trim().toLowerCase(), na = PAY_NA;
+  const rows = closeRows(docs).filter(x => !q || String(x.c.name || '').toLowerCase().includes(q));
+  const w = {};
+  closeCols.forEach(c => {
+    if(c.type === 'check') return;
+    if(c.type === 'date'){ w[c.id] = 0; return; }
+    const len = Math.max(...String(c.label).split('\n').map(s => s.length), ...rows.map(x => String((d.v[x.id] || {})[c.id] ?? '').length));
+    w[c.id] = Math.max(56, Math.min(240, len * 12 + 14));
+  });
+  const head = `<th class="tx-seq"><input type="checkbox" title="모두 선택" onchange="closePickAll(this.checked)"></th><th class="tx-seq">순번</th>`
+    + ['상호명','법인등록번호','사업자번호','개업일'].map((l, i) => `<th class="vp-link${i === 0 ? ' vp-sticky' : ''}${i === 3 ? ' vp-div' : ''}" title="회사웹 값(조회만)">${l}</th>`).join('')
+    + closeCols.map(c => `<th><button class="vp-th" onclick="closeEditCol('${c.id}')" title="눌러서 이름·입력 방식·이어받기 수정 또는 삭제${c.carry ? '\n(다음 회차로 이어받는 항목)' : ''}">${taxjEsc(c.label).replace(/\n/g, '<br>')}${c.carry ? '<span class="vp-carry">↻</span>' : ''}</button></th>`).join('');
+  const body = rows.map((x, n) => {
+    const cid = escapeAttr(x.id), v = d.v[x.id] || {}, t = s => s ? taxjEsc(String(s)) : na;
+    const color = x.gone ? 'var(--muted)' : x.c.entityType === '법인' ? '#0b5a78' : x.c.entityType === '개인' ? '#be185d' : 'inherit';
+    const cells = closeCols.map(c => {
+      const val = v[c.id];
+      if(c.type === 'check') return `<td style="text-align:center;"><input type="checkbox" ${val ? 'checked' : ''} onchange="closeSetVal('${cid}','${c.id}',this.checked)"></td>`;
+      if(c.type === 'date') return `<td style="text-align:center;"><button type="button" class="cl-dt${val && !CLOSE_ISO_RE.test(val) ? ' txt' : ''}" data-cid="${cid}" data-col="${c.id}" title="${escapeAttr(val || '')}" onclick="closeDatePop(this)">${taxjEsc(closeFmtDate(val))}</button></td>`;
+      const s = val == null ? '' : typeof val === 'number' ? val.toLocaleString('ko-KR') : String(val);
+      if(c.type === 'num') return `<td><input class="vp-in" style="width:${w[c.id]}px; text-align:right;" value="${escapeAttr(s)}" onchange="closeNumInput(this,'${cid}','${c.id}')"></td>`;
+      return `<td><input class="vp-in" style="width:${w[c.id]}px;" value="${escapeAttr(s)}" title="${escapeAttr(s)}" onchange="this.title=this.value; closeSetVal('${cid}','${c.id}',this.value.trim())"></td>`;
+    }).join('');
+    return `<tr${x.gone ? ' class="cl-gone"' : ''}><td class="tx-seq"><input type="checkbox" class="cl-pick" data-cid="${cid}" ${closePicked.has(x.id) ? 'checked' : ''} onchange="closePick(this.dataset.cid, this.checked)"></td><td class="tx-seq">${n + 1}</td>
+      <td class="vp-sticky" style="font-weight:800; color:${color};">${taxjEsc(x.c.name || '')}${x.gone ? ' <span class="cl-gone-tag">해지</span>' : ''}</td>
+      <td>${t(x.c.corpRegNo)}</td><td>${t(innerBizNo(x.c.bizNo || ''))}</td><td class="vp-div">${t(x.c.openDate)}</td>${cells}</tr>`;
+  }).join('');
+  return `<div class="table-scroll vat-prog" style="margin-top:8px;"><table><thead><tr>${head}</tr></thead>
+    <tbody>${body || `<tr><td colspan="${closeCols.length + 6}"><div class="empty" style="padding:18px;">${q ? '검색 결과가 없어요.' : '거래처가 없어요.'}</div></td></tr>`}</tbody></table></div>`;
+}
+function renderClose(){
+  const el = document.getElementById('tab-close');
+  if(!el) return;
+  const a = document.activeElement;
+  if(a && el.contains(a) && a.classList && a.classList.contains('vp-in')){
+    if(!a._closeDefer){ a._closeDefer = true; a.addEventListener('blur', () => setTimeout(renderClose, 0), { once:true }); }
+    return;
+  }
+  if(!taxjFull && !taxjFullRestoreTried) taxjRestoreFull();
+  const docs = taxjFull && taxjFull.docs;
+  if(!closeYear){ const lk = closeLatestKey(); closeYear = lk ? lk.split('-')[0] : String(new Date().getFullYear()); }
+  const rounds = closeRounds(closeYear);
+  if(!rounds.includes(closeRound)) closeRound = rounds[rounds.length - 1] || '';
+  const key = closeKey(), d = closeData[key];
+  const nowY = new Date().getFullYear(), years = new Set([closeYear]);
+  Object.keys(closeData).forEach(k => years.add(k.split('-')[0]));
+  for(let y = nowY + 1; y >= nowY - 2; y--) years.add(String(y));
+  const sig = `${closeYear}|${closeRound}`;
+  const keep = el._closeSig === sig ? [...el.querySelectorAll('.table-scroll')].map(x => [x.scrollLeft, x.scrollTop]) : [];
+  el.innerHTML = `<div class="card">${taxjLiveBarHtml()}
+    <div class="toolbar" style="justify-content:center;">
+      <select onchange="closeYear=this.value; closeRound=''; closePicked=new Set(); renderClose();">${[...years].sort((a, b) => b - a).map(y => `<option value="${y}" ${y === closeYear ? 'selected' : ''}>${y}년</option>`).join('')}</select>
+      ${rounds.length ? `<select onchange="closeRound=this.value; closePicked=new Set(); renderClose();">${rounds.map(r => `<option value="${r}" ${r === closeRound ? 'selected' : ''}>${r}차</option>`).join('')}</select>` : ''}
+      ${d ? `<label class="cl-date-lab">결산일 <input type="date" value="${escapeAttr(d.date || '')}" onchange="closeSetDate(this.value)"></label>` : ''}
+      <input type="text" placeholder="거래처 검색" value="${escapeAttr(closeQuery)}" oninput="closeQuery=this.value; clearTimeout(window._closeQT); window._closeQT=setTimeout(()=>{ renderClose(); const s=document.querySelector('#tab-close input[placeholder=&quot;거래처 검색&quot;]'); if(s){ s.focus(); s.setSelectionRange(s.value.length, s.value.length); } }, 250);">
+    </div>
+    <div class="toolbar"><span class="hint" id="closePickN" style="margin:0;">${closePicked.size ? `${closePicked.size}곳 선택` : ''}</span><div class="spacer"></div>
+      <button class="btn primary xs" onclick="closeNewRound()">+ 새 회차</button>
+      ${d ? `<button class="btn xs" onclick="closeBulk()" title="날짜 항목 하나를 골라 체크한 거래처(없으면 보이는 전체)에 오늘 또는 고른 날짜를 넣어요">날짜 일괄 입력</button>` : ''}
+      <button class="btn xs" onclick="closeAddCol()">+ 항목</button>
+      <button class="btn ghost xs" onclick="document.getElementById('closeXlsx').click()" title="1행 = 항목 이름인 결산 엑셀을 고른 회차(없으면 새 회차)에 넣어요">엑셀 올리기</button><input type="file" id="closeXlsx" accept=".xlsx,.xls" style="display:none;" onchange="closeImport(this)">
+      ${d ? '<button class="btn ghost xs danger" onclick="closeDeleteRound()">회차 삭제</button>' : ''}
+    </div>
+    ${d ? closeTableHtml(docs) : `<div class="empty">${closeYear}년 결산 회차가 아직 없어요.<br>'+ 새 회차'를 누르면 그날 수임 중인 거래처로 만들어요. 엑셀이 있으면 '엑셀 올리기'로 바로 넣어도 돼요.</div>`}
+  </div>`;
+  el._closeSig = sig; el.classList.toggle('vat-wide', !!d);
+  if(keep.length) [...el.querySelectorAll('.table-scroll')].forEach((x, i) => { if(keep[i]){ x.scrollLeft = keep[i][0]; x.scrollTop = keep[i][1]; } });
 }
 
 /* =========================================================
@@ -3767,10 +4113,7 @@ function renderClients(){
     <div class="card">
       <div class="cl-head">
         <div>
-          <div class="cl-subtabs">
-            ${[['regular','기장거래처', clients.length], ['other','기타거래처', clientsOther.length], ['terminated','해지거래처', clientsTerminated.length]]
-              .map(([k, l, n]) => `<button class="cl-subtab ${clientsView === k ? 'on' : ''}" onclick="setClientsView('${k}')">${l} <span>${n}</span></button>`).join('')}
-          </div>
+          <!-- [2026.10.14] 왼쪽 하위메뉴와 같은 가로 메뉴는 없앰(요청) -->
         </div>
         <div style="text-align:right;">
           <button class="btn primary xs" onclick="importTaxjLiveClients()" title="회사앱(Tax.J)에 입력된 거래처를 바로 받아와요(조회만)">Tax.J에서 불러오기</button>
@@ -3966,6 +4309,7 @@ const GOOGLE_DATA_KEYS = [
   'payCustomCols','payCustomVals',   // [2026.10.13] 원천세 신고현황 내가 만든 항목
   'vatCustomCols','vatCustomVals',   // [2026.10.13] 부가세 내가 만든 항목
   'vatProgCols','vatProg',   // [2026.10.14] 부가세 진행표
+  'closeCols','closeData',   // [2026.10.14] 결산
   'accountVault',   // [2026.10.08] 계정 보관함이 Google 시트에 저장되지 않아 다시 열면 "보관함 만들기"가 다시 뜨던 문제 수정(요청)
 ];
 
@@ -3981,7 +4325,7 @@ function collectGoogleSnapshot(){
     trashBin, nextTrashId,
     links, nextLinkId,
     manuals, nextManualId, manualCats,
-    accountVault, submitMine, attendMine, payCustomCols, payCustomVals, vatCustomCols, vatCustomVals, vatProgCols, vatProg,
+    accountVault, submitMine, attendMine, payCustomCols, payCustomVals, vatCustomCols, vatCustomVals, vatProgCols, vatProg, closeCols, closeData,
   };
 }
 
@@ -4050,6 +4394,8 @@ async function loadFromGoogleSheet(){
     if(map.vatCustomVals) vatCustomVals = JSON.parse(map.vatCustomVals);
     if(map.vatProgCols) vatProgCols = JSON.parse(map.vatProgCols);
     if(map.vatProg) vatProg = JSON.parse(map.vatProg);
+    if(map.closeCols) closeCols = JSON.parse(map.closeCols);
+    if(map.closeData) closeData = JSON.parse(map.closeData);
     if(map.links)         links        = JSON.parse(map.links);
     if(map.nextLinkId)    nextLinkId   = JSON.parse(map.nextLinkId);
     if(map.manuals)       manuals      = JSON.parse(map.manuals);
@@ -4249,6 +4595,8 @@ function applySnapshot(o){
   if(o.vatCustomVals) vatCustomVals = o.vatCustomVals;
   if(o.vatProgCols) vatProgCols = o.vatProgCols;
   if(o.vatProg) vatProg = o.vatProg;
+  if(o.closeCols) closeCols = o.closeCols;
+  if(o.closeData) closeData = o.closeData;
   if(o.links) links = o.links;
   if(o.nextLinkId) nextLinkId = o.nextLinkId;
   if(o.manuals) manuals = o.manuals;
@@ -4876,7 +5224,7 @@ async function resetAllData(){
   clients = [];
   tasks = [];
   vatData = {}; payData = {}; corpData = {}; indivData = {};
-  submitMine = {}; attendMine = {}; payCustomCols = []; payCustomVals = {}; vatCustomCols = []; vatCustomVals = {}; vatProgCols = []; vatProg = {};
+  submitMine = {}; attendMine = {}; payCustomCols = []; payCustomVals = {}; vatCustomCols = []; vatCustomVals = {}; vatProgCols = []; vatProg = {}; closeCols = []; closeData = {};
   worklistChecklist = {}; worklistSchedule = {};
   events = [];
   clientsOther = []; clientsTerminated = [];
@@ -5596,7 +5944,7 @@ function renderAttend(){
     <div class="card">
       ${taxjLiveBarHtml()}
       <div class="toolbar">
-        <div class="cl-subtabs">${ATTEND_VIEWS.map(([k, l]) => `<button class="cl-subtab ${attendView === k ? 'on' : ''}" onclick="setAttendView('${k}')">${l}</button>`).join('')}</div>
+        <!-- [2026.10.14] 왼쪽 하위메뉴와 같은 가로 메뉴는 없앰(요청) -->
         <button class="btn ghost xs" onclick="attendShiftMonth(-1)" title="이전 달">‹</button>
         <span style="font-weight:800;">${yy}년 ${mm}월</span>
         <button class="btn ghost xs" onclick="attendShiftMonth(1)" title="다음 달">›</button>
@@ -5619,7 +5967,7 @@ function renderAttend(){
 let payView = 'status', payQuery = '', payMonth = '', dwYear = '', dwClient = '', dwShowLeft = false;
 const PAY_VIEWS = [['overview','총괄'], ['status','신고현황'], ['daily','일용직'], ['submit','제출']];
 function setPayView(v){ payView = v; if(activeTab !== 'pay') switchTab('pay'); else renderPay(); }
-function payViewTabsHtml(){ return `<div class="cl-subtabs pay-maintabs">${PAY_VIEWS.map(([k, l]) => `<button class="cl-subtab ${payView === k ? 'on' : ''}" onclick="setPayView('${k}')">${l}</button>`).join('')}</div>`; }
+function payViewTabsHtml(){ return ''; }   // [2026.10.14] 왼쪽 하위메뉴와 같은 가로 메뉴는 없앰(요청) - 이동은 왼쪽 메뉴 원천세 › 총괄·신고현황·일용직·제출
 const PAY_NA = '<span style="color:#d4c6cd;">-</span>';
 function payIsReg(c){ return ['기장대행','신고대리'].includes(c.taxType) && c.status !== '해지'; }
 // Tax.J filingCycleRecordsOf / filingCycleRecordAt / filingCycleRecApplicable와 같은 기준
@@ -5993,7 +6341,7 @@ function renderInner(){
   const tabs = `<div class="cl-subtabs pay-maintabs">${INNER_VIEWS.map(([k, l]) => `<button class="cl-subtab ${innerView === k ? 'on' : ''}" onclick="setInnerView('${k}')">${l}</button>`).join('')}</div>`;
   const body = !docs ? '<div class="card"><div class="empty">Tax.J에 연결하면 회사웹 내부 정보가 여기에 채워져요.</div></div>'
     : innerView === 'team' ? innerTeamHtml(docs) : innerView === 'sched' ? `<div class="card">${innerSchedHtml(docs)}</div>` : innerCorpHtml(docs);
-  el.innerHTML = `<div class="card" style="margin-bottom:12px;">${taxjLiveBarHtml()}${tabs.replace('pay-maintabs', 'pay-maintabs" style="margin-bottom:0 !important; border-bottom:none; padding-bottom:0;')}</div>${body}`;
+  el.innerHTML = `<div class="card" style="margin-bottom:12px;">${taxjLiveBarHtml().replace('margin-bottom:10px;', 'margin-bottom:0;')}</div>${body}`;   // [2026.10.14] 왼쪽 하위메뉴와 같은 가로 메뉴는 없앰(요청)
 }
 
 function setTaxjFullView(v){ taxjFullView = v; if(activeTab !== 'taxj') switchTab('taxj'); else renderTaxjFull(); }
@@ -6045,7 +6393,7 @@ function renderTaxjFull(){
   const head = `
     <div class="card" style="margin-bottom:12px;">
       <div class="cl-head">
-        <div class="cl-subtabs">${TAXJ_FULL_GROUPS.map(g => `<button class="cl-subtab ${taxjFullView === g.id ? 'on' : ''}" onclick="setTaxjFullView('${g.id}')">${g.label}</button>`).join('')}<button class="cl-subtab ${taxjFullView === 'remote' ? 'on' : ''}" onclick="setTaxjFullView('remote')">회사웹 화면</button></div>
+        <div><!-- [2026.10.14] 왼쪽 하위메뉴와 같은 가로 메뉴는 없앰(요청) --></div>
         <div style="text-align:right;">
           <button class="btn primary xs" onclick="loadTaxjFull()" ${taxjFullBusy ? 'disabled' : ''}>${taxjFullBusy ? '불러오는 중…' : taxjFull ? '새로고침' : 'Tax.J에서 불러오기'}</button>
           ${taxjFull ? `<button class="btn ghost xs" onclick="loadTaxjFull(true)">다른 계정으로</button>` : ''}
@@ -6532,7 +6880,7 @@ function renderManuals(){
   el.innerHTML = `
     <div class="card">
       <div class="cl-head">
-        <div class="cl-subtabs">${[''].concat(manualCats).map(c => `<button class="cl-subtab ${manualCat === c ? 'on' : ''}" onclick="setManualCat(${c ? `manualCats[${manualCats.indexOf(c)}]` : "''"})">${c ? taxjEsc(c) : '전체'} <span>${cnt(c)}</span></button>`).join('')}</div>
+        <div><!-- [2026.10.14] 왼쪽 하위메뉴와 같은 가로 메뉴는 없앰(요청) --></div>
         <div style="display:flex; gap:6px; align-items:center;">
           <button class="btn ghost xs" onclick="manualEditCats()">분야 관리</button>
           <button class="btn primary xs" onclick="manualAdd()">매뉴얼 추가</button>
@@ -6992,7 +7340,7 @@ function renderAccounts(){
 
 function renderAllNoSave(){
   try{ ensurePayMonths(); ensureTaxRows(); generateRecurringTasks(); }catch(e){ console.warn(e); }
-  renderHome(); renderWorklist(); renderAccounts(); renderLinks(); renderManuals(); renderVat(); renderPay(); renderCorp(); renderIndiv(); renderClients(); renderSettings();
+  renderHome(); renderWorklist(); renderAccounts(); renderLinks(); renderManuals(); renderVat(); renderClose(); renderPay(); renderCorp(); renderIndiv(); renderClients(); renderSettings();
   if(activeTab === 'review') renderReview();
   if(activeTab === 'taxj') renderTaxjFull();
   if(activeTab === 'attend') renderAttend();
