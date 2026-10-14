@@ -3867,31 +3867,47 @@ function clientKeywords(c){
   if(base.length >= 4) words.add(base.slice(0, 2));
   return [...words].filter(w => w.length >= 2);
 }
+// [2026.10.14] "회사웹처럼 상세정보가 뜨면 좋겠다, 할 일 관련 정보는 필요 없다"(요청) - 회사웹(Tax.J) 거래처 상세정보와 같은 구획
+// (기본정보·대표자 정보·실무자 정보·수임정보)을 회사웹 실시간 자료로 보여주고, 신고 현황은 그대로, 남은 할 일·최근 끝낸 일은 뺌.
+// 회사웹 거래처는 사업자번호(없으면 상호)로 찾고, 못 찾으면(연결 전 등) 이 앱에 가져와 둔 값으로 보여줌
 function openClientDetail(id){
   const c = clients.find(x => x.id === id);
   if(!c) return;
   const esc = v => String(v == null ? '' : v).replace(/&/g,'&amp;').replace(/</g,'&lt;');
-  const kws = clientKeywords(c);
-  const related = tasks.filter(t => kws.some(k => (t.text || '').includes(k))).sort((a, b) => b.date.localeCompare(a.date));
-  const open = related.filter(t => !t.done), doneList = related.filter(t => t.done).slice(0, 5);
   const v = (vatData[currentVatPeriod] || {})[c.id], p = (payData[currentPayMonth] || {})[c.id];
   const co = (corpData[currentCorpYear] || {})[c.id], iv = (indivData[currentIndivYear] || {})[c.id];
   const stepText = (st, steps) => { if(!st) return '-'; const last = steps.filter(x => st.steps && st.steps[x]).pop(); return last ? `${last} 완료` : '시작 전'; };
-  const html = `
-    <div class="cd-grid">
-      <div><span>구분</span><b>${esc(c.type)}</b></div><div><span>대표자</span><b>${esc(c.ceo || '-')}</b></div>
-      <div><span>사업자번호</span><b>${esc(c.biz || '-')}</b></div><div><span>법인등록번호</span><b>${esc(c.corpNo || '-')}</b></div>
-      <div><span>개업일</span><b>${esc(c.openDate || '-')}</b></div><div><span>수임료</span><b>${esc(c.fee || '-')}</b></div>
-    </div>
+  const docs = taxjFull && taxjFull.docs, digits = x => String(x || '').replace(/[^0-9]/g, '');
+  const list = docs ? ((docs.s__clients || {}).list || []) : [];
+  const t = list.find(x => digits(c.biz) && digits(x.bizNo) === digits(c.biz)) || list.find(x => taxjNormName(x.name) === taxjNormName(c.name)) || null;
+  const row = (label, val) => `<div><span>${esc(label)}</span><b>${val == null || val === '' ? '-' : esc(val)}</b></div>`;
+  const sec = (title, rows) => `<div class="cd-sec">${title}</div><div class="cd-grid">${rows}</div>`;
+  let info;
+  if(t){
+    const subTags = Array.isArray(t.subTags) ? t.subTags.map(x => (x && x.key) || x).filter(Boolean).join(', ') : '';
+    info = sec('기본정보', row('구분', t.entityType) + row('상세구분', subTags) + row('사업자번호', innerBizNo(t.bizNo || '')) + (t.entityType === '법인' ? row('법인등록번호', t.corpRegNo) : '')
+      + row('사업장 주소', t.bizAddress) + row('개업일', t.openDate) + (t.entityType !== '개인' ? row('설립일', t.foundingDate) : '') + row('업종코드', t.bizTypeCode) + row('업태', t.bizType));
+    info += sec('대표자 정보', row('대표자', t.repName) + row('주민번호', t.repSsn) + row('연락처', t.repPhone) + row('이메일', t.repEmail));
+    const contacts = (t.contacts && t.contacts.length) ? t.contacts : (t.contact || t.phone || t.email) ? [{ name: t.contact, phone: t.phone, email: t.email }] : [];
+    info += sec('실무자 정보', t.contactSameAsRep ? row('실무자', '대표자와 동일') : !contacts.length ? row('등록 인원', '없음')
+      : contacts.map((x, k) => { const n = contacts.length > 1 ? k + 1 : ''; return row(`실무자${n} 이름`, x.name) + row(`실무자${n} 연락처`, x.phone) + row(`실무자${n} 이메일`, x.email); }).join(''));
+    const taxTypeDisp = ['기타','용역대행','단건신고'].includes(t.taxType) && t.taxTypeEtc ? `${t.taxType} (${t.taxTypeEtc})` : t.taxType;
+    const prog = t.program === '기타' ? (t.programEtc || '기타') : (t.program && t.program !== '없음' ? t.program : '');
+    let hire = row('수임구분', taxTypeDisp) + row('수임료', t.fee ? Number(t.fee).toLocaleString() + '원' : '') + row('계약일', t.contractDate) + row('수임시작일', t.start)
+      + row('프로그램', prog) + row('회사코드', t.companyCode) + row('진행상황', t.status);
+    if(t.status === '해지') hire += row('해지사유', t.terminationReason === '기타' && t.terminationReasonEtc ? `기타 (${t.terminationReasonEtc})` : t.terminationReason) + row('해지일', t.terminationDate) + row('종료월', t.terminationMonth);
+    info += sec('수임정보', hire);
+  }else{
+    info = `<div class="hint" style="margin:0 0 6px;">${docs ? '회사웹에서 이 거래처를 찾지 못해서' : 'Tax.J에 연결하기 전이라'} 가져와 둔 값만 보여요.</div>`
+      + sec('기본정보', row('구분', c.type) + row('대표자', c.ceo) + row('사업자번호', c.biz) + row('법인등록번호', c.corpNo) + row('개업일', c.openDate) + row('수임료', c.fee));
+  }
+  const html = `${info.replace('<div class="cd-sec">', '<div class="cd-sec" style="margin-top:0; border-top:none; padding-top:0;">')}
     <div class="cd-sec">신고 현황</div>
     <div class="cd-tax">
       <div><span>부가세 ${esc(currentVatPeriod)}</span><b>${v ? (v.target ? (v.filedDate ? '신고 완료' : '미신고') : '대상 아님') : '-'}</b></div>
       <div><span>원천세 ${esc(currentPayMonth)}</span><b>${p ? (p.filedDate ? '신고 완료' : '미신고') : '-'}</b></div>
       ${c.type === '법인' ? `<div><span>법인세 ${esc(currentCorpYear)}</span><b>${stepText(co, corpSteps)}</b></div>` : `<div><span>종소세 ${esc(currentIndivYear)}</span><b>${stepText(iv, indivSteps)}</b></div>`}
     </div>
-    <div class="cd-sec">남은 할 일 ${open.length}건 <small>(할 일 내용에 "${esc(kws.join('", "'))}"가 들어간 것)</small></div>
-    ${open.length ? open.slice(0, 10).map(t => `<div class="cd-task"><em>${shortDate(t.date)}</em>${esc(t.text)}</div>`).join('') : '<div class="cd-empty">없어요</div>'}
-    ${doneList.length ? `<div class="cd-sec">최근 끝낸 일</div>${doneList.map(t => `<div class="cd-task done"><em>${shortDate(t.date)}</em>${esc(t.text)}</div>`).join('')}` : ''}
     <div class="ev-actions" style="margin-top:14px;">
       <button class="btn" onclick="document.querySelector('.sm-modal-ok').click(); setTimeout(() => editClient(${c.id}), 180);">${ICON_EDIT} 수정</button>
       <button class="btn" onclick="document.querySelector('.sm-modal-ok').click(); setTimeout(() => showClientHistory(${c.id}), 180);">${ICON_HISTORY} 이력</button>
