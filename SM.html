@@ -987,6 +987,9 @@
   .notice-star:hover{ opacity:1; color:#f5b544; }
   .notice-star.on{ color:#f5b544; opacity:1; }
   .notice-item.imp:not(.done) .notice-text{ font-weight:700; }
+  /* [2026.10.14] 원천세 신고현황 당월·익월 두 줄을 한 거래처로 묶어 보이게 */
+  tr.pay-lane-1 td:not([rowspan]){ border-bottom:1px dashed var(--border); }
+  tr.pay-lane-1 td[rowspan]{ vertical-align:middle; }
   /* [2026.10.14] 거래처 계정정보 */
   .cl-acc td{ white-space:nowrap; font-size:12.5px; }
   .cl-acc .cl-acc-plat{ padding:1px 0; }
@@ -6180,6 +6183,9 @@ function payStatusHtml(docs){
     if(halfOff(c.id)){ const tEnd = payTarget(docs, c.id, `${yy}-${mm <= 6 ? '06' : '12'}`); if(tEnd && tEnd.marked && tEnd.applicable) t = tEnd; }   // Tax.J itHalfLanes와 같음
     const tOn = t && t.marked && t.applicable;
     if(!(applicable && (tOn || recs.length)) && !has('sameMonth') && !has('nextMonth')) return;
+    // [2026.10.14] "노아하우징쿱은 26.9월에 급여가 없는데도 나온다"(요청) - 반기 신고 거래처는 그 달에 급여(그 달 신고대상 등록)가 있거나
+    // 이 달에 적은 기록이 있을 때만 보여줌(예전엔 신고구분만 보고 반기 안의 모든 달에 나왔음). 매월 거래처는 그대로
+    if(rec && payRecApp(rec) && rec.cycle === '반기'){ const own = payTarget(docs, c.id, p); if(!(own && own.marked && own.applicable) && !has('sameMonth') && !has('nextMonth')) return; }
     let lanes = tOn ? [t.sameMonthPay ? 'sameMonth' : null, t.nextMonthPay ? 'nextMonth' : null].filter(Boolean) : [];
     ['sameMonth','nextMonth'].forEach(k => { if(!lanes.includes(k) && has(k)) lanes.push(k); });
     if(!lanes.length) lanes = ['sameMonth'];
@@ -6199,8 +6205,10 @@ function payStatusHtml(docs){
       // 반기 거래처의 6·12월 외 달은 신고서 마감·신고가 없어서 두 칸을 합쳐 '반기'
       const halfTd = what => `<td colspan="2"><span class="hint" style="margin:0;" title="반기 신고 - 6·12월에 ${what}">반기</span></td>`;
       const taxTds = (a, b, what) => ho ? halfTd(what) : `<td>${taxjMd(a)}</td><td>${taxjMd(b)}</td>`;
-      rows.push(`<tr>
-        <td class="tx-seq">${li ? '' : n}</td><td class="tx-name">${li ? '' : taxjEsc(c.name)}</td>
+      // [2026.10.14] "같은 거래처라 한 표에 나오게"(요청) - 당월·익월 두 줄이면 순번·상호명 칸을 합치고(rowspan) 두 줄 사이 선을 옅게
+      const span = dual ? ` rowspan="${lanes.length}"` : '';
+      rows.push(`<tr${dual ? (li ? ' class="pay-lane-2"' : ' class="pay-lane-1"') : ''}>
+        ${li ? '' : `<td class="tx-seq"${span}>${n}</td><td class="tx-name"${span}>${taxjEsc(c.name)}</td>`}
         <td style="white-space:nowrap; font-weight:700;">${payCycleLabelHtml(base, dual ? k : '')}</td>
         <td>${slip}</td><td>${taxjMd(v.payroll)}</td>
         ${taxTds(v.returnClose, v.returnCloseLocal, '신고서 마감')}${taxTds(v.national, v.local, '신고')}
