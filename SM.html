@@ -978,6 +978,11 @@
   /* [2026.10.13] 원천세 메뉴 2단(요청 - "메뉴구성 스타일이 이상하다"): 윗줄(총괄·신고현황·일용직·제출)은 큰 탭 + 아래 구분선,
      아랫줄(매월·반기·연간)은 옆 선택칸과 같은 높이의 작은 칸 묶음으로 구분 */
   .pay-maintabs{ border-bottom:1px solid var(--border); padding-bottom:10px; margin-bottom:14px !important; }
+  /* [2026.10.14] 복사 아이콘(Tax.J .ci-kcopy와 같은 모양, works 색) */
+  .sm-kcopy{ display:inline-flex; align-items:center; justify-content:center; width:22px; height:22px; margin-left:2px; vertical-align:middle; border-radius:6px; border:1px solid transparent; background:transparent; color:var(--muted); cursor:pointer; padding:0; opacity:.55; }
+  tr:hover .sm-kcopy, div:hover > .sm-kcopy{ opacity:1; }
+  .sm-kcopy:hover{ color:var(--primary-dark); background:var(--primary-soft); opacity:1; }
+  .sm-kcopy.ok{ color:#059669; opacity:1; }
   /* [2026.10.14] 부가세 진행표 - 항목이 70개 가까이라 칸을 촘촘하게, 상호 칸은 가로 스크롤해도 왼쪽에 고정 */
   .vat-prog th, .vat-prog td{ padding:4px 5px; }
   /* [2026.10.14] "가로 스크롤이 잘 안 넘어간다"(요청) - 표가 길어 가로 스크롤바가 맨 아래에 있었음 → 표를 화면 높이 안에 넣어 스크롤바가 늘 보이게, 머리글은 위에 고정 */
@@ -5838,8 +5843,17 @@ function setInnerView(v){ innerView = v; if(activeTab !== 'inner') switchTab('in
 // Tax.J CORP_BASIC_INFO_ORDER와 같음
 const INNER_CORP_ORDER = ['사업자번호','법인등록번호','창립일','대표자','주민등록번호','주소','우편번호','조정반번호','대표번호','대표팩스','폴더 링크'];
 function innerBizNo(raw){ const d = String(raw || '').replace(/[^0-9]/g, ''); return d.length === 10 && d === String(raw || '').trim() ? `${d.slice(0,3)}-${d.slice(3,5)}-${d.slice(5)}` : raw; }
-function innerCopy(btn){ const v = btn.getAttribute('data-v') || ''; try{ navigator.clipboard.writeText(v).then(() => { const t = btn.textContent; btn.textContent = '복사됨'; setTimeout(() => { btn.textContent = t; }, 900); }); }catch(e){} }
-function innerCopyBtn(v){ return v ? ` <button class="btn ghost xs" data-v="${escapeAttr(v)}" onclick="innerCopy(this)" title="복사">복사</button>` : ''; }
+// [2026.10.14] "복사는 아이콘으로, 회사웹 가져오는 화면은 회사웹 스타일·아이콘을 따라가도 좋다"(요청) - Tax.J 사내정보 복사 아이콘(CI_ICON_COPY)과 같은 모양.
+// 평소엔 옅게, 줄에 마우스를 올리면 진하게. 누르면 잠깐 체크 표시
+const SM_ICON_COPY = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>';
+const SM_ICON_CHECK = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
+function innerCopy(btn){
+  const v = btn.getAttribute('data-v') || '';
+  const done = () => { btn.innerHTML = SM_ICON_CHECK; btn.classList.add('ok'); setTimeout(() => { btn.innerHTML = SM_ICON_COPY; btn.classList.remove('ok'); }, 900); };
+  try{ navigator.clipboard.writeText(v).then(done); }
+  catch(e){ const ta = document.createElement('textarea'); ta.value = v; document.body.appendChild(ta); ta.select(); try{ document.execCommand('copy'); done(); }catch(_){} ta.remove(); }
+}
+function innerCopyBtn(v){ return v ? ` <button type="button" class="sm-kcopy" data-v="${escapeAttr(v)}" onclick="innerCopy(this)" title="복사" aria-label="복사">${SM_ICON_COPY}</button>` : ''; }
 function innerLink(u){ return `<a href="${escapeAttr(u)}" target="_blank" rel="noopener">${taxjEsc(u)}</a>`; }
 // 왼쪽 등록증 카드: [항목명, 값] 목록
 function innerProfileCard(title, eyebrow, rows, empty){
