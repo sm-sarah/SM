@@ -987,6 +987,11 @@
   .notice-star:hover{ opacity:1; color:#f5b544; }
   .notice-star.on{ color:#f5b544; opacity:1; }
   .notice-item.imp:not(.done) .notice-text{ font-weight:700; }
+  /* [2026.10.14] 거래처 계정정보 */
+  .cl-acc td{ white-space:nowrap; font-size:12.5px; }
+  .cl-acc .cl-acc-plat{ padding:1px 0; }
+  .cl-acc .cl-acc-lab{ display:inline-block; font-size:11px; font-weight:700; color:var(--muted); background:var(--bg); border-radius:5px; padding:0 5px; margin-right:5px; }
+  .cl-acc .cl-acc-sep{ color:var(--muted-soft); }
   /* [2026.10.14] 결산 날짜 칸·날짜 고르기 창 */
   .cl-dt{ font:inherit; font-size:12.5px; min-width:46px; height:26px; padding:0 6px; border:1px solid transparent; border-radius:6px; background:transparent; color:var(--text); cursor:pointer; white-space:nowrap; }
   .cl-dt:hover{ border-color:var(--border); background:#fff; }
@@ -1621,6 +1626,7 @@ const NAV_SUBMENUS = {
   ],
   clients: [
     {js:"setClientsView('regular')",    label:'기장거래처'},
+    {js:"setClientsView('accounts')",   label:'계정정보'},   // [2026.10.14] 거래처별 계정정보(요청)
     {js:"setClientsView('other')",      label:'기타거래처'},
     {js:"setClientsView('terminated')", label:'해지거래처'},
   ],
@@ -4107,8 +4113,75 @@ function renderReadonlyClientTable(list, terminated){
       ${terminated ? `<td>${e(c.terminationDate)}</td><td>${e(c.terminationMonth)}</td><td>${e(c.terminationReason)}</td>` : ''}
     </tr>`).join('')}</tbody></table></div>`;
 }
+/* ── [2026.10.14] 거래처 › 계정정보(요청: "거래처별 통장비번·홈택스 ID/PW·공인인증서 pw·여신 ID/PW + 판매대행 항목을 한 화면에 조회") ──
+   회사웹 거래처 개인정보(s__personalInfo.list[].sensitiveEnc → etcAccounts)를 Tax.J 관리비밀번호로 풀어서 기장거래처별 한 줄로 보여줌.
+   복호화는 accImportTaxjLive와 같은 방식(PBKDF2 150000회 → AES-GCM, s__manageVerifier로 비밀번호 확인).
+   관리비밀번호·풀린 값은 저장하지 않고 이 창 메모리에만 둠(새로고침·잠그기 하면 다시 잠김). 회사웹 값은 조회만 */
+let clAccKey = null, clAccData = null, clAccQuery = '', clAccBusy = false;
+const CL_ACC_PLATFORM_RE = /배민|배달의민족|쿠팡|요기요|땡겨요|위메프|티몬|스마트스토어|네이버|11번가|지마켓|G마켓|옥션|카카오|페이코|토스|에이블리|지그재그|무신사|오늘의집|아이디어스|마켓컬리|컬리|당근|핫시즌너/;   // Tax.J CL_PI_PLATFORM_RE
+function clAccB64(v){ return Uint8Array.from(atob(v), ch => ch.charCodeAt(0)); }
+async function clAccDecryptAll(docs){
+  const dec = async p => JSON.parse(new TextDecoder().decode(await crypto.subtle.decrypt({ name:'AES-GCM', iv: clAccB64(p.iv) }, clAccKey, clAccB64(p.data))));
+  const src = docs.s__personalInfo, list = (src && src.list) || [], out = {};
+  let failed = 0;
+  for(const c of taxjClientIndex(docs).sorted.filter(payIsReg)){
+    const p = list.find(x => x && x.clientId === c.id) || list.find(x => x && !x.clientId && taxjNormName(x.name) === taxjNormName(c.name));
+    if(!p || !p.sensitiveEnc){ out[c.id] = []; continue; }
+    try{ out[c.id] = ((await dec(p.sensitiveEnc)).etcAccounts || []).filter(a => a && a.label !== '대표자 주민번호'); }catch(e){ out[c.id] = null; failed++; }
+  }
+  clAccData = { src, byId: out, failed };
+}
+async function clAccUnlock(){
+  const docs = taxjFull && taxjFull.docs;
+  if(!docs || !docs.s__manageSalt) return smAlert('회사웹 연결이 필요해요', '먼저 Tax.J에 연결해 주세요. 거래처 개인정보는 회사웹에 암호화돼 있어요.');
+  const r = await smForm('Tax.J 관리비밀번호', [{ label:'회사웹 정보조회(관리) 비밀번호', type:'password', value:'' }], { okText:'열기', icon:'🔒' });
+  if(!r || !r[0]) return;
+  try{
+    const base = await crypto.subtle.importKey('raw', new TextEncoder().encode(r[0]), 'PBKDF2', false, ['deriveKey']);
+    const key = await crypto.subtle.deriveKey({ name:'PBKDF2', salt: clAccB64(docs.s__manageSalt), iterations:150000, hash:'SHA-256' }, base, { name:'AES-GCM', length:256 }, false, ['decrypt']);
+    let ok = false;
+    try{ ok = docs.s__manageVerifier && JSON.parse(new TextDecoder().decode(await crypto.subtle.decrypt({ name:'AES-GCM', iv: clAccB64(docs.s__manageVerifier.iv) }, key, clAccB64(docs.s__manageVerifier.data)))).check === 'ok'; }catch(e){}
+    if(!ok) return smAlert('비밀번호가 맞지 않아요', 'Tax.J 관리비밀번호를 다시 확인해 주세요.', { tone:'danger' });
+    clAccKey = key; clAccBusy = true; renderClients();
+    await clAccDecryptAll(docs);
+  }catch(e){
+    console.error('거래처 계정정보 열기 실패', e);
+    smAlert('열지 못했어요', String(e && e.message || e), { tone:'danger' });
+  }
+  clAccBusy = false; renderClients();
+}
+function clAccLock(){ clAccKey = null; clAccData = null; renderClients(); }
+function clAccVal(v){ return v ? `<b>${taxjEsc(v)}</b>${innerCopyBtn(v)}` : PAY_NA; }
+function clientAccountsHtml(){
+  const docs = taxjFull && taxjFull.docs;
+  if(!docs) return '<div class="empty">Tax.J에 연결하면 거래처별 계정정보를 볼 수 있어요.</div>';
+  if(!clAccKey) return `<div class="empty" style="padding:36px 0;">🔒 거래처 계정정보는 회사웹 관리비밀번호로 잠겨 있어요.<br>
+    <button class="btn primary xs" style="margin-top:12px;" onclick="clAccUnlock()">잠금 해제</button>
+    <div class="hint" style="margin-top:8px;">비밀번호와 풀린 값은 저장하지 않아요. 새로고침하면 다시 잠겨요.</div></div>`;
+  if(clAccBusy || !clAccData) return '<div class="empty">푸는 중…</div>';
+  // 회사웹 자료가 실시간으로 바뀌었으면 다시 풀기
+  if(clAccData.src !== docs.s__personalInfo){ clAccBusy = true; clAccDecryptAll(docs).then(() => { clAccBusy = false; renderClients(); }); return '<div class="empty">새로 바뀐 내용을 푸는 중…</div>'; }
+  const q = clAccQuery.trim().toLowerCase();
+  const rows = taxjClientIndex(docs).sorted.filter(payIsReg).filter(c => !q || String(c.name || '').toLowerCase().includes(q)).map((c, n) => {
+    const items = clAccData.byId[c.id];
+    const color = c.entityType === '법인' ? '#0b5a78' : c.entityType === '개인' ? '#be185d' : 'inherit';
+    if(items === null) return `<tr><td class="tx-seq">${n + 1}</td><td class="vp-sticky" style="font-weight:800; color:${color};">${taxjEsc(c.name)}</td><td colspan="7" class="hint" style="margin:0;">풀지 못했어요(회사웹에서 관리비밀번호가 바뀐 뒤 다시 저장되지 않은 항목일 수 있어요)</td></tr>`;
+    const get = l => (items || []).find(a => a.label === l) || {};
+    const plat = (items || []).filter(a => a.grp === 'platform' || (!a.grp && CL_ACC_PLATFORM_RE.test(a.label || '')));
+    const platHtml = plat.length ? plat.map(a => `<div class="cl-acc-plat"><span class="cl-acc-lab">${taxjEsc(a.label || '판매대행')}</span>${a.idVal ? `${taxjEsc(a.idVal)}${innerCopyBtn(a.idVal)}` : ''}${a.pwVal ? ` <span class="cl-acc-sep">/</span> ${taxjEsc(a.pwVal)}${innerCopyBtn(a.pwVal)}` : ''}</div>`).join('') : PAY_NA;
+    return `<tr><td class="tx-seq">${n + 1}</td><td class="vp-sticky" style="font-weight:800; color:${color};">${taxjEsc(c.name)}</td>
+      <td>${clAccVal(get('통장비밀번호').idVal)}</td><td>${clAccVal(get('홈택스').idVal)}</td><td>${clAccVal(get('홈택스').pwVal)}</td>
+      <td>${clAccVal(get('공동인증서').idVal)}</td><td>${clAccVal(get('여신금융협회').idVal)}</td><td>${clAccVal(get('여신금융협회').pwVal)}</td>
+      <td style="text-align:left;">${platHtml}</td></tr>`;
+  }).join('');
+  return `<div class="toolbar"><input type="text" placeholder="거래처 검색" value="${escapeAttr(clAccQuery)}" oninput="clAccQuery=this.value; clearTimeout(window._clAccQT); window._clAccQT=setTimeout(()=>{ renderClients(); const s=document.querySelector('#tab-clients input[placeholder=&quot;거래처 검색&quot;]'); if(s){ s.focus(); s.setSelectionRange(s.value.length, s.value.length); } }, 250);">
+      <div class="spacer"></div>${clAccData.failed ? `<span class="hint" style="margin:0;">${clAccData.failed}곳은 풀지 못했어요</span>` : ''}<button class="btn ghost xs" onclick="clAccLock()">🔒 잠그기</button></div>
+    <div class="table-scroll vat-prog cl-acc"><table><thead><tr><th class="tx-seq">순번</th><th class="vp-sticky">상호명</th><th>통장비번</th><th>홈택스 ID</th><th>홈택스 PW</th><th>공인인증서 PW</th><th>여신 ID</th><th>여신 PW</th><th>판매대행</th></tr></thead>
+    <tbody>${rows || `<tr><td colspan="9"><div class="empty" style="padding:18px;">${q ? '검색 결과가 없어요.' : '거래처가 없어요.'}</div></td></tr>`}</tbody></table></div>`;
+}
 function renderClients(){
   const el = document.getElementById('tab-clients');
+  if(clientsView === 'accounts'){ el.innerHTML = `<div class="card">${taxjLiveBarHtml()}${clientAccountsHtml()}</div>`; el.classList.add('vat-wide'); return; }   // [2026.10.14] 계정정보
   el.innerHTML = `
     <div class="card">
       <div class="cl-head">
