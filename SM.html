@@ -1578,6 +1578,11 @@ const NAV_SUBMENUS = {
     {js:"setSubmitMode('반기')",  label:'제출 · 반기'},
     {js:"setSubmitMode('연간')",  label:'제출 · 연간'},
   ],
+  // [2026.10.14] 부가세 하위메뉴 총괄·진행(요청)
+  vat: [
+    {js:"setVatView('overview')", label:'총괄'},
+    {js:"setVatView('prog')",     label:'진행'},
+  ],
   clients: [
     {js:"setClientsView('regular')",    label:'기장거래처'},
     {js:"setClientsView('other')",      label:'기타거래처'},
@@ -3034,7 +3039,7 @@ function vatTableHtml(docs){
    - 이전 기수에서 이어받기: 이어받기 항목만 복사 */
 let vatView = 'overview';
 const VAT_VIEWS = [['overview','총괄'], ['prog','진행']];
-function setVatView(v){ vatView = v; renderVat(); }
+function setVatView(v){ vatView = v; if(activeTab !== 'vat') switchTab('vat'); else renderVat(); }
 function vatViewTabsHtml(){ return `<div class="cl-subtabs pay-maintabs">${VAT_VIEWS.map(([k, l]) => `<button class="cl-subtab ${vatView === k ? 'on' : ''}" onclick="setVatView('${k}')">${l}</button>`).join('')}</div>`; }
 const VAT_PROG_TYPES = [['text','글자'], ['check','체크'], ['num','숫자']];
 // 회사웹에서 연결하는 칸 - 엑셀 머리글이 이 이름(공백 무시)이면 내 항목으로 만들지 않음
@@ -3149,6 +3154,26 @@ async function vatProgFromPrev(){
   vatProg[key] = out;
   renderVat(); scheduleGoogleSave();
 }
+// [2026.10.14] "엑셀을 잘못 불러왔어, 1기 확정에 넣어야 하는데"(요청) - 이 기수 진행 값을 다른 기수로 옮기기 / 비우기
+async function vatProgMove(){
+  const key = vatProgKey(); if(!vatProgHasData(key)) return;
+  const y0 = Number(vatYear), opts = [];
+  [y0 - 1, y0, y0 + 1].forEach(y => VAT_T_PERIODS.forEach(p => { const k = `${y}-${p}`; if(k !== key) opts.push(vatProgKeyLabel(k)); }));
+  const r = await smForm(`${vatProgKeyLabel(key)} 진행을 옮길까요?`, [{ label:'옮길 기수', options: opts, value: vatProgKeyLabel(`${vatYear}-${VAT_T_PERIODS[(VAT_T_PERIODS.indexOf(vatTPeriod()) + 3) % 4]}`) }], { okText:'옮기기', icon:'→' });
+  if(!r) return;
+  const m = r[0].match(/^(\d{4})년 ([12])기 (예정|확정)$/); if(!m) return;
+  const to = `${m[1]}-${m[2]}기${m[3]}`;
+  if(vatProgHasData(to) && !(await smConfirm(`${r[0]}에 이미 적어 둔 내용이 있어요`, '옮기면 그 내용은 이 내용으로 바뀌어요.', { tone:'danger', icon:'!', okText:'바꾸기' }))) return;
+  vatProg[to] = vatProg[key]; delete vatProg[key];
+  vatYear = m[1]; vatHalf = m[2]; vatKind = m[3] === '예정' ? 'pre' : 'final';
+  renderVat(); scheduleGoogleSave();
+}
+async function vatProgClear(){
+  const key = vatProgKey(); if(!vatProgHasData(key)) return;
+  if(!(await smConfirm(`${vatProgKeyLabel(key)} 진행을 비울까요?`, '이 기수에 적은 내 항목 값이 모두 지워져요(항목 자체와 다른 기수는 그대로).', { tone:'danger', icon:'!', okText:'비우기' }))) return;
+  delete vatProg[key];
+  renderVat(); scheduleGoogleSave();
+}
 function vatProgSet(cid, colId, val, rerender){
   const key = vatProgKey(), per = vatProg[key] = vatProg[key] || {}, r = per[cid] = per[cid] || {};
   if(val === '' || val == null || val === false) delete r[colId]; else r[colId] = val;
@@ -3182,6 +3207,7 @@ function vatProgHtml(docs){
   const bar = `<div class="toolbar"><b>${plab} 진행</b><div class="spacer"></div>
     ${!vatProgHasData(key) && pk ? `<button class="btn primary xs" onclick="vatProgFromPrev()" title="이어받기 항목(↻)만 가져와요">${vatProgKeyLabel(pk)}에서 이어받기</button>` : ''}
     <button class="btn xs" onclick="vatProgAddCol()">+ 항목</button>
+    ${vatProgHasData(key) ? '<button class="btn ghost xs" onclick="vatProgMove()" title="이 기수에 넣은 값을 다른 기수로 옮겨요">다른 기수로 옮기기</button><button class="btn ghost xs danger" onclick="vatProgClear()" title="이 기수에 적은 내 항목 값을 지워요">비우기</button>' : ''}
     <button class="btn ghost xs" onclick="document.getElementById('vatProgXlsx').click()" title="1행 = 항목 이름인 진행표 엑셀을 ${plab}에 넣어요">엑셀 올리기</button><input type="file" id="vatProgXlsx" accept=".xlsx,.xls" style="display:none;" onchange="vatProgImport(this)"></div>`;
   if(!docs) return bar + '<div class="empty">Tax.J에 연결하면 회사웹 거래처·예정고지 칸이 채워지고, 옆에 내 진행 칸을 적을 수 있어요.</div>';
   const q = vatQuery.trim().toLowerCase(), na = PAY_NA, num = v => v == null || v === '' ? na : Number(v).toLocaleString('ko-KR');
@@ -3211,8 +3237,7 @@ function vatProgHtml(docs){
     return `<tr><td class="tx-seq">${n + 1}</td>${link}${mine}</tr>`;
   }).join('');
   return bar + `<div class="table-scroll vat-prog" style="margin-top:8px;"><table><thead><tr><th class="tx-seq">순번</th>${linkHead}${head}</tr></thead>
-    <tbody>${rows || `<tr><td colspan="${vatProgCols.length + 11}"><div class="empty" style="padding:18px;">${q ? '검색 결과가 없어요.' : '거래처가 없어요.'}</div></td></tr>`}</tbody></table></div>
-    <div class="hint" style="margin-top:6px;">상호~담당자 전화번호는 회사웹 값(조회만, 예정고지 칸은 그 기의 예정 기수 택스봇 값)이에요. 오른쪽 내 항목은 works에만 저장되고, 항목 이름을 누르면 수정·삭제, ↻는 다음 기수로 이어받는 항목이에요.</div>`;
+    <tbody>${rows || `<tr><td colspan="${vatProgCols.length + 11}"><div class="empty" style="padding:18px;">${q ? '검색 결과가 없어요.' : '거래처가 없어요.'}</div></td></tr>`}</tbody></table></div>`;
 }
 function renderVat(){
   const el = document.getElementById('tab-vat');
@@ -3233,8 +3258,7 @@ function renderVat(){
       <input type="text" placeholder="거래처 검색" value="${escapeAttr(vatQuery)}" oninput="vatQuery=this.value; clearTimeout(window._vatQT); window._vatQT=setTimeout(()=>{ renderVat(); const s=document.querySelector('#tab-vat input[placeholder=&quot;거래처 검색&quot;]'); if(s){ s.focus(); s.setSelectionRange(s.value.length, s.value.length); } }, 250);">
     </div>
     ${vatView === 'prog' ? vatProgHtml(docs) : !docs ? '<div class="empty">Tax.J에 연결하면 회사웹 부가세 화면이 여기에 채워져요.</div>' : vatTableHtml(docs) + `
-    <div class="hint" style="margin-top:10px; text-align:center;">${f.year}년 ${VAT_T_LABEL[f.period]} · ${f.due.getMonth() + 1}/${f.due.getDate()} 마감 <b style="color:${f.dday <= 3 ? '#e11d48' : 'inherit'};">${dday}</b> · 대상 <b>${f.total}</b> · 완료 <b style="color:#059669;">${f.done}</b> · 남음 <b style="color:${f.pending ? '#b45309' : 'inherit'};">${f.pending}</b></div>
-    <div class="hint" style="margin-top:4px;">구분·제외사유·고지 금액·발송일·메모·Tip·신고도움은 회사웹 값(조회만)이고, '+ 항목 추가'로 만든 칸은 내 데이터에만 저장돼요. 검증은 회사웹에서 해요.</div>`}
+    <div class="hint" style="margin-top:10px; text-align:center;">${f.year}년 ${VAT_T_LABEL[f.period]} · ${f.due.getMonth() + 1}/${f.due.getDate()} 마감 <b style="color:${f.dday <= 3 ? '#e11d48' : 'inherit'};">${dday}</b> · 대상 <b>${f.total}</b> · 완료 <b style="color:#059669;">${f.done}</b> · 남음 <b style="color:${f.pending ? '#b45309' : 'inherit'};">${f.pending}</b></div>`}
   </div>`;
 }
 
@@ -5224,12 +5248,12 @@ function taxjLiveBarHtml(){
   const btn = taxjFullBusy ? `<button class="btn ghost xs" disabled>연결 중…</button>`
     : taxjLiveAutoBusy ? `<button class="btn ghost xs" disabled>자동 연결 중…</button>`
     : taxjLiveOn ? '' : `<button class="btn primary xs" onclick="loadTaxjFull()">${taxjFull ? '실시간 연결' : 'Tax.J 연결'}</button>`;
-  const txt = taxjLiveOn ? `회사웹 실시간 연결됨 · ${taxjEsc(taxjFull.email)} · ${taxjWhen(taxjFull.at)} 반영`
+  const txt = taxjLiveOn ? `회사웹 실시간 연결됨 · ${taxjWhen(taxjFull.at)} 반영`   // [2026.10.14] 계정(이메일)은 안 보이게(요청)
     : taxjFull ? `저장해 둔 회사 자료 · ${taxjWhen(taxjFull.at)} 기준${taxjLiveErr ? ' · 연결 끊김: ' + taxjEsc(taxjLiveErr) : ''}`
     : `회사 계정(${TAXJ_COMPANY_DOMAIN})으로 연결하면 회사웹 진행 상황이 실시간으로 채워져요`;
   // [2026.10.13] 연결 상태 줄은 오른쪽 정렬(요청)
   return `<div style="display:flex; align-items:center; justify-content:flex-end; gap:8px; flex-wrap:wrap; margin-bottom:10px;">
-    <span class="hint" style="margin:0; text-align:right;">${taxjLiveOn ? '<span style="color:#059669;">●</span> ' : ''}${txt}</span>${btn}</div>`;
+    <span class="hint" style="margin:0; text-align:right; font-size:11px;">${taxjLiveOn ? '<span style="color:#059669;">●</span> ' : ''}${txt}</span>${btn}</div>`;
 }
 function taxjDoc(key){ return taxjFull && taxjFull.docs ? taxjFull.docs['s__' + key] : undefined; }
 function taxjClientsList(){ const v = taxjDoc('clients'); return (v && v.list) || []; }
@@ -5730,8 +5754,7 @@ function payStatusHtml(docs){
     <div class="progress-bar"><div class="fill tone-blue" style="width:${pct}%"></div></div>
     ${rows.length ? `<div class="table-scroll" style="margin-top:16px;"><table><thead><tr><th class="tx-seq" rowspan="2">순번</th><th rowspan="2">상호명</th><th rowspan="2">신고</th><th rowspan="2">급여명세서 전달</th><th rowspan="2">급여마감</th><th colspan="2">신고서 마감</th><th colspan="2">신고일자</th><th rowspan="2">납부서 발송</th><th rowspan="2">납부마감</th><th rowspan="2">메모</th>
       ${payCustomCols.map(col => `<th rowspan="2"><button class="btn ghost xs" onclick="editPayCustomCol('${col.id}')" title="눌러서 이름·입력 방식 수정 또는 삭제" style="font-weight:800;">${taxjEsc(col.label)} ✎</button></th>`).join('')}</tr><tr><th>국세</th><th>지방세</th><th>국세</th><th>지방세</th></tr></thead><tbody>${rows.join('')}</tbody></table></div>`
-      : `<div class="empty">${q ? '검색 결과가 없어요.' : `${yy}년 ${mm}월 귀속 신고대상이 없어요.`}</div>`}
-    <div class="hint" style="margin-top:8px;">급여명세서 전달·급여마감·신고서 마감·신고일자·메모는 회사웹 값(조회만)이고, 납부서 발송·납부마감과 '+ 항목 추가'로 만든 칸은 내 데이터에만 저장돼요.</div>`;
+      : `<div class="empty">${q ? '검색 결과가 없어요.' : `${yy}년 ${mm}월 귀속 신고대상이 없어요.`}</div>`}`;
 }
 
 // ── 3. 일용직 ── (Tax.J dwInEmploy / dwSuggest와 같은 기준)
@@ -5791,8 +5814,7 @@ function payDailyHtml(docs){
       <tr${off}><td class="hint" style="margin:0;">신고</td>${rep}</tr>`;
   }).join('');
   return ctrl + `<div class="table-scroll" style="margin-top:12px;"><table><thead><tr><th>이름</th><th></th>${Array.from({ length:12 }, (_, i) => `<th style="${fbg(i + 1)}">${i + 1}월</th>`).join('')}</tr></thead>
-    <tbody>${rows || `<tr><td colspan="14"><div class="empty" style="padding:18px;">재직 중인 일용직이 없어요.</div></td></tr>`}${leftN ? `<tr><td colspan="14" style="text-align:center;"><button class="btn ghost xs" onclick="dwShowLeft=!dwShowLeft; renderPay();">${dwShowLeft ? '퇴사자 접기 ▴' : `퇴사자 ${leftN}명 보기 ▾`}</button></td></tr>` : ''}</tbody></table></div>
-    <div class="hint" style="margin-top:8px;">이름에 마우스를 올리면 생년월일·입사일·퇴사일이 보여요. 흐린 신고 금액은 회사웹의 제안(아직 확정 전)이에요.</div>`;
+    <tbody>${rows || `<tr><td colspan="14"><div class="empty" style="padding:18px;">재직 중인 일용직이 없어요.</div></td></tr>`}${leftN ? `<tr><td colspan="14" style="text-align:center;"><button class="btn ghost xs" onclick="dwShowLeft=!dwShowLeft; renderPay();">${dwShowLeft ? '퇴사자 접기 ▴' : `퇴사자 ${leftN}명 보기 ▾`}</button></td></tr>` : ''}</tbody></table></div>`;
 }
 
 function renderPay(){
@@ -5921,8 +5943,7 @@ function innerSchedHtml(docs){
       <td class="hint" style="margin:0; text-align:left;">${it.overridden ? '날짜 직접 수정됨' : it.shifted ? '주말·공휴일이라 다음 영업일로' : ''}</td></tr>`;
   }).join('');
   return `<div class="toolbar"><button class="btn ghost xs" onclick="innerShiftMonth(-1)" title="이전 달">‹</button><span style="font-weight:800;">${y}년 ${m}월</span><button class="btn ghost xs" onclick="innerShiftMonth(1)" title="다음 달">›</button><div class="spacer"></div><span class="hint" style="margin:0;">${list.length}건</span></div>
-    ${rows ? `<div class="table-scroll" style="margin-top:12px;"><table><thead><tr><th>기한</th><th></th><th style="text-align:left;">일정</th><th style="text-align:left;">비고</th></tr></thead><tbody>${rows}</tbody></table></div>` : '<div class="empty">이 달 세무일정이 없어요.</div>'}
-    <div class="hint" style="margin-top:8px;">회사웹 세무일정과 같은 기준이에요(국세청 기준 규칙 + 회사가 등록·수정한 일정). 정확한 기한은 홈택스에서 한 번 더 확인해 주세요.</div>`;
+    ${rows ? `<div class="table-scroll" style="margin-top:12px;"><table><thead><tr><th>기한</th><th></th><th style="text-align:left;">일정</th><th style="text-align:left;">비고</th></tr></thead><tbody>${rows}</tbody></table></div>` : '<div class="empty">이 달 세무일정이 없어요.</div>'}`;
 }
 function renderInner(){
   const el = document.getElementById('tab-inner');
@@ -5988,7 +6009,7 @@ function renderTaxjFull(){
         <div style="text-align:right;">
           <button class="btn primary xs" onclick="loadTaxjFull()" ${taxjFullBusy ? 'disabled' : ''}>${taxjFullBusy ? '불러오는 중…' : taxjFull ? '새로고침' : 'Tax.J에서 불러오기'}</button>
           ${taxjFull ? `<button class="btn ghost xs" onclick="loadTaxjFull(true)">다른 계정으로</button>` : ''}
-          <div class="hint" style="margin-top:4px;">${taxjFull ? `${taxjEsc(taxjFull.email)} · ${taxjWhen(taxjFull.at)} 기준${taxjFullSaveMsg ? ' · ' + taxjEsc(taxjFullSaveMsg) : ''}` : `회사 계정(${TAXJ_COMPANY_DOMAIN})으로 로그인해 Tax.J 저장소를 읽고 내 데이터에 저장해요. 회사 원본은 바뀌지 않아요.`}</div>
+          <div class="hint" style="margin-top:4px;">${taxjFull ? `${taxjWhen(taxjFull.at)} 기준${taxjFullSaveMsg ? ' · ' + taxjEsc(taxjFullSaveMsg) : ''}` : `회사 계정(${TAXJ_COMPANY_DOMAIN})으로 로그인해 Tax.J 저장소를 읽고 내 데이터에 저장해요. 회사 원본은 바뀌지 않아요.`}</div>
         </div>
       </div>
       ${taxjFullErr ? `<div class="hint" style="color:#e2445c; margin-top:8px;">불러오지 못했어요: ${taxjEsc(taxjFullErr)}</div>` : ''}
