@@ -16,7 +16,7 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,600;1,600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,600;1,600&family=IBM+Plex+Mono:wght@500;600;700&display=swap" rel="stylesheet">
 <script src="https://apis.google.com/js/api.js"></script>
 <script src="https://accounts.google.com/gsi/client"></script>
 <style>
@@ -1008,6 +1008,16 @@
   .cl-pop-row button.del{ color:var(--rose); }
   .cl-gone td{ color:var(--muted); }
   .cl-gone-tag{ font-size:10.5px; font-weight:700; color:var(--muted); border:1px solid var(--border); border-radius:5px; padding:0 4px; margin-left:3px; }
+  /* [2026.10.15] "결산 왼쪽 거래처 칸(순번~개업일)은 회사웹 스타일 그대로"(요청) - Tax.J 거래처 표와 같게:
+     숫자·날짜는 IBM Plex Mono 굵게(.num), 칸마다 세로 구분선(.cvb), 상호 줄바꿈 없음, 빈 칸 '-'는 흐린 회색(client-cell-na),
+     개인의 법인등록번호는 해당 없음으로 옅은 회색 바탕(client-cell-off) */
+  #tab-close .cl-lk{ border-right:1px solid var(--border); white-space:nowrap; }
+  #tab-close .cl-lk.cl-num{ font-family:'IBM Plex Mono', ui-monospace, monospace; font-weight:700; letter-spacing:-0.02em; }
+  #tab-close td.cl-na{ color:#C9CBD6 !important; }
+  #tab-close td.cl-off{ background:#F8F9FB !important; color:#CDD0DA !important; }
+  /* [2026.10.15] 기간 칸(시작~끝 날짜) */
+  .cl-pop-range{ display:flex; align-items:center; gap:4px; }
+  .cl-pop-range input{ flex:1; min-width:0; }
   .cl-date-lab{ display:inline-flex; align-items:center; gap:6px; font-size:12.5px; color:var(--muted); font-weight:700; }
   /* [2026.10.14] 복사 아이콘(Tax.J .ci-kcopy와 같은 모양, works 색) */
   .sm-kcopy{ display:inline-flex; align-items:center; justify-content:center; width:22px; height:22px; margin-left:2px; vertical-align:middle; border-radius:6px; border:1px solid transparent; background:transparent; color:var(--muted); cursor:pointer; padding:0; opacity:.55; }
@@ -1555,7 +1565,7 @@ const ICONS = {
 
 const TABS = [
   {id:'home',     label:'홈'},
-  {id:'worklist', label:'To do'},
+  // [2026.10.15] "To do 메뉴 삭제하고 내용을 홈으로"(요청) - To do 메뉴를 없애고 홈을 누르면 To do 화면(체크리스트·Today)이 나옴. 예전 홈(요약·달력)은 안 보임
   {id:'accounts', label:'계정'},
   {id:'links',    label:'링크'},
   {id:'manuals',  label:'매뉴얼'},
@@ -1680,7 +1690,7 @@ function renderNav(){
   }).join('');
 
   {
-    const [title, subtitle] = activeTab === 'home' ? ['이달의 일정', ''] : TAB_TITLES[activeTab];
+    const [title, subtitle] = activeTab === 'home' ? ['홈', ''] : TAB_TITLES[activeTab];   // [2026.10.15] 홈 = To do 화면
     document.getElementById('pageHead').innerHTML = `
       <div class="underline-bar"></div>
       <h1>${title}</h1>
@@ -1690,12 +1700,13 @@ function renderNav(){
 
 let prevTab = null;
 function switchTab(id){
+  if(id === 'worklist') id = 'home';   // [2026.10.15] To do 메뉴를 홈으로 합침(요청) - 예전 'To do로 가기'도 홈으로
   if(id !== activeTab) prevTab = activeTab;
   activeTab = id;
   try{ localStorage.setItem('sm_last_tab', id); }catch(e){}
   renderNav();
   document.querySelectorAll('.tab').forEach(el => el.classList.remove('active'));
-  document.getElementById('tab-'+id).classList.add('active');
+  document.getElementById('tab-' + (id === 'home' ? 'worklist' : id)).classList.add('active');   // 홈 = To do 화면
   renderAll();
 }
 function goBackTab(){
@@ -2767,7 +2778,7 @@ function bindWorklistSwipe(){
   if(!wlSwipeBound){
     wlSwipeBound = true;
     document.addEventListener('keydown', e => {
-      if(typeof activeTab === 'undefined' || activeTab !== 'worklist') return;
+      if(typeof activeTab === 'undefined' || activeTab !== 'home') return;   // [2026.10.15] To do 화면은 홈에서 보임
       const tag = (e.target.tagName || '').toLowerCase();
       if(tag === 'input' || tag === 'textarea' || tag === 'select' || e.target.isContentEditable) return;
       if(e.key === 'ArrowLeft'){ shiftWorklistDay(-1); e.preventDefault(); }
@@ -3351,7 +3362,7 @@ function renderVatInner(){
    항목 closeCols = [{ id, label, type:'date'|'text'|'check'|'num', carry }] - 모든 회차 공통. 값은 works에만 저장
    ========================================================= */
 let closeYear = '', closeRound = '', closeQuery = '', closePicked = new Set();
-const CLOSE_TYPES = [['date','날짜'], ['text','글자'], ['check','체크'], ['num','숫자']];
+const CLOSE_TYPES = [['date','날짜'], ['range','기간'], ['text','글자'], ['check','체크'], ['num','숫자']];   // [2026.10.15] 기간(시작~끝 날짜) 추가(요청)
 const CLOSE_LINK_RE = /^(순번|상호|상호명|법인등록번호|사업자번호|개업일)$/;
 const CLOSE_CARRY_RE = /^(차량|급여종류|비고)/;
 const CLOSE_QUICK = ['x', '-', '미해당'];
@@ -3385,6 +3396,41 @@ function closeParseDate(v, year){
   m = s.match(/^(\d{1,2})[./](\d{1,2})\.?$/);
   if(m && +m[1] >= 1 && +m[1] <= 12 && +m[2] >= 1 && +m[2] <= 31) return `${year}-${m[1].padStart(2, '0')}-${m[2].padStart(2, '0')}`;
   return s;
+}
+// [2026.10.15] 기간 칸(요청: "기간은 날짜로 입력할 수 있게") - 값 'YYYY-MM-DD~YYYY-MM-DD'. 한쪽만 있어도 됨, 날짜로 못 읽는 값은 글자 그대로(흐리게)
+// 엑셀의 '26.01~09.29' 같은 값: 앞 숫자가 12보다 크면 '연.월'(그 달 1일), 아니면 '월.일'
+function closeParseRangePart(v, year){
+  const s = String(v == null ? '' : v).trim();
+  if(!s) return '';
+  const m = s.match(/^(\d{2})[./](\d{1,2})\.?$/);
+  if(m && +m[1] > 12 && +m[2] >= 1 && +m[2] <= 12) return `20${m[1]}-${m[2].padStart(2, '0')}-01`;
+  return closeParseDate(s, year);
+}
+function closeParseRange(v, year){
+  if(v instanceof Date) return closeParseDate(v, year);
+  const s = String(v == null ? '' : v).trim();
+  const m = s.match(/^(.*?)\s*[~∼〜]\s*(.*)$/);
+  if(!m) return s;
+  const a = closeParseRangePart(m[1], year), b = closeParseRangePart(m[2], (a.match(/^(\d{4})-/) || [, year])[1]);
+  return (a && !CLOSE_ISO_RE.test(a)) || (b && !CLOSE_ISO_RE.test(b)) ? s : `${a}~${b}`;
+}
+function closeIsRange(v){ return /^(\d{4}-\d{2}-\d{2})?~(\d{4}-\d{2}-\d{2})?$/.test(String(v || '')) && String(v) !== '~'; }
+function closeFmtRange(v){
+  if(v == null || v === '') return '';
+  if(!closeIsRange(v)) return String(v);
+  const [a, b] = String(v).split('~');
+  return `${a ? closeFmtDate(a) : ''}~${b ? closeFmtDate(b) : ''}`;
+}
+function closeIsRangeish(v){ const s = String(v == null ? '' : v).trim(); return /[~∼〜]/.test(s) && closeIsRange(closeParseRange(s, '2026')); }
+// 입력 방식을 바꾸면 이미 적힌 값도 새 방식으로 바꿈(못 읽는 값은 글자 그대로 둠)
+function closeConvertVal(v, from, to, year){
+  if(v == null || v === '' || from === to) return v;
+  if(to === 'date') return typeof v === 'string' ? closeParseDate(v, year) : v;
+  if(to === 'range') return typeof v === 'string' ? closeParseRange(v, year) : v;
+  if(to === 'num'){ const t = String(v).replace(/,/g, '').trim(); return /^-?\d+(\.\d+)?$/.test(t) ? Number(t) : v; }
+  if(to === 'check') return v === true || /^(true|y|o|ㅇ|v|✓)$/i.test(String(v).trim());
+  if(to === 'text') return typeof v === 'boolean' ? (v ? 'TRUE' : '') : typeof v === 'number' ? String(v) : v;
+  return v;
 }
 function closeIsDateish(v){ if(v instanceof Date) return true; const s = String(v).trim(); return /^(\d{4}[.\-/])?\d{1,2}[./]\d{1,2}\.?$/.test(s) || CLOSE_QUICK.includes(s); }
 // 가장 최근 회차는 새로 수임한 거래처를 자동으로 더함(나간 거래처는 빼지 않음)
@@ -3464,7 +3510,8 @@ async function closeImport(input){
       if(!col){
         const vals = body.map(r => r[j]).filter(v => v != null && v !== '');
         const type = vals.length && vals.every(v => typeof v === 'boolean' || /^(true|false)$/i.test(String(v))) ? 'check'
-          : vals.length && vals.every(closeIsDateish) && vals.some(v => !CLOSE_QUICK.includes(String(v).trim())) ? 'date' : 'text';
+          : vals.length && vals.every(closeIsDateish) && vals.some(v => !CLOSE_QUICK.includes(String(v).trim())) ? 'date'
+          : vals.length && vals.every(v => closeIsRangeish(v) || CLOSE_QUICK.includes(String(v).trim())) && vals.some(closeIsRangeish) ? 'range' : 'text';
         col = { id: closeUid('k'), label: h, type, carry: CLOSE_CARRY_RE.test(n) };
         newCols.push(col);
       }
@@ -3484,6 +3531,7 @@ async function closeImport(input){
       map.forEach(([j, col]) => {
         let x = r[j]; if(x == null || x === '') return;
         if(col.type === 'date') x = closeParseDate(x, year);
+        else if(col.type === 'range') x = closeParseRange(x, year);
         else if(col.type === 'check') x = x === true || /^(true|y|o|ㅇ|v|✓)$/i.test(String(x).trim());
         else if(col.type === 'num'){ const t = String(x).replace(/,/g, '').trim(); x = /^-?\d+(\.\d+)?$/.test(t) ? Number(t) : String(x).trim(); }
         else x = x instanceof Date ? closeParseDate(x, year) : typeof x === 'boolean' ? (x ? 'TRUE' : 'FALSE') : String(x).trim();
@@ -3535,6 +3583,35 @@ function closeDatePop(btn){
   setTimeout(() => document.addEventListener('mousedown', closeDatePopOutside, true), 0);
   try{ di.showPicker(); }catch(e){ di.focus(); }
 }
+function closeRangePop(btn){
+  closeDatePopClose();
+  const { cid, col } = btn.dataset, cur = closeGet(cid, col), ok = closeIsRange(cur);
+  const [a0, b0] = ok ? String(cur).split('~') : ['', ''];
+  const pop = document.createElement('div');
+  pop.id = 'closeDatePop'; pop.className = 'cl-pop'; pop.style.width = '300px';
+  pop.innerHTML = `<div class="cl-pop-range"><input type="date" class="cl-r-a" value="${a0}" title="시작일"><span>~</span><input type="date" class="cl-r-b" value="${b0}" title="끝 날짜"></div>
+    <div class="cl-pop-row"><button type="button" data-v="__ystart">1/1부터</button><button type="button" data-v="__today">끝 = 오늘</button>${CLOSE_QUICK.map(q => `<button type="button" data-v="${q}">${q}</button>`).join('')}<button type="button" data-v="__clear" class="del">지우기</button><button type="button" data-v="__ok" style="margin-left:auto; font-weight:800;">저장</button></div>
+    <input type="text" class="cl-pop-text" placeholder="직접 입력 후 Enter (예: 26.01~09.29)" value="${ok || cur == null ? '' : escapeAttr(String(cur))}">`;
+  document.body.appendChild(pop);
+  const r = btn.getBoundingClientRect(), pw = pop.offsetWidth, ph = pop.offsetHeight;
+  pop.style.left = Math.max(8, Math.min(window.innerWidth - pw - 8, r.left)) + 'px';
+  pop.style.top = (r.bottom + ph + 8 > window.innerHeight ? r.top - ph - 4 : r.bottom + 4) + 'px';
+  const ia = pop.querySelector('.cl-r-a'), ib = pop.querySelector('.cl-r-b');
+  const set = v => { closeSetVal(cid, col, v); btn.textContent = closeFmtRange(v); btn.title = v || ''; btn.classList.toggle('txt', !!v && !closeIsRange(v)); closeDatePopClose(); };
+  const save = () => { if(ia.value || ib.value) set(`${ia.value}~${ib.value}`); else closeDatePopClose(); };
+  pop.querySelectorAll('[data-v]').forEach(b => b.onclick = () => {
+    const v = b.dataset.v;
+    if(v === '__ystart'){ ia.value = `${closeYear}-01-01`; return; }
+    if(v === '__today'){ ib.value = todayStr(); return; }
+    if(v === '__ok') return save();
+    set(v === '__clear' ? '' : v);
+  });
+  [ia, ib].forEach(i => i.addEventListener('keydown', e => { if(e.key === 'Enter'){ e.preventDefault(); save(); } if(e.key === 'Escape') closeDatePopClose(); }));
+  const ti = pop.querySelector('.cl-pop-text');
+  ti.addEventListener('keydown', e => { if(e.key === 'Enter' && !e.isComposing){ e.preventDefault(); const t = ti.value.trim(); set(t ? closeParseRange(t, closeYear) : ''); } if(e.key === 'Escape') closeDatePopClose(); });
+  setTimeout(() => document.addEventListener('mousedown', closeDatePopOutside, true), 0);
+  ia.focus();
+}
 function closePick(cid, on){ if(on) closePicked.add(cid); else closePicked.delete(cid); const n = document.getElementById('closePickN'); if(n) n.textContent = closePicked.size ? `${closePicked.size}곳 선택` : ''; }
 function closePickAll(on){ document.querySelectorAll('#tab-close .cl-pick').forEach(cb => { cb.checked = on; closePick(cb.dataset.cid, on); }); }
 // 일괄 입력: 날짜 항목 하나를 골라 체크한 거래처(없으면 지금 보이는 거래처 전체)에 오늘 또는 고른 날짜
@@ -3570,7 +3647,15 @@ async function closeEditCol(id){
     Object.values(closeData).forEach(d => Object.values(d.v || {}).forEach(v => { delete v[id]; }));
   }else{
     if(r[0].trim()) col.label = r[0].trim();
-    col.type = (CLOSE_TYPES.find(x => x[1] === r[1]) || CLOSE_TYPES[0])[0];
+    const to = (CLOSE_TYPES.find(x => x[1] === r[1]) || CLOSE_TYPES[0])[0];
+    if(to !== col.type){   // [2026.10.15] 이미 불러온 값도 새 입력 방식으로(요청)
+      Object.entries(closeData).forEach(([k, d]) => Object.values(d.v || {}).forEach(v => {
+        if(!(id in v)) return;
+        const nv = closeConvertVal(v[id], col.type, to, k.split('-')[0]);
+        if(nv === '' || nv == null || nv === false) delete v[id]; else v[id] = nv;
+      }));
+      col.type = to;
+    }
     col.carry = r[2] === '예';
   }
   renderClose(); scheduleGoogleSave();
@@ -3584,27 +3669,29 @@ function closeTableHtml(docs){
   const w = {};
   closeCols.forEach(c => {
     if(c.type === 'check') return;
-    if(c.type === 'date'){ w[c.id] = 0; return; }
+    if(c.type === 'date' || c.type === 'range'){ w[c.id] = 0; return; }
     const len = Math.max(...String(c.label).split('\n').map(s => s.length), ...rows.map(x => String((d.v[x.id] || {})[c.id] ?? '').length));
     w[c.id] = Math.max(56, Math.min(240, len * 12 + 14));
   });
-  const head = `<th class="tx-seq"><input type="checkbox" title="모두 선택" onchange="closePickAll(this.checked)"></th><th class="tx-seq">순번</th>`
-    + ['상호명','법인등록번호','사업자번호','개업일'].map((l, i) => `<th class="vp-link${i === 0 ? ' vp-sticky' : ''}${i === 3 ? ' vp-div' : ''}" title="회사웹 값(조회만)">${l}</th>`).join('')
+  const head = `<th class="tx-seq"><input type="checkbox" title="모두 선택" onchange="closePickAll(this.checked)"></th><th class="tx-seq cl-lk">순번</th>`
+    + ['상호명','법인등록번호','사업자번호','개업일'].map((l, i) => `<th class="vp-link cl-lk${i === 0 ? ' vp-sticky' : ''}${i === 3 ? ' vp-div' : ''}" title="회사웹 값(조회만)">${l}</th>`).join('')
     + closeCols.map(c => `<th><button class="vp-th" onclick="closeEditCol('${c.id}')" title="눌러서 이름·입력 방식·이어받기 수정 또는 삭제${c.carry ? '\n(다음 회차로 이어받는 항목)' : ''}">${taxjEsc(c.label).replace(/\n/g, '<br>')}${c.carry ? '<span class="vp-carry">↻</span>' : ''}</button></th>`).join('');
   const body = rows.map((x, n) => {
-    const cid = escapeAttr(x.id), v = d.v[x.id] || {}, t = s => s ? taxjEsc(String(s)) : na;
+    const cid = escapeAttr(x.id), v = d.v[x.id] || {}, t = s => s ? taxjEsc(String(s)) : '-';
+    const lk = (val, extra) => `<td class="cl-lk cl-num${extra || ''}${val ? '' : ' cl-na'}">${t(val)}</td>`;   // 회사웹 거래처 표와 같은 칸
     const color = x.gone ? 'var(--muted)' : x.c.entityType === '법인' ? '#0b5a78' : x.c.entityType === '개인' ? '#be185d' : 'inherit';
     const cells = closeCols.map(c => {
       const val = v[c.id];
       if(c.type === 'check') return `<td style="text-align:center;"><input type="checkbox" ${val ? 'checked' : ''} onchange="closeSetVal('${cid}','${c.id}',this.checked)"></td>`;
+      if(c.type === 'range') return `<td style="text-align:center;"><button type="button" class="cl-dt${val && !closeIsRange(val) ? ' txt' : ''}" data-cid="${cid}" data-col="${c.id}" title="${escapeAttr(val || '')}" onclick="closeRangePop(this)">${taxjEsc(closeFmtRange(val))}</button></td>`;
       if(c.type === 'date') return `<td style="text-align:center;"><button type="button" class="cl-dt${val && !CLOSE_ISO_RE.test(val) ? ' txt' : ''}" data-cid="${cid}" data-col="${c.id}" title="${escapeAttr(val || '')}" onclick="closeDatePop(this)">${taxjEsc(closeFmtDate(val))}</button></td>`;
       const s = val == null ? '' : typeof val === 'number' ? val.toLocaleString('ko-KR') : String(val);
       if(c.type === 'num') return `<td><input class="vp-in" style="width:${w[c.id]}px; text-align:right;" value="${escapeAttr(s)}" onchange="closeNumInput(this,'${cid}','${c.id}')"></td>`;
       return `<td><input class="vp-in" style="width:${w[c.id]}px;" value="${escapeAttr(s)}" title="${escapeAttr(s)}" onchange="this.title=this.value; closeSetVal('${cid}','${c.id}',this.value.trim())"></td>`;
     }).join('');
-    return `<tr${x.gone ? ' class="cl-gone"' : ''}><td class="tx-seq"><input type="checkbox" class="cl-pick" data-cid="${cid}" ${closePicked.has(x.id) ? 'checked' : ''} onchange="closePick(this.dataset.cid, this.checked)"></td><td class="tx-seq">${n + 1}</td>
-      <td class="vp-sticky" style="font-weight:800; color:${color};">${taxjEsc(x.c.name || '')}${x.gone ? ' <span class="cl-gone-tag">해지</span>' : ''}</td>
-      <td>${t(x.c.corpRegNo)}</td><td>${t(innerBizNo(x.c.bizNo || ''))}</td><td class="vp-div">${t(x.c.openDate)}</td>${cells}</tr>`;
+    return `<tr${x.gone ? ' class="cl-gone"' : ''}><td class="tx-seq"><input type="checkbox" class="cl-pick" data-cid="${cid}" ${closePicked.has(x.id) ? 'checked' : ''} onchange="closePick(this.dataset.cid, this.checked)"></td><td class="tx-seq cl-lk cl-num">${n + 1}</td>
+      <td class="vp-sticky cl-lk" style="font-weight:800; color:${color};">${taxjEsc(x.c.name || '')}${x.gone ? ' <span class="cl-gone-tag">해지</span>' : ''}</td>
+      ${x.c.entityType === '개인' ? `<td class="cl-lk cl-num cl-off">${t(x.c.corpRegNo)}</td>` : lk(x.c.corpRegNo)}${lk(innerBizNo(x.c.bizNo || ''))}${lk(x.c.openDate, ' vp-div')}${cells}</tr>`;
   }).join('');
   return `<div class="table-scroll vat-prog" style="margin-top:8px;"><table><thead><tr>${head}</tr></thead>
     <tbody>${body || `<tr><td colspan="${closeCols.length + 6}"><div class="empty" style="padding:18px;">${q ? '검색 결과가 없어요.' : '거래처가 없어요.'}</div></td></tr>`}</tbody></table></div>`;
@@ -5566,7 +5653,7 @@ async function taxjRestoreFull(){
       if(fromSheet && (!best || fromSheet.at > best.at)){ best = fromSheet; try{ await taxjIdbSet(best); }catch(e){} }
     }catch(e){ /* 탭이 아직 없으면 그냥 넘어감 */ }
   }else taxjFullRestoreTried = false;   // Google 연결 뒤 다시 시도
-  if(best && (!taxjFull || best.at > taxjFull.at)){ taxjFull = best; taxjFullSaveMsg = '저장해 둔 자료예요. 최신으로 받으려면 새로고침'; if(activeTab === 'taxj') renderTaxjFull(); if(activeTab === 'home') renderHome(); if(activeTab === 'worklist') renderWlMonthCal(); }
+  if(best && (!taxjFull || best.at > taxjFull.at)){ taxjFull = best; taxjFullSaveMsg = '저장해 둔 자료예요. 최신으로 받으려면 새로고침'; if(activeTab === 'taxj') renderTaxjFull(); if(activeTab === 'home') renderHome(); if(activeTab === 'home') renderWlMonthCal(); }
 }
 const TAXJ_FULL_GROUPS = [
   { id:'filing', label:'신고 진행 현황', keys:[
