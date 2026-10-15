@@ -735,6 +735,10 @@
     box-shadow:0 24px 48px -12px rgba(0,0,0,.35); transform:translateY(8px) scale(.98); transition:transform .15s;
   }
   .sm-modal-backdrop.show .sm-modal{ transform:none; }
+  /* [2026.10.15] 항목 수정 창 닫기(X) 버튼(요청: "닫기버튼 만들어줘") - 삭제 버튼만 있어서 그냥 닫을 수가 없었음 */
+  .sm-modal{ position:relative; }
+  .sm-modal-x{ position:absolute; top:12px; right:12px; width:30px; height:30px; border:none; border-radius:50%; background:transparent; color:var(--muted); font-size:20px; line-height:1; cursor:pointer; }
+  .sm-modal-x:hover{ background:#f3eef1; color:var(--text); }
   .sm-modal-ic{
     width:52px; height:52px; border-radius:50%; margin:0 auto 12px;
     background:linear-gradient(135deg,#f5a3c2,#f7c46e); color:#fff; font-size:26px; font-weight:800;
@@ -6196,7 +6200,7 @@ function payOverviewHtml(docs){
 // payCustomCols·payCustomVals(내가 만든 항목)는 다른 저장 항목과 함께 위쪽에 선언
 const PAY_COL_TYPES = [['date','날짜'], ['check','체크'], ['text','글자']];
 function payFocusMonth(){ const d = new Date(); if(d.getDate() <= 10) d.setMonth(d.getMonth() - 1); return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}`; }   // Tax.J itFocusPeriodNow와 같음(10일까지는 지난달 귀속)
-function payShiftMonth(n){ const [y, m] = payMonth.split('-').map(Number); const d = new Date(y, m - 1 + n, 1); payMonth = `${d.getFullYear()}-${pad2(d.getMonth() + 1)}`; renderPay(); }
+function payShiftMonth(n){ const [y, m] = payMonth.split('-').map(Number); const d = new Date(y, m - 1 + n, 1); payMonth = `${d.getFullYear()}-${pad2(d.getMonth() + 1)}`; payPicked = new Set(); renderPay(); }
 async function addPayCustomCol(){
   const r = await smForm('신고현황 항목 추가', [{ label:'항목 이름', placeholder:'예: 4대보험 확인' }, { label:'입력 방식', options: PAY_COL_TYPES.map(x => x[1]), value:'날짜' }], { okText:'추가' });
   if(!r || !r[0].trim()) return;
@@ -6205,7 +6209,8 @@ async function addPayCustomCol(){
 }
 async function editPayCustomCol(id){
   const col = payCustomCols.find(c => c.id === id); if(!col) return;
-  const r = await smForm('항목 수정', [{ label:'항목 이름', value: col.label }, { label:'입력 방식', options: PAY_COL_TYPES.map(x => x[1]), value: (PAY_COL_TYPES.find(x => x[0] === col.type) || PAY_COL_TYPES[0])[1] }], { okText:'저장', cancelText:'삭제', icon:'✎' });
+  const r = await smForm('항목 수정', [{ label:'항목 이름', value: col.label }, { label:'입력 방식', options: PAY_COL_TYPES.map(x => x[1]), value: (PAY_COL_TYPES.find(x => x[0] === col.type) || PAY_COL_TYPES[0])[1] }], { okText:'저장', cancelText:'삭제', icon:'✎', closeX:true });
+  if(r === undefined) return;   // [2026.10.15] 닫기(X) - 아무것도 안 바꿈
   if(r === null){
     if(!(await smConfirm(`'${col.label}' 항목을 지울까요?`, '이 항목에 적어 둔 값도 모두 지워져요.', { tone:'danger', icon:'!', okText:'삭제' }))) return;
     payCustomCols = payCustomCols.filter(c => c.id !== id);
@@ -6229,13 +6234,66 @@ function payCustomCellHtml(key, col){
   const k = escapeAttr(key);
   if(col.type === 'check') return `<td><input type="checkbox" ${v ? 'checked' : ''} onchange="setPayCustomVal('${k}','${col.id}',this.checked)"></td>`;
   if(col.type === 'text') return `<td class="note-cell"><input type="text" value="${escapeAttr(v || '')}" onchange="setPayCustomVal('${k}','${col.id}',this.value)" style="width:100%"></td>`;
-  return `<td><div class="date-cell"><input type="date" value="${escapeAttr(v || '')}" onchange="setPayCustomVal('${k}','${col.id}',this.value)">${v ? pill('완료','ok') : `<button class="btn xs" onclick="setPayCustomVal('${k}','${col.id}','${todayStr()}')">오늘</button>`}</div></td>`;
+  return `<td><div class="date-cell">${payDateBtnHtml(key, col.id, v)}${v ? pill('완료','ok') : ''}</div></td>`;
+}
+// [2026.10.15] "날짜 입력하는 곳은 연월일이 안 보여도 된다. 아이콘·플러스 버튼 하나로, 입력하면 조회만 되면 된다"(요청)
+//   빈 칸 = ＋ 버튼(결산 날짜 칸 .cl-dt와 같은 모양), 누르면 작은 창(달력·오늘·지우기), 입력하면 날짜(월/일)만 보임
+function payFmtDate(v){
+  if(!v) return '';
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(v)) return taxjEsc(v);
+  const [y, m, d] = v.split('-');
+  return `${y === String(new Date().getFullYear()) ? '' : y.slice(2) + '.'}${Number(m)}/${Number(d)}`;
+}
+function payDateBtnHtml(key, id, v, title){
+  return `<button type="button" class="cl-dt" data-key="${escapeAttr(key)}" data-col="${id}" title="${escapeAttr(v || title || '날짜 입력')}" onclick="payDatePop(this)">${payFmtDate(v)}</button>`;
+}
+function payDatePop(btn){
+  closeDatePopClose();
+  const { key, col } = btn.dataset, cur = ((payCustomVals[payMonth] || {})[key] || {})[col] || '';
+  const pop = document.createElement('div');
+  pop.id = 'closeDatePop'; pop.className = 'cl-pop';   // 결산 날짜 창과 같은 모양·닫기 동작
+  pop.innerHTML = `<input type="date" class="cl-pop-date" value="${/^\d{4}-\d{2}-\d{2}$/.test(cur) ? cur : ''}">
+    <div class="cl-pop-row"><button type="button" data-v="__today">오늘</button><button type="button" data-v="__clear" class="del">지우기</button></div>`;
+  document.body.appendChild(pop);
+  const r = btn.getBoundingClientRect(), pw = pop.offsetWidth, ph = pop.offsetHeight;
+  pop.style.left = Math.max(8, Math.min(window.innerWidth - pw - 8, r.left)) + 'px';
+  pop.style.top = (r.bottom + ph + 8 > window.innerHeight ? r.top - ph - 4 : r.bottom + 4) + 'px';
+  const set = v => { closeDatePopClose(); setPayCustomVal(key, col, v); };
+  const di = pop.querySelector('.cl-pop-date');
+  di.addEventListener('change', () => { if(di.value) set(di.value); });
+  di.addEventListener('keydown', e => { if(e.key === 'Escape') closeDatePopClose(); });
+  pop.querySelectorAll('[data-v]').forEach(b => b.onclick = () => set(b.dataset.v === '__today' ? todayStr() : ''));
+  setTimeout(() => document.addEventListener('mousedown', closeDatePopOutside, true), 0);
+  try{ di.showPicker(); }catch(e){ di.focus(); }
+}
+// [2026.10.15] 신고현황도 결산처럼 줄을 골라 날짜 일괄 입력(요청). 고른 줄 = '거래처id|당월·익월' 키
+let payPicked = new Set();
+function payPick(key, on){ if(on) payPicked.add(key); else payPicked.delete(key); const n = document.getElementById('payPickN'); if(n) n.textContent = payPicked.size ? `${payPicked.size}줄 선택` : ''; }
+function payPickAll(on){ document.querySelectorAll('#tab-pay .pay-pick').forEach(cb => { cb.checked = on; payPick(cb.dataset.key, on); }); }
+async function payBulk(){
+  const dcols = [['_billSent', '납부서 발송'], ...payCustomCols.filter(c => c.type === 'date').map(c => [c.id, c.label])];
+  const shown = [...document.querySelectorAll('#tab-pay .pay-pick')].map(cb => cb.dataset.key);
+  const picked = shown.filter(k => payPicked.has(k));
+  const targets = [];
+  if(picked.length) targets.push(`선택한 줄 ${picked.length}개`);
+  targets.push(`지금 보이는 전체 ${shown.length}줄`);
+  const r = await smForm('날짜 일괄 입력', [{ label:'항목', options: dcols.map(c => c[1]), value: dcols[0][1] }, { label:'날짜 (기본 오늘)', type:'date', value: todayStr() }, { label:'대상', options: targets, value: targets[0] }, { label:'이미 적힌 칸', options:['빈 칸만 채우기','모두 바꾸기'], value:'빈 칸만 채우기' }], { okText:'입력', icon:'✓' });
+  if(!r) return;
+  const col = dcols.find(c => c[1] === r[0]) || dcols[0], date = r[1] || todayStr();
+  const keys = r[2].startsWith('선택한') ? picked : shown, onlyEmpty = r[3] === '빈 칸만 채우기';
+  const per = payCustomVals[payMonth] = payCustomVals[payMonth] || {};
+  let n = 0;
+  keys.forEach(k => { const row = per[k] = per[k] || {}; if(onlyEmpty && row[col[0]]) return; row[col[0]] = date; n++; });
+  Object.keys(per).forEach(k => { if(!Object.keys(per[k]).length) delete per[k]; });
+  if(!Object.keys(per).length) delete payCustomVals[payMonth];
+  renderPay(); scheduleGoogleSave();
+  smAlert('입력했어요', `${col[1]} · ${n}줄에 ${date}`, { icon:'✓' });
 }
 // [2026.10.13] 신고현황 기본 내 칸(요청: "납부서발송(발송일자), 납부마감(완납+확인일자 / 미납+확인일자+멘트발송)도 필요") - 회사웹에 없는 내 칸이라 payCustomVals에 고정 id로 저장
 //   _billSent = 납부서 발송일 / _payState = '완납'|'미납' / _payCheck = 확인일 / _payMsg = 미납 멘트 발송일
 function payDateInputHtml(key, id, v, label){
   const k = escapeAttr(key);
-  return `<div class="date-cell">${label ? `<span class="hint" style="margin:0; white-space:nowrap;">${label}</span>` : ''}<input type="date" value="${escapeAttr(v || '')}" onchange="setPayCustomVal('${k}','${id}',this.value)">${v ? pill('발송','ok') : `<button class="btn xs" onclick="setPayCustomVal('${k}','${id}','${todayStr()}')">오늘</button>`}</div>`;
+  return `<div class="date-cell">${label ? `<span class="hint" style="margin:0; white-space:nowrap;">${label}</span>` : ''}${payDateBtnHtml(key, id, v)}${v ? pill('발송','ok') : ''}</div>`;
 }
 function setPayState(key, v){
   const cur = (payCustomVals[payMonth] || {})[key] || {};
@@ -6248,7 +6306,7 @@ function payBillCellsHtml(key){
   const sent = `<td>${payDateInputHtml(key, '_billSent', v._billSent)}</td>`;
   const sel = `<select onchange="setPayState('${k}', this.value)" style="font-weight:700; color:${st === '완납' ? '#059669' : st === '미납' ? '#e11d48' : 'inherit'};">${['', '완납', '미납'].map(o => `<option value="${o}" ${o === st ? 'selected' : ''}>${o || '-'}</option>`).join('')}</select>`;
   const pay = `<td><div style="display:flex; flex-direction:column; gap:4px; align-items:flex-start;">
-      <div class="date-cell">${sel}${st ? `<input type="date" value="${escapeAttr(v._payCheck || '')}" title="확인일" onchange="setPayCustomVal('${k}','_payCheck',this.value)">` : ''}</div>
+      <div class="date-cell">${sel}${st ? payDateBtnHtml(key, '_payCheck', v._payCheck, '확인일') : ''}</div>
       ${st === '미납' ? payDateInputHtml(key, '_payMsg', v._payMsg, '멘트 발송') : ''}</div></td>`;
   return sent + pay;
 }
@@ -6295,6 +6353,7 @@ function payStatusHtml(docs){
       // [2026.10.14] "같은 거래처라 한 표에 나오게"(요청) - 당월·익월 두 줄이면 순번·상호명 칸을 합치고(rowspan) 두 줄 사이 선을 옅게
       const span = dual ? ` rowspan="${lanes.length}"` : '';
       rows.push(`<tr${dual ? (li ? ' class="pay-lane-2"' : ' class="pay-lane-1"') : ''}>
+        <td class="tx-seq"><input type="checkbox" class="pay-pick" data-key="${escapeAttr(key)}" ${payPicked.has(key) ? 'checked' : ''} onchange="payPick(this.dataset.key, this.checked)"></td>
         ${li ? '' : `<td class="tx-seq"${span}>${n}</td><td class="tx-name"${span}>${taxjEsc(c.name)}</td>`}
         <td style="white-space:nowrap; font-weight:700;">${payCycleLabelHtml(base, dual ? k : '')}</td>
         <td>${slip}</td><td>${taxjMd(v.payroll)}</td>
@@ -6307,7 +6366,8 @@ function payStatusHtml(docs){
   const pct = total ? Math.round(cntPayroll / total * 100) : 0;
   return `<div class="toolbar">
       <button class="btn ghost xs" onclick="payShiftMonth(-1)" title="이전 달">‹</button><span style="font-weight:800;">${yy}년 ${mm}월 귀속</span><button class="btn ghost xs" onclick="payShiftMonth(1)" title="다음 달">›</button>
-      ${paySearchHtml()}<div class="spacer"></div><button class="btn xs" onclick="addPayCustomCol()">+ 항목 추가</button>
+      ${paySearchHtml()}<div class="spacer"></div><span class="hint" id="payPickN" style="margin:0;">${payPicked.size ? `${payPicked.size}줄 선택` : ''}</span>
+      <button class="btn xs" onclick="payBulk()" title="날짜 항목 하나를 골라 선택한 줄(없으면 보이는 전체)에 오늘 또는 고른 날짜를 넣어요">날짜 일괄 입력</button><button class="btn xs" onclick="addPayCustomCol()">+ 항목 추가</button>
     </div>
     <div class="summary-row">
       <div class="stat tone-blue"><div class="n">${total}</div><div class="label">신고 대상(줄)</div></div>
@@ -6315,7 +6375,7 @@ function payStatusHtml(docs){
       <div class="stat"><div class="n">${cntClose} · ${cntFiled}</div><div class="label">신고서 마감 · 신고 완료</div></div>
     </div>
     <div class="progress-bar"><div class="fill tone-blue" style="width:${pct}%"></div></div>
-    ${rows.length ? `<div class="table-scroll" style="margin-top:16px;"><table><thead><tr><th class="tx-seq" rowspan="2">순번</th><th rowspan="2">상호명</th><th rowspan="2">신고</th><th rowspan="2">급여명세서 전달</th><th rowspan="2">급여마감</th><th colspan="2">신고서 마감</th><th colspan="2">신고일자</th><th rowspan="2">납부서 발송</th><th rowspan="2">납부마감</th><th rowspan="2">메모</th>
+    ${rows.length ? `<div class="table-scroll" style="margin-top:16px;"><table><thead><tr><th class="tx-seq" rowspan="2"><input type="checkbox" title="모두 선택" onchange="payPickAll(this.checked)"></th><th class="tx-seq" rowspan="2">순번</th><th rowspan="2">상호명</th><th rowspan="2">신고</th><th rowspan="2">급여명세서 전달</th><th rowspan="2">급여마감</th><th colspan="2">신고서 마감</th><th colspan="2">신고일자</th><th rowspan="2">납부서 발송</th><th rowspan="2">납부마감</th><th rowspan="2">메모</th>
       ${payCustomCols.map(col => `<th rowspan="2"><button class="btn ghost xs" onclick="editPayCustomCol('${col.id}')" title="눌러서 이름·입력 방식 수정 또는 삭제" style="font-weight:800;">${taxjEsc(col.label)} ✎</button></th>`).join('')}</tr><tr><th>국세</th><th>지방세</th><th>국세</th><th>지방세</th></tr></thead><tbody>${rows.join('')}</tbody></table></div>`
       : `<div class="empty">${q ? '검색 결과가 없어요.' : `${yy}년 ${mm}월 귀속 신고대상이 없어요.`}</div>`}`;
 }
@@ -7634,6 +7694,7 @@ function smDialog(opts){
     const esc = v => String(v == null ? '' : v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
     wrap.innerHTML = `
       <div class="sm-modal ${o.tone} ${o.wide ? 'wide' : ''}" role="dialog" aria-modal="true">
+        ${o.closeX ? '<button type="button" class="sm-modal-x" title="닫기" aria-label="닫기">×</button>' : ''}
         <div class="sm-modal-ic">${esc(o.icon)}</div>
         ${o.title ? `<div class="sm-modal-title">${esc(o.title)}</div>` : ''}
         ${o.html ? `<div class="sm-modal-msg sm-modal-html">${o.html}</div>` : (o.message ? `<div class="sm-modal-msg">${esc(o.message).replace(/\n/g,'<br>')}</div>` : '')}
@@ -7654,11 +7715,12 @@ function smDialog(opts){
       document.removeEventListener('keydown', onKey, true);
       wrap.classList.remove('show');
       setTimeout(() => wrap.remove(), 150);
+      if(ok === 'x') return resolve(undefined);   // [2026.10.15] closeX 창: X·Esc·바깥 클릭 = 아무것도 안 하고 닫기(undefined)
       if(o.fields) resolve(ok ? inputs.map(x => x.value) : null);
       else resolve(!!ok);
     };
     const onKey = e => {
-      if(e.key === 'Escape'){ e.preventDefault(); e.stopPropagation(); done(false); }
+      if(e.key === 'Escape'){ e.preventDefault(); e.stopPropagation(); done(o.closeX ? 'x' : false); }
       else if(e.key === 'Enter' && !e.isComposing){
         // 여러 줄 입력칸(메모)에서는 Enter = 줄바꿈, Ctrl/Cmd+Enter = 저장
         if(e.target && e.target.tagName === 'TEXTAREA' && !(e.ctrlKey || e.metaKey)) return;
@@ -7668,7 +7730,8 @@ function smDialog(opts){
     document.addEventListener('keydown', onKey, true);
     wrap.querySelector('.sm-modal-ok').onclick = () => done(true);
     const c = wrap.querySelector('.sm-modal-cancel'); if(c) c.onclick = () => done(false);
-    wrap.addEventListener('mousedown', e => { if(e.target === wrap) done(false); });
+    const x = wrap.querySelector('.sm-modal-x'); if(x) x.onclick = () => done('x');
+    wrap.addEventListener('mousedown', e => { if(e.target === wrap) done(o.closeX ? 'x' : false); });
     setTimeout(() => (inputs[0] || wrap.querySelector('.sm-modal-ok')).focus(), 30);
   });
 }
