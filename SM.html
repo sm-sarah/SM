@@ -3008,6 +3008,7 @@ async function addVatCustomCol(){
 async function editVatCustomCol(id){
   const col = vatCustomCols.find(c => c.id === id); if(!col) return;
   const r = await smForm('항목 수정', [{ label:'항목 이름', value: col.label }, { label:'입력 방식', options: PAY_COL_TYPES.map(x => x[1]), value: (PAY_COL_TYPES.find(x => x[0] === col.type) || PAY_COL_TYPES[0])[1] }], { okText:'저장', cancelText:'삭제', icon:'✎' });
+  if(r === undefined) return;   // [2026.10.15] 닫기(X) - 아무것도 안 바꿈
   if(r === null){
     if(!(await smConfirm(`'${col.label}' 항목을 지울까요?`, '이 항목에 적어 둔 값도 모두 지워져요.', { tone:'danger', icon:'!', okText:'삭제' }))) return;
     vatCustomCols = vatCustomCols.filter(c => c.id !== id);
@@ -3267,6 +3268,7 @@ async function vatProgAddCol(){
 async function vatProgEditCol(id){
   const col = vatProgCols.find(c => c.id === id); if(!col) return;
   const r = await smForm('진행 항목 수정', [{ label:'항목 이름', type:'textarea', rows:2, value: col.label }, { label:'입력 방식', options: VAT_PROG_TYPES.map(x => x[1]), value: (VAT_PROG_TYPES.find(x => x[0] === col.type) || VAT_PROG_TYPES[0])[1] }, { label:'다음 기수로 이어받기', options:['아니오','예'], value: col.carry ? '예' : '아니오' }], { okText:'저장', cancelText:'삭제', icon:'✎' });
+  if(r === undefined) return;   // [2026.10.15] 닫기(X) - 아무것도 안 바꿈
   if(r === null){
     if(!(await smConfirm(`'${vatProgNorm(col.label)}' 항목을 지울까요?`, '모든 기수에서 이 항목에 적어 둔 값도 지워져요.', { tone:'danger', icon:'!', okText:'삭제' }))) return;
     vatProgCols = vatProgCols.filter(c => c.id !== id);
@@ -3645,6 +3647,7 @@ async function closeAddCol(){
 async function closeEditCol(id){
   const col = closeCols.find(c => c.id === id); if(!col) return;
   const r = await smForm('결산 항목 수정', [{ label:'항목 이름', type:'textarea', rows:2, value: col.label }, { label:'입력 방식', options: CLOSE_TYPES.map(x => x[1]), value: (CLOSE_TYPES.find(x => x[0] === col.type) || CLOSE_TYPES[0])[1] }, { label:'다음 회차로 이어받기', options:['아니오','예'], value: col.carry ? '예' : '아니오' }], { okText:'저장', cancelText:'삭제', icon:'✎' });
+  if(r === undefined) return;   // [2026.10.15] 닫기(X) - 아무것도 안 바꿈
   if(r === null){
     if(!(await smConfirm(`'${col.label.replace(/\s+/g, ' ')}' 항목을 지울까요?`, '모든 회차에서 이 항목에 적어 둔 값도 지워져요.', { tone:'danger', icon:'!', okText:'삭제' }))) return;
     closeCols = closeCols.filter(c => c.id !== id);
@@ -3840,7 +3843,7 @@ function renderCorp(){
   el.innerHTML = `
     <div class="card">
       ${taxjLiveBarHtml()}
-      <div class="toolbar">
+      <div class="toolbar" style="justify-content:center;"><!-- [2026.10.15] 귀속 제목 가운데(요청) -->
         <select onchange="currentCorpYear=this.value; renderCorp();">
           ${corpYears.map(y => `<option value="${y}" ${y===currentCorpYear?'selected':''}>${y}년 귀속</option>`).join('')}
         </select>
@@ -3906,7 +3909,7 @@ function renderIndiv(){
   el.innerHTML = `
     <div class="card">
       ${taxjLiveBarHtml()}
-      <div class="toolbar">
+      <div class="toolbar" style="justify-content:center;"><!-- [2026.10.15] 귀속 제목 가운데(요청) -->
         <select onchange="currentIndivYear=this.value; renderIndiv();">
           ${indivYears.map(y => `<option value="${y}" ${y===currentIndivYear?'selected':''}>${y}년 귀속</option>`).join('')}
         </select>
@@ -5965,12 +5968,11 @@ function renderSubmit(){
   el.innerHTML = `
     <div class="card">
       ${taxjLiveBarHtml()}${payViewTabsHtml()}
-      <div class="toolbar">
-        <div class="sm-seg" id="submitModeSeg">${['월별','반기','연간'].map(m => `<button class="${submitMode === m ? 'on' : ''}" onclick="setSubmitMode('${m}')">${SUBMIT_MODE_LABEL[m]}</button>`).join('')}</div>
-        <select onchange="submitYear=this.value; renderSubmit();">${years.map(y => `<option value="${y}" ${y===submitYear?'selected':''}>${y}년${submitMode === '연간' ? ' 귀속' : ''}</option>`).join('')}</select>
-        ${sub}
-        <div class="spacer"></div>
-        <label class="hint" style="margin:0; display:inline-flex; align-items:center; gap:4px; cursor:pointer;"><input type="checkbox" ${submitOnlyLeft ? 'checked' : ''} onchange="submitOnlyLeft=this.checked; renderSubmit();"> 남은 것만</label>
+      <div class="toolbar" style="display:grid; grid-template-columns:1fr auto 1fr; align-items:center;"><!-- [2026.10.15] 귀속 제목 가운데(요청) -->
+        <div><div class="sm-seg" id="submitModeSeg">${['월별','반기','연간'].map(m => `<button class="${submitMode === m ? 'on' : ''}" onclick="setSubmitMode('${m}')">${SUBMIT_MODE_LABEL[m]}</button>`).join('')}</div></div>
+        <div style="display:flex; align-items:center; gap:10px;"><select onchange="submitYear=this.value; renderSubmit();">${years.map(y => `<option value="${y}" ${y===submitYear?'selected':''}>${y}년${submitMode === '연간' ? ' 귀속' : ''}</option>`).join('')}</select>
+        ${sub}</div>
+        <label class="hint" style="justify-self:end; margin:0; display:inline-flex; align-items:center; gap:4px; cursor:pointer;"><input type="checkbox" ${submitOnlyLeft ? 'checked' : ''} onchange="submitOnlyLeft=this.checked; renderSubmit();"> 남은 것만</label>
       </div>
       ${!taxjFull ? '<div class="empty">Tax.J에 연결하면 회사웹 제출현황이 여기에 채워져요.</div>' : `
       <div class="summary-row">
@@ -7759,12 +7761,13 @@ async function installApp(){
 function smDialog(opts){
   return new Promise(resolve => {
     const o = Object.assign({ icon:'?', tone:'', title:'', message:'', okText:'확인', cancelText:'취소', fields:null }, opts || {});
+    if(o.cancelText === '삭제' && o.closeX === undefined) o.closeX = true;
     const wrap = document.createElement('div');
     wrap.className = 'sm-modal-backdrop';
     const esc = v => String(v == null ? '' : v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
     wrap.innerHTML = `
       <div class="sm-modal ${o.tone} ${o.wide ? 'wide' : ''}" role="dialog" aria-modal="true">
-        ${o.closeX ? '<button type="button" class="sm-modal-x" title="닫기" aria-label="닫기">×</button>' : ''}
+        ${o.closeX === false ? '' : '<button type="button" class="sm-modal-x" title="닫기" aria-label="닫기">×</button>'}
         <div class="sm-modal-ic">${esc(o.icon)}</div>
         ${o.title ? `<div class="sm-modal-title">${esc(o.title)}</div>` : ''}
         ${o.html ? `<div class="sm-modal-msg sm-modal-html">${o.html}</div>` : (o.message ? `<div class="sm-modal-msg">${esc(o.message).replace(/\n/g,'<br>')}</div>` : '')}
@@ -7800,7 +7803,8 @@ function smDialog(opts){
     document.addEventListener('keydown', onKey, true);
     wrap.querySelector('.sm-modal-ok').onclick = () => done(true);
     const c = wrap.querySelector('.sm-modal-cancel'); if(c) c.onclick = () => done(false);
-    const x = wrap.querySelector('.sm-modal-x'); if(x) x.onclick = () => done('x');
+    // [2026.10.15] "모든 팝업에 닫기 버튼"(요청) - X는 취소와 같음. 단 취소 버튼이 '삭제'인 창(항목 수정)은 X·Esc·바깥 클릭 = 그냥 닫기(undefined)
+    const x = wrap.querySelector('.sm-modal-x'); if(x) x.onclick = () => done(o.closeX ? 'x' : false);
     wrap.addEventListener('mousedown', e => { if(e.target === wrap) done(o.closeX ? 'x' : false); });
     setTimeout(() => (inputs[0] || wrap.querySelector('.sm-modal-ok')).focus(), 30);
   });
