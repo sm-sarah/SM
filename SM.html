@@ -3108,6 +3108,35 @@ function vatCustomCellHtml(cid, col){
   if(col.type === 'text') return `<td class="note-cell"><input type="text" value="${escapeAttr(v || '')}" onchange="setVatCustomVal('${k}','${col.id}',this.value)" style="width:100%"></td>`;
   return `<td><div class="date-cell"><input type="date" value="${escapeAttr(v || '')}" onchange="setVatCustomVal('${k}','${col.id}',this.value)">${v ? pill('완료','ok') : `<button class="btn xs" onclick="setVatCustomVal('${k}','${col.id}','${todayStr()}')">오늘</button>`}</div></td>`;
 }
+/* [2026.10.15] 부가세 검증 결과(요청: "검증들은 다 내 개인웹에 계산방식 연동") - 회사웹 reviewVatSalesItems·reviewVatPurchaseItems·vatSupplyOf와 같은 계산.
+   자료: s__vatReviewFigures[거래처][연도][기수] { dataSales, dataPurchase, dataPrelim, reportSales, reportPurchase, reportPrelim, manualCheck{sales,purchase,prelim} }
+   원 단위: 공급가액 = 공급대가 − 세액(공급대가×10/110 원 미만 절사). 카드·현금은 100원 이내 차이를 ≈(끝수)로 맞음. 회사웹 계산이 바뀌면 여기도 같이 */
+const VAT_V_TOL = 100;
+function vatVSupply(t){ t = Number(t) || 0; return t < 0 ? -vatVSupply(-t) : t - Math.floor(t / 11); }
+function vatVItem(label, data, report, approx){ const has = data !== 0 || report !== 0, diff = report - data; return { label, data, report, diff, state: !has ? 'none' : diff === 0 ? 'ok' : (approx && Math.abs(diff) <= VAT_V_TOL) ? 'approx' : 'bad' }; }
+function vatVerify(e){
+  if(!e) return null;
+  const n = v => Number(v) || 0, ds = e.dataSales || {}, rs = e.reportSales || {}, dp = e.dataPurchase || {}, rp = e.reportPurchase || {};
+  const rpManualTax = rp.manualTax != null && rp.manualTax !== '' ? rp.manualTax : rp.manual;   // 예전 '수기' 칸은 수기세금계산서로 봄(회사웹과 같음)
+  const sales = [
+    vatVItem('세금계산서', n(ds.taxInvoice), n(rs.taxInvoice) + n(rs.zero) - n(rs.manualTax)),
+    vatVItem('계산서', n(ds.invoice), n(rs.invoice) - n(rs.manualInvoice)),
+    vatVItem('카드·현금', vatVSupply(n(ds.card) + n(ds.agency) - n(ds.cardFree)) + n(ds.cash) - n(ds.cashFree), n(rs.cardCash), true)];
+  const purchase = [
+    vatVItem('세금계산서', n(dp.taxInvoice), n(rp.taxInvoice) - n(rpManualTax)),
+    vatVItem('계산서', n(dp.invoice), n(rp.invoice) - n(rp.manualInvoice))];
+  const grp = (items, key) => items.every(x => x.state === 'none') ? null : items.every(x => x.state !== 'bad') ? 'ok' : ((e.manualCheck || {})[key] ? 'manual' : 'bad');
+  const prelim = !n(e.dataPrelim) && !n(e.reportPrelim) ? null : n(e.dataPrelim) === n(e.reportPrelim) ? 'ok' : ((e.manualCheck || {}).prelim ? 'manual' : 'bad');
+  return { sales: grp(sales, 'sales'), purchase: grp(purchase, 'purchase'), prelim, items: { 매출: sales, 매입: purchase }, legacy: e.legacy || null };
+}
+function vatVerifyCellHtml(e){
+  const v = vatVerify(e);
+  if(!v || (!v.sales && !v.purchase && !v.prelim)) return v && v.legacy ? `<span class="hint" style="margin:0;" title="예전 양식 엑셀 요약(조회만) · 매출 신고 ${Math.round(Number(v.legacy.reportSales) || 0).toLocaleString()} · 매입 신고 ${Math.round(Number(v.legacy.reportPurchase) || 0).toLocaleString()}">엑셀 요약</span>` : PAY_NA;
+  const C = { ok:['#059669','✓'], manual:['#b45309','✓'], bad:['#e11d48','✕'] };
+  const tip = Object.entries(v.items).map(([g, its]) => g + ': ' + its.filter(x => x.state !== 'none').map(x => x.label + (x.state === 'ok' ? ' ✓' : x.state === 'approx' ? ` ≈(${x.diff > 0 ? '+' : ''}${x.diff.toLocaleString()}원)` : ` ✕(자료 ${x.data.toLocaleString()} / 신고 ${x.report.toLocaleString()})`)).join(' · ')).join('\n')
+    + Object.entries((e.manualCheck || {})).map(([k, r]) => `\n수기검증(${{ sales:'매출', purchase:'매입', prelim:'예정' }[k] || k}): ${r}`).join('');
+  return `<span title="${escapeAttr(tip)}" style="font-size:12px; font-weight:800;">${[['매출', v.sales], ['매입', v.purchase], ['예정', v.prelim]].filter(([, st]) => st).map(([l, st]) => `<span style="color:${C[st][0]};">${l}${C[st][1]}</span>`).join(' ')}</span>`;
+}
 function vatTableHtml(docs){
   const year = vatYear, period = vatTPeriod(), pre = period.endsWith('예정');
   const idx = taxjClientIndex(docs), seen = new Set(), list = [];
@@ -3158,15 +3187,16 @@ function vatTableHtml(docs){
       <td>${memo ? `<button class="btn ghost xs" onclick="vatTShowMemo('${cid}')" title="${escapeAttr(memo)}">✎</button>` : na}</td>
       <td>${hasHelp ? `<button class="btn ghost xs" onclick="vatTShowHelp('${cid}')" title="${escapeAttr(vatTHelpRows(help, year, period).map(([k, v]) => k + ': ' + v).join('\n'))}">Tip</button>` : na}</td>
       <td>${files ? `<button class="btn ghost xs" onclick="vatTShowDocs('${cid}')" title="신고도움 파일 ${files}개">📎${files > 1 ? ' ' + files : ''}</button>` : na}</td>
+      <td style="white-space:nowrap;">${vatVerifyCellHtml((((docs.s__vatReviewFigures || {})[x.c.id] || {})[year] || {})[period])}</td>
       ${vatCustomCols.map(col => vatCustomCellHtml(x.c.id, col)).join('')}</tr>`;
   }).join('');
   const plab = `${year}년 ${VAT_T_LABEL[period]}`;
-  const cols = 17 + vatCustomCols.length;
+  const cols = 18 + vatCustomCols.length;
   // [2026.10.14] "예정고지 상세 제목 삭제"(요청 - 회사웹과 같게)
   return `${pre && !list.some(x => x.hasTb) ? '<div class="hint" style="margin:0 0 8px;">회사웹에 불러온 택스봇 예정고지가 없어요(회사웹 부가세 화면에서 가져오면 여기도 채워져요).</div>' : ''}
     <div class="toolbar"><div class="cl-subtabs">${segs.map(([k, l, c]) => `<button class="cl-subtab ${vatSeg === k ? 'on' : ''}" onclick="vatSeg='${k}'; renderVat();">${l} ${c}</button>`).join('')}</div>
       <div class="spacer"></div><button class="btn xs" onclick="addVatCustomCol()">+ 항목 추가</button></div>
-    <div class="table-scroll" style="margin-top:12px;"><table><thead><tr><th class="tx-seq">순번</th><th>상호명</th><th>사업자번호</th><th>업종코드</th><th>업태</th><th>구분</th><th>제외사유</th><th>직전 과세기간<br>공급가액</th><th>예정고지세액</th><th>관할서</th><th>납부기한</th><th>안내문</th><th>납부서</th><th>메모</th><th>Tip</th><th>신고도움</th>
+    <div class="table-scroll" style="margin-top:12px;"><table><thead><tr><th class="tx-seq">순번</th><th>상호명</th><th>사업자번호</th><th>업종코드</th><th>업태</th><th>구분</th><th>제외사유</th><th>직전 과세기간<br>공급가액</th><th>예정고지세액</th><th>관할서</th><th>납부기한</th><th>안내문</th><th>납부서</th><th>메모</th><th>Tip</th><th>신고도움</th><th title="회사웹 부가세 검증과 같은 계산(매출·매입 항목별, 예정)">검증</th>
       ${vatCustomCols.map(col => `<th><button class="btn ghost xs" onclick="editVatCustomCol('${col.id}')" title="눌러서 이름·입력 방식 수정 또는 삭제" style="font-weight:800;">${taxjEsc(col.label)} ✎</button></th>`).join('')}</tr></thead>
       <tbody>${rows || `<tr><td colspan="${cols}"><div class="empty" style="padding:18px;">${q ? '검색 결과가 없어요.' : '거래처가 없어요.'}</div></td></tr>`}</tbody></table></div>`;
 }
