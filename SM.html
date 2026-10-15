@@ -6205,7 +6205,38 @@ const PAY_COL_TYPES = [['date','날짜'], ['check','체크'], ['text','글자']]
 const PAY_COL_POS = [['end','맨 끝 (메모 뒤)'], ['cycle','신고 앞'], ['payslip','급여명세서 전달 앞'], ['payroll','급여마감 앞'], ['close','신고서 마감 앞'], ['filed','신고일자 앞'], ['bill','납부서 발송 앞'], ['paid','납부마감 앞'], ['memo','메모 앞']];
 function payPosKey(label){ return (PAY_COL_POS.find(x => x[1] === label) || PAY_COL_POS[0])[0]; }
 function payPosLabel(key){ return (PAY_COL_POS.find(x => x[0] === (key || 'end')) || PAY_COL_POS[0])[1]; }
-function payFocusMonth(){ const d = new Date(); if(d.getDate() <= 10) d.setMonth(d.getMonth() - 1); return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}`; }   // Tax.J itFocusPeriodNow와 같음(10일까지는 지난달 귀속)
+function payFocusMonth(docs){
+  const d = new Date(); if(d.getDate() <= 10) d.setMonth(d.getMonth() - 1);
+  const base = `${d.getFullYear()}-${pad2(d.getMonth() + 1)}`;
+  // [2026.10.15] "아직 마감이 안 끝났으면 날짜 기준이 아니라 신고 안 끝난 최근 월로"(요청) - 회사웹 itFocusPeriodNow(같은 날 수정)와 같게
+  //   앞 귀속월에 아직 국세·지방세 신고가 다 안 끝난 대상이 있으면 그 달에 머묾. 회사 자료가 아직 없으면 앞 달
+  if(!docs) return base;
+  d.setMonth(d.getMonth() - 1);
+  const prev = `${d.getFullYear()}-${pad2(d.getMonth() + 1)}`;
+  try{
+    const list = taxjClientIndex(docs).sorted.filter(payIsReg);
+    if(!list.length) return prev;
+    if(payPendingCount(docs, prev) > 0) return prev;
+  }catch(e){}
+  return base;
+}
+// 그 귀속월 마감(다음 달 10일)에 내야 하는 신고 중 국세·지방세가 다 안 끝난 줄 수 - 회사웹 itFocusFiling과 같은 기준:
+//   그 달 당월지급 줄 + 앞 달 익월지급 줄. 반기 거래처의 6·12월 외 달은 신고가 없어 뺌
+function payPendingCount(docs, p){
+  const st = docs.s__itFilingStatus || {}, [y, m] = p.split('-').map(Number);
+  const pv = m === 1 ? `${y - 1}-12` : `${y}-${pad2(m - 1)}`;
+  const isHalfOff = (cid, per) => { const r = payCycleAt(docs, cid, per), mm = Number(per.slice(5)); return !!r && payRecApp(r) && (r.cycle || '매월') === '반기' && mm !== 6 && mm !== 12; };
+  const on = t => t && t.applicable && (t.sameMonthPay || t.nextMonthPay);
+  const filed = (per, cid, k) => { const v = ((st[per] || {})[cid] || {})[k] || {}; return !!(v.national && v.local); };
+  let n = 0;
+  taxjClientIndex(docs).sorted.filter(payIsReg).forEach(c => {
+    const t = payTarget(docs, c.id, p);
+    if(on(t) && t.sameMonthPay && !isHalfOff(c.id, p) && !filed(p, c.id, 'sameMonth')) n++;
+    const tp = payTarget(docs, c.id, pv);
+    if(on(tp) && tp.nextMonthPay && !isHalfOff(c.id, pv) && !filed(pv, c.id, 'nextMonth')) n++;
+  });
+  return n;
+}   // Tax.J itFocusPeriodNow와 같음(10일까지는 지난달 귀속)
 function payShiftMonth(n){ const [y, m] = payMonth.split('-').map(Number); const d = new Date(y, m - 1 + n, 1); payMonth = `${d.getFullYear()}-${pad2(d.getMonth() + 1)}`; payPicked = new Set(); renderPay(); }
 async function addPayCustomCol(){
   const r = await smForm('신고현황 항목 추가', [{ label:'항목 이름', placeholder:'예: 4대보험 확인' }, { label:'입력 방식', options: PAY_COL_TYPES.map(x => x[1]), value:'날짜' }, { label:'위치', options: PAY_COL_POS.map(x => x[1]), value: PAY_COL_POS[0][1] }], { okText:'추가' });
@@ -6370,7 +6401,7 @@ function payBillCellsHtml(key){
   return [sent, pay];
 }
 function payStatusHtml(docs){
-  if(!payMonth) payMonth = payFocusMonth();
+  if(!payMonth) payMonth = payFocusMonth(docs);
   const p = payMonth, [yy, mm] = p.split('-').map(Number);
   const idx = taxjClientIndex(docs), st = (docs.s__itFilingStatus || {})[p] || {}, ov = docs.s__itOverview || {};
   const q = payQuery.trim().toLowerCase();
@@ -6490,7 +6521,7 @@ function payDailyHtml(docs){
   list = list.filter(w => w.clientId === dwClient).sort((a, b) => ((a.leaveDate ? 1 : 0) - (b.leaveDate ? 1 : 0)) || (a.leaveDate || '').localeCompare(b.leaveDate || '') || (a.joinDate || '').localeCompare(b.joinDate || '') || (a.name || '').localeCompare(b.name || '', 'ko'));
   const leftN = list.filter(w => w.leaveDate).length;
   if(!dwShowLeft) list = list.filter(w => !w.leaveDate);
-  const focus = payFocusMonth();
+  const focus = payFocusMonth(docs);
   const fbg = m => dwYmS(year, m) === focus ? 'background:#fff7e6;' : '';
   const nf = v => (v === null || v === undefined || v === '') ? '' : Number(v).toLocaleString();
   const dup = w => list.some(x => x.id !== w.id && String(x.name || '').trim() === String(w.name || '').trim());
