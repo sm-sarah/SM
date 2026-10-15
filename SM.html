@@ -4781,13 +4781,63 @@ function rowsToSnapshot(rows){
   Object.keys(map).forEach(k => { if(k !== '__version'){ try{ o[k] = JSON.parse(map[k]); }catch(e){} } });
   return o;
 }
+// [2026.10.15] 날짜별 백업 파일(요청: "데이터 보존이 걱정 - 날짜별 그거는 해야겠다") - 위 시트 안 백업(backup_날짜 탭, 14일)은 같은 스프레드시트에 있어서
+//   시트를 지우거나 망가지면 같이 사라짐 → 하루 한 번 내 Google 드라이브 'SM_백업' 폴더에 'SM_백업_YYYY-MM-DD.json' 파일을 따로 남김.
+//   내용: works 데이터 전체 + 그날 받아 둔 회사웹(Tax.J) 자료 전체. 실시간 연동과 달리 덮어쓰지 않아서, 어느 쪽이 망가져도 그 날짜 상태가 남음
+//   (같은 날 안에서는 회사 자료가 나중에 생기면 그 날 파일만 한 번 더 채움). 보관: 최근 60일 + 매달 1일 파일은 계속. 지울 땐 휴지통으로(30일 안에 되살림)
+const SM_BACKUP_FOLDER = 'SM_백업', SM_BACKUP_KEEP_DAYS = 60;
+let smBackupFolderId = null, smDriveBackupBusy = false;
+async function smBackupFolder(){
+  if(smBackupFolderId) return smBackupFolderId;
+  const q = encodeURIComponent(`name='${SM_BACKUP_FOLDER}' and mimeType='application/vnd.google-apps.folder' and trashed=false`);
+  const r = await smDriveFetch(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id)&spaces=drive`);
+  if(r.files && r.files.length) return (smBackupFolderId = r.files[0].id);
+  const c = await smDriveFetch('https://www.googleapis.com/drive/v3/files?fields=id', { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ name: SM_BACKUP_FOLDER, mimeType:'application/vnd.google-apps.folder' }) });
+  return (smBackupFolderId = c.id);
+}
+async function smDriveDailyBackup(){
+  if(!googleAccessToken || smDriveBackupBusy) return;
+  const T = todayStr(), hasT = !!(taxjFull && taxjFull.docs);
+  let st = {}; try{ st = JSON.parse(localStorage.getItem('sm_drive_backup') || '{}') || {}; }catch(e){}
+  if(st.day === T && (st.taxj || !hasT)) return;
+  smDriveBackupBusy = true;
+  try{
+    const folder = await smBackupFolder();
+    const name = `SM_백업_${T}.json`;
+    const q = encodeURIComponent(`name='${name}' and '${folder}' in parents and trashed=false`);
+    const ex = await smDriveFetch(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,description)&spaces=drive`);
+    const exFile = ex.files && ex.files[0];
+    if(exFile && (exFile.description === 'taxj' || !hasT)){ try{ localStorage.setItem('sm_drive_backup', JSON.stringify({ day:T, taxj: exFile.description === 'taxj' })); }catch(e){} return; }   // 다른 기기에서 이미 만듦
+    const body = JSON.stringify({ savedAt: new Date().toISOString(), note: 'Sunmin\'s Works 날짜별 백업(덮어쓰지 않음)', works: collectGoogleSnapshot(), taxj: hasT ? { at: taxjFull.at, docs: taxjFull.docs } : null });
+    const blob = new Blob([body], { type:'application/json' });
+    if(exFile){
+      await smDriveFetch(`https://www.googleapis.com/upload/drive/v3/files/${exFile.id}?uploadType=media&fields=id`, { method:'PATCH', headers:{ 'Content-Type':'application/json' }, body: blob });
+      await smDriveFetch(`https://www.googleapis.com/drive/v3/files/${exFile.id}?fields=id`, { method:'PATCH', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ description: 'taxj' }) });
+    }else{
+      const fd = new FormData();
+      fd.append('metadata', new Blob([JSON.stringify({ name, parents: [folder], description: hasT ? 'taxj' : '' })], { type:'application/json' }));
+      fd.append('file', blob);
+      await smDriveFetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id', { method:'POST', body: fd });
+    }
+    try{ localStorage.setItem('sm_drive_backup', JSON.stringify({ day:T, taxj: hasT })); }catch(e){}
+    // 오래된 파일 정리: 최근 60일 + 매달 1일 파일은 남김
+    const lq = encodeURIComponent(`'${folder}' in parents and trashed=false and name contains 'SM_백업_'`);
+    const all = await smDriveFetch(`https://www.googleapis.com/drive/v3/files?q=${lq}&fields=files(id,name)&pageSize=1000&spaces=drive`);
+    const cut = new Date(Date.now() - SM_BACKUP_KEEP_DAYS * 86400000).toISOString().slice(0, 10);
+    for(const f of (all.files || [])){ const d = (/SM_백업_(\d{4}-\d{2}-\d{2})\.json$/.exec(f.name) || [])[1]; if(d && d < cut && !d.endsWith('-01')) await smDriveTrash(f.id); }
+  }catch(e){ console.warn('드라이브 날짜별 백업 실패', e); }
+  finally{ smDriveBackupBusy = false; }
+}
+async function smOpenBackupFolder(){
+  try{ const id = await smBackupFolder(); window.open(`https://drive.google.com/drive/folders/${id}`, '_blank', 'noopener'); }catch(e){ smAlert('백업 폴더를 열지 못했어요', String(e && e.message || e)); }
+}
 async function showBackups(){
   if(!googleAccessToken || !googleSpreadsheetId){ smAlert('먼저 Google 로그인을 해주세요'); return; }
   const list = (await listBackupSheets()).reverse();
   const html = list.length ? list.map(p => `<div class="cl-hist-item"><div class="cl-hist-head"><b>${p.title.replace('backup_','')}</b>
       <button class="btn xs" onclick="document.querySelector('.sm-modal-ok').click(); setTimeout(() => restoreBackup('${p.title}'), 180);">이 날짜로 되돌리기</button></div></div>`).join('')
     : '<div class="cl-hist-empty">아직 백업이 없어요. 오늘 첫 저장 때 만들어져요.</div>';
-  smDialog({ title:'백업 목록', html:`<div class="cl-hist"><div class="cl-hist-meta">하루 한 번 자동 저장 · 최근 ${BACKUP_KEEP}일치 보관</div>${html}</div>`, icon:'⟲', cancelText:null, okText:'닫기', wide:true });
+  smDialog({ title:'백업 목록', html:`<div class="cl-hist"><div class="cl-hist-meta">하루 한 번 자동 저장 · 최근 ${BACKUP_KEEP}일치 보관 · 드라이브에도 날짜별 파일(works + 회사 자료, 60일·매달 1일) <button class="btn ghost xs" onclick="smOpenBackupFolder()">드라이브 백업 폴더</button></div>${html}</div>`, icon:'⟲', cancelText:null, okText:'닫기', wide:true });
 }
 async function restoreBackup(title){
   if(!(await smConfirm(`${title.replace('backup_','')} 백업으로 되돌릴까요?`, '지금 데이터는 그 날짜 상태로 바뀌어요. (지금 상태도 오늘 백업에 남아 있어요)', { tone:'danger', icon:'!', okText:'되돌리기' }))) return;
@@ -4847,6 +4897,7 @@ async function saveToGoogleSheet(){
     lastSyncedContent = snapStr;
     writeLocalCache();
     dailyBackupIfNeeded(rows).catch(e => console.warn('백업 실패', e));
+    smDriveDailyBackup();   // [2026.10.15] 드라이브 날짜별 파일도
     // 저장하는 동안 또 바뀐 게 없으면 보관본 삭제
     if(JSON.stringify(collectGoogleSnapshot()) === snapStr) clearPendingChanges();
     const t = new Date();
@@ -5758,6 +5809,7 @@ async function taxjSaveFull(full){
     }catch(e){ console.error('Tax.J 자료 시트 저장 실패', e); taxjFullSaveMsg = 'Google 시트에는 저장하지 못했어요(' + ((e && e.result && e.result.error && e.result.error.message) || (e && e.message) || e) + ')'; return; }
   }else msgs.push('(Google 연결 전이라 시트에는 아직 안 올렸어요)');
   taxjFullSaveMsg = '내 데이터에 저장됨: ' + msgs.join(' · ');
+  if(googleAccessToken) smDriveDailyBackup();   // [2026.10.15] 회사 자료를 받으면 그날 백업 파일에도 넣음
 }
 // 저장해 둔 자료 불러오기: 이 기기 → 없으면 Google 시트. 둘 다 있으면 더 최근 것
 async function taxjRestoreFull(){
