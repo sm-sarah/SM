@@ -295,6 +295,9 @@
   table{ width:100%; border-collapse:collapse; font-size:13px; }
   th, td{ text-align:left; padding:10px 10px; border-bottom:1px solid var(--border); white-space:nowrap; }
   th{ color:var(--muted-soft); font-weight:800; font-size:11px; text-transform:uppercase; letter-spacing:.04em; }
+  /* [2026.10.15] "각 항목마다 세로 구분선, 모든 메뉴에"(요청) - 표의 칸 사이 세로선(가로선과 같은 색) */
+  th + th, td + td{ border-left:1px solid var(--border); }
+  tr > th[rowspan]:not(:last-child), tr > td[rowspan]:not(:last-child){ border-right:1px solid var(--border); }
   td.note-cell{ white-space:normal; min-width:160px; }
   .table-scroll{ overflow-x:auto; }
 
