@@ -6199,17 +6199,21 @@ function payOverviewHtml(docs){
 // ── 2. 신고현황 ──
 // payCustomCols·payCustomVals(내가 만든 항목)는 다른 저장 항목과 함께 위쪽에 선언
 const PAY_COL_TYPES = [['date','날짜'], ['check','체크'], ['text','글자']];
+// [2026.10.15] "항목 추가하면 위치도 조정 가능? 예: 급여명세서 전달 왼쪽"(요청) - 내 항목마다 pos(어느 칸 앞에 둘지) 저장. 없으면 맨 끝
+const PAY_COL_POS = [['end','맨 끝 (메모 뒤)'], ['cycle','신고 앞'], ['payslip','급여명세서 전달 앞'], ['payroll','급여마감 앞'], ['close','신고서 마감 앞'], ['filed','신고일자 앞'], ['bill','납부서 발송 앞'], ['paid','납부마감 앞'], ['memo','메모 앞']];
+function payPosKey(label){ return (PAY_COL_POS.find(x => x[1] === label) || PAY_COL_POS[0])[0]; }
+function payPosLabel(key){ return (PAY_COL_POS.find(x => x[0] === (key || 'end')) || PAY_COL_POS[0])[1]; }
 function payFocusMonth(){ const d = new Date(); if(d.getDate() <= 10) d.setMonth(d.getMonth() - 1); return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}`; }   // Tax.J itFocusPeriodNow와 같음(10일까지는 지난달 귀속)
 function payShiftMonth(n){ const [y, m] = payMonth.split('-').map(Number); const d = new Date(y, m - 1 + n, 1); payMonth = `${d.getFullYear()}-${pad2(d.getMonth() + 1)}`; payPicked = new Set(); renderPay(); }
 async function addPayCustomCol(){
-  const r = await smForm('신고현황 항목 추가', [{ label:'항목 이름', placeholder:'예: 4대보험 확인' }, { label:'입력 방식', options: PAY_COL_TYPES.map(x => x[1]), value:'날짜' }], { okText:'추가' });
+  const r = await smForm('신고현황 항목 추가', [{ label:'항목 이름', placeholder:'예: 4대보험 확인' }, { label:'입력 방식', options: PAY_COL_TYPES.map(x => x[1]), value:'날짜' }, { label:'위치', options: PAY_COL_POS.map(x => x[1]), value: PAY_COL_POS[0][1] }], { okText:'추가' });
   if(!r || !r[0].trim()) return;
-  payCustomCols.push({ id: 'c' + Date.now().toString(36), label: r[0].trim(), type: (PAY_COL_TYPES.find(x => x[1] === r[1]) || PAY_COL_TYPES[0])[0] });
+  payCustomCols.push({ id: 'c' + Date.now().toString(36), label: r[0].trim(), type: (PAY_COL_TYPES.find(x => x[1] === r[1]) || PAY_COL_TYPES[0])[0], pos: payPosKey(r[2]) });
   renderPay(); scheduleGoogleSave();
 }
 async function editPayCustomCol(id){
   const col = payCustomCols.find(c => c.id === id); if(!col) return;
-  const r = await smForm('항목 수정', [{ label:'항목 이름', value: col.label }, { label:'입력 방식', options: PAY_COL_TYPES.map(x => x[1]), value: (PAY_COL_TYPES.find(x => x[0] === col.type) || PAY_COL_TYPES[0])[1] }], { okText:'저장', cancelText:'삭제', icon:'✎', closeX:true });
+  const r = await smForm('항목 수정', [{ label:'항목 이름', value: col.label }, { label:'입력 방식', options: PAY_COL_TYPES.map(x => x[1]), value: (PAY_COL_TYPES.find(x => x[0] === col.type) || PAY_COL_TYPES[0])[1] }, { label:'위치', options: PAY_COL_POS.map(x => x[1]), value: payPosLabel(col.pos) }], { okText:'저장', cancelText:'삭제', icon:'✎', closeX:true });
   if(r === undefined) return;   // [2026.10.15] 닫기(X) - 아무것도 안 바꿈
   if(r === null){
     if(!(await smConfirm(`'${col.label}' 항목을 지울까요?`, '이 항목에 적어 둔 값도 모두 지워져요.', { tone:'danger', icon:'!', okText:'삭제' }))) return;
@@ -6218,6 +6222,7 @@ async function editPayCustomCol(id){
   }else{
     if(r[0].trim()) col.label = r[0].trim();
     col.type = (PAY_COL_TYPES.find(x => x[1] === r[1]) || PAY_COL_TYPES[0])[0];
+    col.pos = payPosKey(r[2]);
   }
   renderPay(); scheduleGoogleSave();
 }
@@ -6270,24 +6275,76 @@ function payDatePop(btn){
 let payPicked = new Set();
 function payPick(key, on){ if(on) payPicked.add(key); else payPicked.delete(key); const n = document.getElementById('payPickN'); if(n) n.textContent = payPicked.size ? `${payPicked.size}줄 선택` : ''; }
 function payPickAll(on){ document.querySelectorAll('#tab-pay .pay-pick').forEach(cb => { cb.checked = on; payPick(cb.dataset.key, on); }); }
-async function payBulk(){
-  const dcols = [['_billSent', '납부서 발송'], ...payCustomCols.filter(c => c.type === 'date').map(c => [c.id, c.label])];
-  const shown = [...document.querySelectorAll('#tab-pay .pay-pick')].map(cb => cb.dataset.key);
-  const picked = shown.filter(k => payPicked.has(k));
-  const targets = [];
-  if(picked.length) targets.push(`선택한 줄 ${picked.length}개`);
-  targets.push(`지금 보이는 전체 ${shown.length}줄`);
-  const r = await smForm('날짜 일괄 입력', [{ label:'항목', options: dcols.map(c => c[1]), value: dcols[0][1] }, { label:'날짜 (기본 오늘)', type:'date', value: todayStr() }, { label:'대상', options: targets, value: targets[0] }, { label:'이미 적힌 칸', options:['빈 칸만 채우기','모두 바꾸기'], value:'빈 칸만 채우기' }], { okText:'입력', icon:'✓' });
-  if(!r) return;
-  const col = dcols.find(c => c[1] === r[0]) || dcols[0], date = r[1] || todayStr();
-  const keys = r[2].startsWith('선택한') ? picked : shown, onlyEmpty = r[3] === '빈 칸만 채우기';
-  const per = payCustomVals[payMonth] = payCustomVals[payMonth] || {};
-  let n = 0;
-  keys.forEach(k => { const row = per[k] = per[k] || {}; if(onlyEmpty && row[col[0]]) return; row[col[0]] = date; n++; });
-  Object.keys(per).forEach(k => { if(!Object.keys(per[k]).length) delete per[k]; });
-  if(!Object.keys(per).length) delete payCustomVals[payMonth];
-  renderPay(); scheduleGoogleSave();
-  smAlert('입력했어요', `${col[1]} · ${n}줄에 ${date}`, { icon:'✓' });
+// [2026.10.15] "일괄입력도 회사웹처럼 항목 + 거래처 선택해서, 납부마감(완납·미납)도 여러 거래처 한 번에"(요청)
+//   회사웹 원천세 날짜 일괄적용 창처럼: 항목·날짜를 고르고 아래 목록에서 거래처(줄)를 체크 → 입력.
+//   체크 기본값 = 표에서 고른 줄이 있으면 그 줄, 없으면 그 항목이 비어 있는 줄. 납부마감 완납·미납은 날짜 = 확인일
+let payRowsShown = [];   // 신고현황 표에 지금 보이는 줄 [{ key, name, lane }] - payStatusHtml에서 채움
+function payBulkItems(){
+  return [['_billSent', '납부서 발송'], ['__paid', '납부마감 · 완납'], ['__unpaid', '납부마감 · 미납'], ['_payMsg', '미납 멘트 발송'],
+    ...payCustomCols.filter(c => c.type === 'date').map(c => [c.id, c.label])];
+}
+function payBulkCur(key, item){
+  const v = (payCustomVals[payMonth] || {})[key] || {};
+  if(item === '__paid' || item === '__unpaid') return v._payState ? `${v._payState}${v._payCheck ? ' ' + payFmtDate(v._payCheck) : ''}` : '';
+  return v[item] ? payFmtDate(v[item]) : '';
+}
+function payBulk(){
+  if(!payRowsShown.length) return smAlert('입력할 줄이 없어요', '이 귀속월 표에 보이는 거래처가 없어요.');
+  const items = payBulkItems();
+  const wrap = document.createElement('div');
+  wrap.className = 'sm-modal-backdrop';
+  wrap.innerHTML = `<div class="sm-modal wide" role="dialog" aria-modal="true">
+      <button type="button" class="sm-modal-x" title="닫기" aria-label="닫기">×</button>
+      <div class="sm-modal-ic">✓</div>
+      <div class="sm-modal-title">날짜 일괄 입력</div>
+      <div class="sm-modal-fields">
+        <label class="sm-modal-field"><span>항목</span><select class="pb-item">${items.map(x => `<option value="${x[0]}">${taxjEsc(x[1])}</option>`).join('')}</select></label>
+        <label class="sm-modal-field"><span>날짜 (완납·미납은 확인일)</span><div style="display:flex; gap:6px;"><input type="date" class="pb-date" value="${todayStr()}" style="flex:1;"><button type="button" class="btn xs pb-today">오늘</button></div></label>
+        <div class="sm-modal-field"><span style="display:flex; align-items:center; gap:6px;"><input type="checkbox" class="pb-all" style="width:auto; margin:0;"> 거래처 <b class="pb-cnt" style="margin-left:auto; font-weight:700;"></b></span>
+          <div class="pb-list" style="max-height:300px; overflow:auto; border:1px solid var(--border); border-radius:12px; padding:2px 10px;"></div></div>
+      </div>
+      <div class="sm-modal-btns"><button type="button" class="sm-modal-cancel">취소</button><button type="button" class="sm-modal-ok">입력</button></div>
+    </div>`;
+  document.body.appendChild(wrap);
+  requestAnimationFrame(() => wrap.classList.add('show'));
+  const $ = q => wrap.querySelector(q), list = $('.pb-list'), itemSel = $('.pb-item'), dateIn = $('.pb-date');
+  const sync = () => {
+    const all = [...list.querySelectorAll('.pb-chk')], on = all.filter(x => x.checked).length;
+    $('.pb-all').checked = all.length > 0 && on === all.length; $('.pb-all').indeterminate = on > 0 && on < all.length;
+    $('.pb-cnt').textContent = `${on} / ${all.length}`;
+  };
+  const draw = () => {
+    const item = itemSel.value, usePicked = payRowsShown.some(r => payPicked.has(r.key));
+    list.innerHTML = payRowsShown.map((r, i) => { const cur = payBulkCur(r.key, item), on = usePicked ? payPicked.has(r.key) : !cur;
+      return `<label style="display:flex; align-items:center; gap:8px; padding:7px 0; border-bottom:1px dashed var(--border); font-size:12.5px; cursor:pointer;">
+        <input type="checkbox" class="pb-chk" data-i="${i}" ${on ? 'checked' : ''} style="width:auto; margin:0;">
+        <span style="margin:0; font-size:12.5px; color:var(--text); font-weight:700; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${taxjEsc(r.name)}${r.lane ? ` <span style="display:inline; margin:0; font-size:11px; color:${r.lane === 'sameMonth' ? '#059669' : '#e11d48'};">${r.lane === 'sameMonth' ? '당월' : '익월'}</span>` : ''}</span>
+        <span class="hint" style="display:inline; margin:0; white-space:nowrap;">${taxjEsc(cur)}</span></label>`; }).join('');
+    list.querySelectorAll('.pb-chk').forEach(x => x.addEventListener('change', sync));
+    sync();
+  };
+  const close = () => { document.removeEventListener('keydown', onKey, true); wrap.classList.remove('show'); setTimeout(() => wrap.remove(), 150); };
+  const apply = () => {
+    const item = itemSel.value, date = dateIn.value || todayStr();
+    const keys = [...list.querySelectorAll('.pb-chk')].filter(x => x.checked).map(x => payRowsShown[Number(x.dataset.i)].key);
+    if(!keys.length) return smAlert('거래처를 골라 주세요', '목록에서 입력할 거래처를 하나 이상 체크해 주세요.');
+    const per = payCustomVals[payMonth] = payCustomVals[payMonth] || {};
+    keys.forEach(k => {
+      const row = per[k] = per[k] || {};
+      if(item === '__paid' || item === '__unpaid'){ row._payState = item === '__paid' ? '완납' : '미납'; row._payCheck = date; if(item === '__paid') delete row._payMsg; }
+      else row[item] = date;
+    });
+    close(); renderPay(); scheduleGoogleSave();
+    smAlert('입력했어요', `${(items.find(x => x[0] === item) || ['', ''])[1]} · ${keys.length}줄에 ${date}`, { icon:'✓' });
+  };
+  const onKey = e => { if(e.key === 'Escape'){ e.preventDefault(); e.stopPropagation(); close(); } };
+  document.addEventListener('keydown', onKey, true);
+  itemSel.addEventListener('change', draw);
+  $('.pb-today').onclick = () => { dateIn.value = todayStr(); };
+  $('.pb-all').addEventListener('change', e => { list.querySelectorAll('.pb-chk').forEach(x => { x.checked = e.target.checked; }); sync(); });
+  $('.sm-modal-x').onclick = close; $('.sm-modal-cancel').onclick = close; $('.sm-modal-ok').onclick = apply;
+  wrap.addEventListener('mousedown', e => { if(e.target === wrap) close(); });
+  draw();
 }
 // [2026.10.13] 신고현황 기본 내 칸(요청: "납부서발송(발송일자), 납부마감(완납+확인일자 / 미납+확인일자+멘트발송)도 필요") - 회사웹에 없는 내 칸이라 payCustomVals에 고정 id로 저장
 //   _billSent = 납부서 발송일 / _payState = '완납'|'미납' / _payCheck = 확인일 / _payMsg = 미납 멘트 발송일
@@ -6308,7 +6365,7 @@ function payBillCellsHtml(key){
   const pay = `<td><div style="display:flex; flex-direction:column; gap:4px; align-items:flex-start;">
       <div class="date-cell">${sel}${st ? payDateBtnHtml(key, '_payCheck', v._payCheck, '확인일') : ''}</div>
       ${st === '미납' ? payDateInputHtml(key, '_payMsg', v._payMsg, '멘트 발송') : ''}</div></td>`;
-  return sent + pay;
+  return [sent, pay];
 }
 function payStatusHtml(docs){
   if(!payMonth) payMonth = payFocusMonth();
@@ -6318,6 +6375,7 @@ function payStatusHtml(docs){
   const half = cid => { const r = payCycleAt(docs, cid, p); return !!r && (r.cycle || '매월') === '반기'; };
   const halfOff = cid => half(cid) && mm !== 6 && mm !== 12;   // 반기 거래처의 6·12월 외 달 = 급여작업만(신고서 마감은 6·12월에)
   const rows = [];
+  payRowsShown = [];
   let n = 0, cntPayroll = 0, cntClose = 0, cntFiled = 0, total = 0;
   idx.sorted.filter(payIsReg).filter(c => !q || String(c.name || '').toLowerCase().includes(q)).forEach(c => {
     const recs = payCycleRecs(docs, c.id), e = st[c.id] || {};
@@ -6327,7 +6385,10 @@ function payStatusHtml(docs){
     let t = payTarget(docs, c.id, p);
     if(halfOff(c.id)){ const tEnd = payTarget(docs, c.id, `${yy}-${mm <= 6 ? '06' : '12'}`); if(tEnd && tEnd.marked && tEnd.applicable) t = tEnd; }   // Tax.J itHalfLanes와 같음
     const tOn = t && t.marked && t.applicable;
-    if(!(applicable && (tOn || recs.length)) && !has('sameMonth') && !has('nextMonth')) return;
+    // [2026.10.15] "회사웹에서 9월 귀속 대상이 아닌 거래처(엘비케이파트너스 등)도 나온다"(요청) - 예전엔 신고구분만 등록돼 있어도 나왔음.
+    // 회사웹 신고현황(renderIncomeTaxFilingStatusTable)과 같게 그 달 신고대상(applicable + 당월·익월 지급)으로 등록된 거래처만
+    const own = payTarget(docs, c.id, p);
+    if(!(own && own.applicable && (own.sameMonthPay || own.nextMonthPay))) return;
     // [2026.10.14] "노아하우징쿱은 26.9월에 급여가 없는데도 나온다"(요청) - 반기 신고 거래처는 그 달에 급여(그 달 신고대상 등록)가 있거나
     // 이 달에 적은 기록이 있을 때만 보여줌(예전엔 신고구분만 보고 반기 안의 모든 달에 나왔음). 매월 거래처는 그대로
     if(rec && payRecApp(rec) && rec.cycle === '반기'){ const own = payTarget(docs, c.id, p); if(!(own && own.marked && own.applicable) && !has('sameMonth') && !has('nextMonth')) return; }
@@ -6352,22 +6413,31 @@ function payStatusHtml(docs){
       const taxTds = (a, b, what) => ho ? halfTd(what) : `<td>${taxjMd(a)}</td><td>${taxjMd(b)}</td>`;
       // [2026.10.14] "같은 거래처라 한 표에 나오게"(요청) - 당월·익월 두 줄이면 순번·상호명 칸을 합치고(rowspan) 두 줄 사이 선을 옅게
       const span = dual ? ` rowspan="${lanes.length}"` : '';
+      const cc = pos => payCustomCols.filter(col => (col.pos || 'end') === pos).map(col => payCustomCellHtml(key, col)).join('');
+      const [billTd, paidTd] = payBillCellsHtml(key);
+      payRowsShown.push({ key, name: c.name, lane: dual ? k : '' });
       rows.push(`<tr${dual ? (li ? ' class="pay-lane-2"' : ' class="pay-lane-1"') : ''}>
         <td class="tx-seq"><input type="checkbox" class="pay-pick" data-key="${escapeAttr(key)}" ${payPicked.has(key) ? 'checked' : ''} onchange="payPick(this.dataset.key, this.checked)"></td>
         ${li ? '' : `<td class="tx-seq"${span}>${n}</td><td class="tx-name"${span}>${taxjEsc(c.name)}</td>`}
-        <td style="white-space:nowrap; font-weight:700;">${payCycleLabelHtml(base, dual ? k : '')}</td>
-        <td>${slip}</td><td>${taxjMd(v.payroll)}</td>
-        ${taxTds(v.returnClose, v.returnCloseLocal, '신고서 마감')}${taxTds(v.national, v.local, '신고')}
-        ${payBillCellsHtml(key)}
-        <td style="text-align:left; white-space:pre-wrap; min-width:140px; font-size:12.5px;">${v.memo ? taxjEsc(v.memo) : PAY_NA}</td>
-        ${payCustomCols.map(col => payCustomCellHtml(key, col)).join('')}</tr>`);
+        ${cc('cycle')}<td style="white-space:nowrap; font-weight:700;">${payCycleLabelHtml(base, dual ? k : '')}</td>
+        ${cc('payslip')}<td>${slip}</td>${cc('payroll')}<td>${taxjMd(v.payroll)}</td>
+        ${cc('close')}${taxTds(v.returnClose, v.returnCloseLocal, '신고서 마감')}${cc('filed')}${taxTds(v.national, v.local, '신고')}
+        ${cc('bill')}${billTd}${cc('paid')}${paidTd}
+        ${cc('memo')}<td style="text-align:left; white-space:pre-wrap; min-width:140px; font-size:12.5px;">${v.memo ? taxjEsc(v.memo) : PAY_NA}</td>
+        ${cc('end')}</tr>`);
     });
   });
   const pct = total ? Math.round(cntPayroll / total * 100) : 0;
-  return `<div class="toolbar">
-      <button class="btn ghost xs" onclick="payShiftMonth(-1)" title="이전 달">‹</button><span style="font-weight:800;">${yy}년 ${mm}월 귀속</span><button class="btn ghost xs" onclick="payShiftMonth(1)" title="다음 달">›</button>
-      ${paySearchHtml()}<div class="spacer"></div><span class="hint" id="payPickN" style="margin:0;">${payPicked.size ? `${payPicked.size}줄 선택` : ''}</span>
-      <button class="btn xs" onclick="payBulk()" title="날짜 항목 하나를 골라 선택한 줄(없으면 보이는 전체)에 오늘 또는 고른 날짜를 넣어요">날짜 일괄 입력</button><button class="btn xs" onclick="addPayCustomCol()">+ 항목 추가</button>
+  const ch = pos => payCustomCols.filter(col => (col.pos || 'end') === pos).map(col => `<th rowspan="2"><button class="btn ghost xs" onclick="editPayCustomCol('${col.id}')" title="눌러서 이름·입력 방식·위치 수정 또는 삭제" style="font-weight:800;">${taxjEsc(col.label)} ✎</button></th>`).join('');
+  // [2026.10.15] "연월 귀속 제목은 가운데로, 검색은 항목 추가 칩 아래로"(요청)
+  return `<div class="toolbar" style="display:grid; grid-template-columns:1fr auto 1fr; align-items:center;">
+      <div></div>
+      <div style="display:flex; align-items:center; gap:10px;"><button class="btn ghost xs" onclick="payShiftMonth(-1)" title="이전 달">‹</button><span style="font-weight:800;">${yy}년 ${mm}월 귀속</span><button class="btn ghost xs" onclick="payShiftMonth(1)" title="다음 달">›</button></div>
+      <div style="display:flex; flex-direction:column; align-items:flex-end; gap:8px;">
+        <div style="display:flex; align-items:center; gap:10px;"><span class="hint" id="payPickN" style="margin:0;">${payPicked.size ? `${payPicked.size}줄 선택` : ''}</span>
+        <button class="btn xs" onclick="payBulk()" title="항목을 고르고 거래처를 체크해서 날짜·완납·미납을 한 번에 넣어요">날짜 일괄 입력</button><button class="btn xs" onclick="addPayCustomCol()">+ 항목 추가</button></div>
+        ${paySearchHtml()}
+      </div>
     </div>
     <div class="summary-row">
       <div class="stat tone-blue"><div class="n">${total}</div><div class="label">신고 대상(줄)</div></div>
@@ -6375,8 +6445,8 @@ function payStatusHtml(docs){
       <div class="stat"><div class="n">${cntClose} · ${cntFiled}</div><div class="label">신고서 마감 · 신고 완료</div></div>
     </div>
     <div class="progress-bar"><div class="fill tone-blue" style="width:${pct}%"></div></div>
-    ${rows.length ? `<div class="table-scroll" style="margin-top:16px;"><table><thead><tr><th class="tx-seq" rowspan="2"><input type="checkbox" title="모두 선택" onchange="payPickAll(this.checked)"></th><th class="tx-seq" rowspan="2">순번</th><th rowspan="2">상호명</th><th rowspan="2">신고</th><th rowspan="2">급여명세서 전달</th><th rowspan="2">급여마감</th><th colspan="2">신고서 마감</th><th colspan="2">신고일자</th><th rowspan="2">납부서 발송</th><th rowspan="2">납부마감</th><th rowspan="2">메모</th>
-      ${payCustomCols.map(col => `<th rowspan="2"><button class="btn ghost xs" onclick="editPayCustomCol('${col.id}')" title="눌러서 이름·입력 방식 수정 또는 삭제" style="font-weight:800;">${taxjEsc(col.label)} ✎</button></th>`).join('')}</tr><tr><th>국세</th><th>지방세</th><th>국세</th><th>지방세</th></tr></thead><tbody>${rows.join('')}</tbody></table></div>`
+    ${rows.length ? `<div class="table-scroll" style="margin-top:16px;"><table><thead><tr><th class="tx-seq" rowspan="2"><input type="checkbox" title="모두 선택" onchange="payPickAll(this.checked)"></th><th class="tx-seq" rowspan="2">순번</th><th rowspan="2">상호명</th>${ch('cycle')}<th rowspan="2">신고</th>${ch('payslip')}<th rowspan="2">급여명세서 전달</th>${ch('payroll')}<th rowspan="2">급여마감</th>${ch('close')}<th colspan="2">신고서 마감</th>${ch('filed')}<th colspan="2">신고일자</th>${ch('bill')}<th rowspan="2">납부서 발송</th>${ch('paid')}<th rowspan="2">납부마감</th>${ch('memo')}<th rowspan="2">메모</th>
+      ${ch('end')}</tr><tr><th>국세</th><th>지방세</th><th>국세</th><th>지방세</th></tr></thead><tbody>${rows.join('')}</tbody></table></div>`
       : `<div class="empty">${q ? '검색 결과가 없어요.' : `${yy}년 ${mm}월 귀속 신고대상이 없어요.`}</div>`}`;
 }
 
