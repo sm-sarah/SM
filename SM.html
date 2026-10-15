@@ -297,6 +297,11 @@
   th{ color:var(--muted-soft); font-weight:800; font-size:11px; text-transform:uppercase; letter-spacing:.04em; }
   /* [2026.10.15] "각 항목마다 세로 구분선, 모든 메뉴에"(요청) - 표의 칸 사이 세로선(가로선과 같은 색) */
   th + th, td + td{ border-left:1px solid var(--border); }
+  /* [2026.10.15] "표로 구성된 건 모두 칸의 가운데 정렬로, 전체 메뉴"(요청) - 모든 표의 머리글·칸을 가로·세로 가운데로(칸마다 적힌 왼쪽 정렬보다 우선).
+     칸 안의 날짜·첨부 묶음과 입력칸 글자도 가운데 */
+  th, td{ text-align:center !important; vertical-align:middle; }
+  td .date-cell, td .att-list{ justify-content:center; }
+  td input[type=text], td input[type=number], td .vp-in{ text-align:center !important; }
   tr > th[rowspan]:not(:last-child), tr > td[rowspan]:not(:last-child){ border-right:1px solid var(--border); }
   td.note-cell{ white-space:normal; min-width:160px; }
   .table-scroll{ overflow-x:auto; }
@@ -1008,6 +1013,13 @@
   /* [2026.10.14] 원천세 신고현황 당월·익월 두 줄을 한 거래처로 묶어 보이게 */
   tr.pay-lane-1 td:not([rowspan]){ border-bottom:1px dashed var(--border); }
   tr.pay-lane-1 td[rowspan]{ vertical-align:middle; }
+  /* [2026.10.15] 신고현황 납부마감 칸 정리 */
+  .pay-grid{ display:inline-grid; grid-template-columns:auto 52px; align-items:center; column-gap:6px; row-gap:3px; }
+  .pay-grid > span{ text-align:center; }
+  .pay-st{ font:inherit; font-size:12px; font-weight:700; height:24px; padding:0 18px 0 10px; border-radius:999px; border:1px solid var(--border); background-color:#fff; color:var(--muted); cursor:pointer; }
+  .pay-st.ok{ color:#047857; background-color:#ecfdf5; border-color:#a7f3d0; }
+  .pay-st.no{ color:#be123c; background-color:#fff1f2; border-color:#fecdd3; }
+  .pay-lab{ font-size:11.5px; color:var(--muted); text-align:center !important; }
   /* [2026.10.14] 거래처 계정정보 */
   .cl-acc td{ white-space:nowrap; font-size:12.5px; }
   .cl-acc .cl-acc-plat{ padding:1px 0; }
@@ -3658,8 +3670,11 @@ function closeRangePop(btn){
   const pop = document.createElement('div');
   pop.id = 'closeDatePop'; pop.className = 'cl-pop'; pop.style.width = '300px';
   pop.innerHTML = `<div class="cl-pop-range"><input type="date" class="cl-r-a" value="${a0}" title="시작일"><span>~</span><input type="date" class="cl-r-b" value="${b0}" title="끝 날짜"></div>
-    <div class="cl-pop-row"><button type="button" data-v="__ystart">1/1부터</button><button type="button" data-v="__today">끝 = 오늘</button>${CLOSE_QUICK.map(q => `<button type="button" data-v="${q}">${q}</button>`).join('')}<button type="button" data-v="__clear" class="del">지우기</button><button type="button" data-v="__ok" style="margin-left:auto; font-weight:800;">저장</button></div>
-    <input type="text" class="cl-pop-text" placeholder="직접 입력 후 Enter (예: 26.01~09.29)" value="${ok || cur == null ? '' : escapeAttr(String(cur))}">`;
+    <!-- [2026.10.15] "메뉴 위치가 정리 안 돼 있다"(요청) - 날짜 채우기 / 글자 값 / 직접 입력 / 지우기·저장 순서로 줄을 나눔 -->
+    <div class="cl-pop-row"><button type="button" data-v="__ystart">1/1부터</button><button type="button" data-v="__today">끝 = 오늘</button></div>
+    <div class="cl-pop-row">${CLOSE_QUICK.map(q => `<button type="button" data-v="${q}">${q}</button>`).join('')}</div>
+    <input type="text" class="cl-pop-text" placeholder="직접 입력 후 Enter (예: 26.01~09.29)" value="${ok || cur == null ? '' : escapeAttr(String(cur))}">
+    <div class="cl-pop-row" style="justify-content:space-between;"><button type="button" data-v="__clear" class="del">지우기</button><button type="button" data-v="__ok" style="font-weight:800; color:var(--primary-dark); border-color:var(--primary);">저장</button></div>`;
   document.body.appendChild(pop);
   const r = btn.getBoundingClientRect(), pw = pop.offsetWidth, ph = pop.offsetHeight;
   pop.style.left = Math.max(8, Math.min(window.innerWidth - pw - 8, r.left)) + 'px';
@@ -6616,10 +6631,11 @@ function setPayState(key, v){
 function payBillCellsHtml(key){
   const v = (payCustomVals[payMonth] || {})[key] || {}, k = escapeAttr(key), st = v._payState || '';
   const sent = `<td>${payDateInputHtml(key, '_billSent', v._billSent)}</td>`;
-  const sel = `<select onchange="setPayState('${k}', this.value)" style="font-weight:700; color:${st === '완납' ? '#059669' : st === '미납' ? '#e11d48' : 'inherit'};">${['', '완납', '미납'].map(o => `<option value="${o}" ${o === st ? 'selected' : ''}>${o || '-'}</option>`).join('')}</select>`;
-  const pay = `<td><div style="display:flex; flex-direction:column; gap:4px; align-items:flex-start;">
-      <div class="date-cell">${sel}${st ? payDateBtnHtml(key, '_payCheck', v._payCheck, '확인일') : ''}</div>
-      ${st === '미납' ? payDateInputHtml(key, '_payMsg', v._payMsg, '멘트 발송') : ''}</div></td>`;
+  // [2026.10.15] "납부마감 쪽 스타일이 뒤죽박죽"(요청) - 완납/미납은 작은 둥근 칩 모양 선택칸(색으로 구분), 확인일·멘트 발송일은 같은 열에 맞춰
+  //   [상태 | 확인일] / [멘트 | 발송일] 두 줄 격자로. 멘트 줄의 '발송' 표시는 날짜와 겹쳐서 뺌
+  const sel = `<select class="pay-st ${st === '완납' ? 'ok' : st === '미납' ? 'no' : ''}" onchange="setPayState('${k}', this.value)" title="납부 확인">${['', '완납', '미납'].map(o => `<option value="${o}" ${o === st ? 'selected' : ''}>${o || '-'}</option>`).join('')}</select>`;
+  const pay = `<td><div class="pay-grid">${sel}<span>${st ? payDateBtnHtml(key, '_payCheck', v._payCheck, '확인일') : ''}</span>
+      ${st === '미납' ? `<span class="pay-lab">멘트</span><span>${payDateBtnHtml(key, '_payMsg', v._payMsg, '멘트 발송일')}</span>` : ''}</div></td>`;
   return [sent, pay];
 }
 function payStatusHtml(docs){
