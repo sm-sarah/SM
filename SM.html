@@ -1019,9 +1019,11 @@
      숫자·날짜는 IBM Plex Mono 굵게(.num), 칸마다 세로 구분선(.cvb), 상호 줄바꿈 없음, 빈 칸 '-'는 흐린 회색(client-cell-na),
      개인의 법인등록번호는 해당 없음으로 옅은 회색 바탕(client-cell-off) */
   #tab-close .cl-lk{ border-right:1px solid var(--border); white-space:nowrap; }
-  #tab-close .cl-lk.cl-num{ font-family:'IBM Plex Mono', ui-monospace, monospace; font-weight:700; letter-spacing:-0.02em; }
-  #tab-close td.cl-na{ color:#C9CBD6 !important; }
-  #tab-close td.cl-off{ background:#F8F9FB !important; color:#CDD0DA !important; }
+  /* [2026.10.15] "기장거래처 스타일 그대로, 법인등록번호~개업일 숫자는 작게, 항목명·내용 다 가운데"(요청) - 위 회사웹식 굵은 고정폭 숫자·회색 바탕을 빼고
+     works 거래처 메뉴 표처럼 보통 글자(상호도 보통 굵기·기본 색)로, 숫자는 12.5px. 결산 표 머리글·칸·입력칸 모두 가운데 정렬 */
+  #tab-close td.cl-lk{ font-size:12.5px; font-weight:400; }
+  #tab-close th, #tab-close td, #tab-close .vat-prog thead th{ text-align:center; }
+  #tab-close .vat-prog .vp-in{ text-align:center !important; }
   /* [2026.10.15] 기간 칸(시작~끝 날짜) */
   .cl-pop-range{ display:flex; align-items:center; gap:4px; }
   .cl-pop-range input{ flex:1; min-width:0; }
@@ -3700,7 +3702,7 @@ function closeTableHtml(docs){
       return `<td><input class="vp-in" style="width:${w[c.id]}px;" value="${escapeAttr(s)}" title="${escapeAttr(s)}" onchange="this.title=this.value; closeSetVal('${cid}','${c.id}',this.value.trim())"></td>`;
     }).join('');
     return `<tr${x.gone ? ' class="cl-gone"' : ''}><td class="tx-seq"><input type="checkbox" class="cl-pick" data-cid="${cid}" ${closePicked.has(x.id) ? 'checked' : ''} onchange="closePick(this.dataset.cid, this.checked)"></td><td class="tx-seq cl-lk cl-num">${n + 1}</td>
-      <td class="vp-sticky cl-lk" style="font-weight:800; color:${color};">${taxjEsc(x.c.name || '')}${x.gone ? ' <span class="cl-gone-tag">해지</span>' : ''}</td>
+      <td class="vp-sticky cl-lk">${taxjEsc(x.c.name || '')}${x.gone ? ' <span class="cl-gone-tag">해지</span>' : ''}</td>
       ${x.c.entityType === '개인' ? `<td class="cl-lk cl-num cl-off">${t(x.c.corpRegNo)}</td>` : lk(x.c.corpRegNo)}${lk(innerBizNo(x.c.bizNo || ''))}${lk(x.c.openDate, ' vp-div')}${cells}</tr>`;
   }).join('');
   return `<div class="table-scroll vat-prog" style="margin-top:8px;"><table><thead><tr>${head}</tr></thead>
