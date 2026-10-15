@@ -848,10 +848,12 @@
   .wl-memo-new textarea{ flex:1; font:inherit; font-size:13px; border:1px solid var(--border); border-radius:var(--radius-sm); padding:8px 10px; resize:vertical; background:#fff; color:var(--text); box-sizing:border-box; min-height:44px; }
   .wl-memo-new textarea:focus{ outline:2px solid var(--primary-soft); border-color:var(--primary); }
   .wl-memo-list{ margin-top:8px; max-height:240px; overflow-y:auto; }
-  .wl-memo-item{ padding:8px 2px; border-bottom:1px solid var(--border); }
+  .wl-memo-item{ padding:6px 2px 8px; border-bottom:1px solid var(--border); }
+  .wl-memo-day{ font-size:12px; font-weight:800; color:var(--primary-dark); margin:10px 0 2px; display:flex; align-items:center; gap:6px; }
+  .wl-memo-day span{ font-size:11px; font-weight:700; color:var(--muted); background:#f3eef1; border-radius:999px; padding:0 7px; }
   .wl-memo-text{ font-size:13px; white-space:pre-wrap; word-break:break-word; line-height:1.5; }
   .wl-memo-text mark{ background:#fde68a; border-radius:2px; padding:0 1px; }
-  .wl-memo-meta{ display:flex; justify-content:space-between; align-items:center; font-size:11.5px; color:var(--muted); margin-top:2px; }
+  .wl-memo-meta{ display:flex; justify-content:space-between; align-items:center; font-size:11.5px; color:var(--muted); margin-bottom:2px; }
   /* 요청 배경(2026.10.06): 아래 여백 없이 세 칸 모두 화면 맨 아래까지 같은 높이로 채움. 목록이 짧으면 칸 안이 빈 채로 둠.
      높이(--wl-h)는 fitWorklistHeight()가 화면 높이에 맞춰 계산. 3단으로 나란히 보이는 넓은 화면에서만 적용 */
   @media (min-width:1301px){
@@ -2751,9 +2753,17 @@ function renderWlMemo(){
     <div class="notice-top"><span></span><div class="today-title" onclick="wlMemoOpen=!wlMemoOpen; renderWlMemo();" style="cursor:pointer;" title="${wlMemoOpen ? '접기' : '펼치기'}">Memo</div>
       <div class="search-wrap open" style="justify-self:end;"><input type="text" id="wlMemoSearch" class="search-input" placeholder="메모 검색" value="${escapeAttr(wlMemoSearch)}" oninput="wlMemoOnSearch(this.value)" onkeydown="if(event.key==='Escape'){ this.value=''; wlMemoOnSearch(''); }"><span class="search-icon static" aria-hidden="true">${SEARCH_SVG}</span></div></div>
     ${!wlMemoOpen ? '' : `<div class="wl-memo-new"><textarea id="wlMemoInput" rows="2" placeholder="급하게 적어 둘 메모 (Ctrl+Enter로 저장)" onkeydown="if(event.key==='Enter' && (event.ctrlKey || event.metaKey) && !event.isComposing){ event.preventDefault(); wlMemoAdd(); }">${taxjEsc(draft)}</textarea><button class="btn primary xs" onclick="wlMemoAdd()">저장</button></div>
-    <div class="wl-memo-list">${list.length ? list.map(m => `<div class="wl-memo-item"><div class="wl-memo-text">${hl(m.text)}</div>
-        <div class="wl-memo-meta"><span>${taxjEsc(m.at)}${m.edited ? ` · 수정 ${taxjEsc(m.edited)}` : ''}</span><span class="row-actions" style="display:inline-flex; gap:2px;"><button class="icon-btn" onclick="wlMemoEdit(${m.id})" title="수정" aria-label="수정">${ICON_EDIT}</button><button class="icon-btn danger" onclick="wlMemoDelete(${m.id})" title="삭제" aria-label="삭제">${ICON_TRASH}</button></span></div></div>`).join('')
+    <div class="wl-memo-list">${list.length ? wlMemoGroups(list).map(([day, ms]) => `<div class="wl-memo-day">${taxjEsc(worklistDayLabel(day))}<span>${ms.length}</span></div>`
+        + ms.map(m => `<div class="wl-memo-item">
+        <div class="wl-memo-meta"><span>${taxjEsc(String(m.at).slice(11))}${m.edited ? ` · 수정 ${taxjEsc(m.edited.slice(0,10) === day ? m.edited.slice(11) : m.edited)}` : ''}</span><span class="row-actions" style="display:inline-flex; gap:2px;"><button class="icon-btn" onclick="wlMemoEdit(${m.id})" title="수정" aria-label="수정">${ICON_EDIT}</button><button class="icon-btn danger" onclick="wlMemoDelete(${m.id})" title="삭제" aria-label="삭제">${ICON_TRASH}</button></span></div>
+        <div class="wl-memo-text">${hl(m.text)}</div></div>`).join('')).join('')
       : `<div class="empty" style="padding:10px 0;">${q ? '검색과 맞는 메모가 없어요.' : '아직 메모가 없어요.'}</div>`}</div>`}`;
+}
+// [2026.10.15] "메모도 등록일자별로 목록형, 수정 버튼은 위에"(요청) - 등록한 날짜별로 묶어(최신 날짜 위) 날짜 제목 아래 시간·수정·삭제 줄, 그 아래 내용
+function wlMemoGroups(list){
+  const g = {};
+  list.forEach(m => { const d = String(m.at).slice(0,10); (g[d] = g[d] || []).push(m); });
+  return Object.keys(g).sort().reverse().map(d => [d, g[d]]);
 }
 // 세 칸 높이를 화면 맨 아래(24px 위)까지 맞춤. 너무 작은 창에서는 최소 560px
 function fitWorklistHeight(){
@@ -5953,6 +5963,8 @@ function submitAddMonth(ym, n){ let y = Number(ym.slice(0,4)), m = Number(ym.sli
 function submitDueOf(item, period, payMonth){
   const rule = SUBMIT_DUE[item];
   if(!rule || !/^\d{4}-\d{2}$/.test(period)) return '';
+  // [2026.10.15] 회사웹 변경 반영 - 지급의제: 12월 귀속 일용을 다음 해 1~2월에 지급하면 12월 지급으로 보고 1월 말일까지 제출
+  if(item === '일용지급' && period.slice(5,7) === '12' && payMonth > period && payMonth <= submitAddMonth(period, 2)) return `${Number(period.slice(0,4)) + 1}-01-31`;
   const base = submitAddMonth(rule === 'att15' ? period : payMonth, 1);
   if(rule === 'att15') return `${base}-15`;
   if(rule === 'pay10') return `${base}-10`;
@@ -5977,17 +5989,40 @@ function submitPayrollTargetS(cid, periods, keys){
     return (keys || [cid, cid + '@nextMonth']).some(k => Object.entries(((((rf[k] || {})[y] || {})[m] || {}).income) || {}).some(([f, v]) => fields.has(f) && Number(v)));
   });
 }
-// 반기 근로(간이)·연간 근로 제출금액 검증(회사웹 submitAmtInfo) - ✓ 일치 / ✕ 불일치
+// [2026.10.15] 회사웹 변경 반영 - 지급명세서 검증(원천세_2026.xlsx 거래처 시트 수식 그대로, 회사웹 submitAmtInfoM·submitAmtInfo). 제출금액이 적힌 칸만 ✓ 일치 / ✕ 불일치
+//   매월(간이) 사업 = 사업소득, 기타 = 기타소득(간이대상), 일용(지급) = 일용소득 - 그 귀속월·그 지급시기 줄(제출금액 = 월 데이터 .submit[칸])
+//   반기 근로 = 근로(과세+제출비과세) 상반기·하반기(익월지급은 1~5월 / 6~12월 귀속)
+//   연간 근로·퇴직·이자배당 = 1~12월 귀속 합(지급의제), 사업·기타(간이대상+간이미대상) = 지급 기준(익월지급은 전년 12월~11월 귀속)
+const SUBMIT_AMT_ITEMS = { 근로간이:true, 근로연간:true, 사업연간:true, 기타연간:true, 퇴직연간:true, 이자배당연간:true };
+const SUBMIT_AMT_M = { 사업간이:['사업'], 기타간이:['기타간이대상'], 일용지급:['일용'] };
+const SUBMIT_AMT_Y = { 근로:['근로과세','근로제출비과세'], 근로H1:['근로과세','근로제출비과세'], 근로H2:['근로과세','근로제출비과세'], 사업:['사업'], 기타:['기타간이대상','기타간이미대상'], 퇴직:['퇴직'], 이자배당:['이자'] };
+function submitAmtKeyS(itemKey, period){
+  const Y = { 근로연간:'근로', 사업연간:'사업', 기타연간:'기타', 퇴직연간:'퇴직', 이자배당연간:'이자배당' };
+  if(Y[itemKey]) return Y[itemKey];
+  if(SUBMIT_AMT_M[itemKey]) return itemKey;
+  return /H2$/.test(period) ? '근로H2' : '근로H1';
+}
+function submitAmtInfoMS(ek, period, itemKey){
+  const y = Number(String(period).slice(0,4)), m = Number(String(period).slice(5,7));
+  const d = (((taxjDoc('reviewFigures') || {})[ek] || {})[y] || {})[String(m)] || {};
+  const calc = (SUBMIT_AMT_M[itemKey] || []).reduce((a, f) => a + (Number((d.income || {})[f]) || 0), 0);
+  const v = (d.submit || {})[itemKey], rep = v == null || v === '' ? null : Number(v);
+  return { calc, rep, state: rep == null ? '' : rep === calc ? 'ok' : 'bad' };
+}
 function submitAmtInfoS(docs, cid, year, k){
   const rf = taxjDoc('reviewFigures') || {}, has = v => v != null && v !== '';
   const nxKey = cid + '@nextMonth', hasNxKey = !!rf[nxKey];
   const nxSingle = !hasNxKey && Object.entries((docs.s__filingTargets || {})[cid] || {}).some(([pp, t]) => pp.startsWith(String(year)) && t && t.nextMonthPay && !t.sameMonthPay);
-  const monthsOf = nx => k === '근로' ? [1,2,3,4,5,6,7,8,9,10,11,12] : k === '근로H1' ? (nx ? [1,2,3,4,5] : [1,2,3,4,5,6]) : (nx ? [6,7,8,9,10,11,12] : [7,8,9,10,11,12]);
+  const all = [1,2,3,4,5,6,7,8,9,10,11,12];
+  const monthsOf = nx => (k === '사업' || k === '기타') ? (nx ? [[year - 1, 12]].concat([1,2,3,4,5,6,7,8,9,10,11].map(m => [year, m])) : all.map(m => [year, m]))
+    : (k === '근로' || k === '퇴직' || k === '이자배당') ? all.map(m => [year, m])
+    : k === '근로H1' ? (nx ? [1,2,3,4,5] : [1,2,3,4,5,6]).map(m => [year, m]) : (nx ? [6,7,8,9,10,11,12] : [7,8,9,10,11,12]).map(m => [year, m]);
+  const fields = SUBMIT_AMT_Y[k] || ['근로과세','근로제출비과세'];
   let calc = 0, rep = null;
   [[cid, nxSingle]].concat(hasNxKey ? [[nxKey, true]] : []).forEach(([key, nx]) => {
-    const yd = (rf[key] || {})[year] || {};
-    monthsOf(nx).forEach(m => { const inc = (yd[String(m)] || {}).income || {}; calc += ['근로과세','근로제출비과세'].reduce((a, f) => a + (Number(inc[f]) || 0), 0); });
-    const v = (yd.submitYear || {})[k]; if(has(v)) rep = (rep || 0) + Number(v);
+    monthsOf(nx).forEach(([yy, m]) => { const inc = ((((rf[key] || {})[yy] || {})[String(m)]) || {}).income || {}; calc += fields.reduce((a, f) => a + (Number(inc[f]) || 0), 0); });
+    const v = (((rf[key] || {})[year] || {}).submitYear || {})[k];
+    if(has(v)) rep = (rep || 0) + Number(v);
   });
   return { calc, rep, state: rep == null ? '' : rep === calc ? 'ok' : 'bad' };
 }
@@ -6036,7 +6071,7 @@ function submitRows(){
         const st = !(!naMark && (!!auto || manual)) ? 'off' : (date || note) ? 'done' : 'todo';
         if(st !== 'off') anyOn = true;
         const due = monthly ? submitDueOf(it, pp, payMonth) : '';
-        const amt = !monthly && (it === '근로간이' || it === '근로연간') ? submitAmtInfoS(docs, cid, Number(String(pp).slice(0,4)), it === '근로연간' ? '근로' : /H2$/.test(pp) ? '근로H2' : '근로H1') : null;
+        const amt = monthly ? (SUBMIT_AMT_M[it] ? submitAmtInfoMS(d.ek, pp, it) : null) : SUBMIT_AMT_ITEMS[it] ? submitAmtInfoS(docs, cid, Number(String(pp).slice(0,4)), submitAmtKeyS(it, pp)) : null;
         if(dueView){ const dueM = due ? due.slice(0,7) : submitAddMonth(pp, 1); if(st === 'off' || dueM !== dueYm) return { st:'hide' }; hit = true; }
         return { st, date, note, due, dueLeft: due ? dleft(due) : null, amt };
       });
