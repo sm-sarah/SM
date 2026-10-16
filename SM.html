@@ -1278,8 +1278,13 @@
   .sm-help-btn{ display:inline-flex; align-items:center; justify-content:center; width:24px; height:24px; flex:none; border:1px solid var(--border); border-radius:50%; background:#fff; color:var(--muted); font-size:12px; font-weight:800; cursor:pointer; padding:0; font-family:inherit; }
   .sm-help-btn:hover{ color:var(--primary-dark); border-color:var(--primary); }
   /* [2026.10.16] 거래처 표 - 회사웹 거래처 표와 같은 짜임 + "칸 안 좌우 여백이 너무 넓지 않게"(요청): 표를 내용 폭만큼만(가운데), 칸 여백 8px 9px */
-  table.cl-table{ width:auto; min-width:0; margin:0 auto; }
-  table.cl-table th, table.cl-table td{ padding:8px 12px; font-size:13px; white-space:nowrap; }
+  /* [2026.10.16] "표 좌우 여백이 뭐야"(요청) - 표는 카드 폭 전체를 쓰고, 다른 칸은 내용 폭만큼만(width:1%), 남는 폭은 상호명 칸이 가져감 */
+  table.cl-table{ width:100%; }
+  table.cl-table th, table.cl-table td{ padding:8px 12px; font-size:13px; white-space:nowrap; width:1%; }
+  table.cl-table th.cl-name-th, table.cl-table td.cl-name-cell{ width:auto; }
+  /* [2026.10.16] 회사웹 상세구분 칩(본점·지점·성실·면세 등) + 메모 있으면 * (마우스를 올리면 내용) */
+  .cl-subtag{ position:relative; display:inline-flex; align-items:center; margin-left:5px; padding:1px 7px; border-radius:8px; font-size:9.5px; font-weight:800; vertical-align:middle; }
+  .cl-subtag sup{ position:absolute; top:-5px; right:-4px; font-size:10px; font-weight:900; line-height:1; cursor:help; }
   table.cl-table td.cl-na, table.cl-table td.cl-na *{ color:#d4c6cd !important; font-weight:400 !important; }
   table.cl-table td.cl-off{ background:#faf6f8; color:#d9cdd3 !important; }
   table.cl-table td.cl-off *{ color:#d9cdd3 !important; }
@@ -4490,17 +4495,32 @@ function setClientsView(v){
   clientsView = v;
   if(activeTab !== 'clients') switchTab('clients'); else renderClients();
 }
+// [2026.10.16] "회사웹의 본점·지점 등 특이사항과 * 내용이 연동 안 됨"(요청) - Tax.J getClientSubTags·activeSubTagNoteText와 같은 기준으로
+// 연결된 회사웹 거래처(s__clients)의 subTags(없으면 entitySubType)를 상호명 옆 칩으로, 지금 표시 중인 메모가 있으면 * (마우스를 올리면 내용)
+function clSubTagsHtml(c){
+  const tid = taxjIdOf(c); if(tid == null) return '';
+  const t = taxjClientsList().find(x => String(x.id) === String(tid)); if(!t) return '';
+  const tags = Array.isArray(t.subTags) ? t.subTags : (t.entitySubType ? [{ key: t.entitySubType }] : []);
+  const fg = t.entityType === '법인' ? '#0b5a78' : t.entityType === '개인' ? '#be185d' : 'var(--muted)';
+  const bg = t.entityType === '법인' ? '#dceef5' : t.entityType === '개인' ? '#fce9f1' : '#f3eef1';
+  return tags.filter(x => x && x.key).map(x => {
+    let note = '';
+    if(Array.isArray(x.notes)){ const n = x.notes.find(y => y.id === x.activeNoteId); note = n ? (n.text || '') : ''; }
+    else note = x.note || (x.key === '성실' ? ((t.faithfulYears && t.faithfulYears.length) ? `${[...t.faithfulYears].sort().join(', ')}년 귀속` : t.faithfulTaxYear ? `${t.faithfulTaxYear}년 귀속` : '') : '');
+    return `<span class="cl-subtag" style="background:${bg}; color:${fg};">${taxjEsc(x.key)}${note ? `<sup title="${escapeAttr(note)}" onclick="event.stopPropagation(); smAlert(${escapeAttr(JSON.stringify(x.key))}, ${escapeAttr(JSON.stringify(note))}, { icon:'*' })">*</sup>` : ''}</span>`;
+  }).join('');
+}
 function renderReadonlyClientTable(list, terminated){
   const e = v => String(v == null || v === '' ? '-' : v).replace(/&/g,'&amp;').replace(/</g,'&lt;');
   if(!list.length) return '<div class="empty">아직 가져온 목록이 없어요. 위의 "Tax.J 엑셀 가져오기"로 전체거래처가 들어 있는 엑셀을 올려주세요.</div>';
   const ec = c => c.type === '법인' ? '#0b5a78' : c.type === '개인' ? '#be185d' : 'inherit';
   const na = v => String(v == null ? '' : v).trim() ? '' : 'cl-na';
   return `<div class="table-scroll"><table class="cl-table">
-    <thead><tr><th>순번</th><th>수임구분</th><th>사업자구분</th><th>상호명</th><th>사업자번호</th><th>법인등록번호</th><th>대표자</th><th>수임료</th><th>계약일</th><th>수임시작일</th>${terminated ? '<th>해지일</th><th>종료월</th><th>해지사유</th>' : ''}</tr></thead>
+    <thead><tr><th>순번</th><th>수임구분</th><th>사업자구분</th><th class="cl-name-th">상호명</th><th>사업자번호</th><th>법인등록번호</th><th>대표자</th><th>수임료</th><th>계약일</th><th>수임시작일</th>${terminated ? '<th>해지일</th><th>종료월</th><th>해지사유</th>' : ''}</tr></thead>
     <tbody>${list.map(c => `<tr>
       <td class="${na(c.seq)}">${e(c.seq)}</td><td class="cl-taxtype ${c.taxType === '기장대행' ? 'kj' : c.taxType === '신고대리' ? 'sd' : ''} ${na(c.taxType)}">${e(c.taxType)}</td>
       <td style="color:${ec(c)}; font-weight:800;">${e(c.type)}</td>
-      <td style="color:${ec(c)}; font-weight:800;">${e(c.name)}</td><td class="${na(c.biz)}">${e(c.biz)}</td><td class="${c.type === '개인' ? 'cl-off' : na(c.corpNo)}">${e(c.corpNo)}</td><td class="${na(c.ceo)}">${e(c.ceo)}</td><td class="num ${na(c.fee)}">${e(c.fee)}</td>
+      <td class="cl-name-cell" style="color:${ec(c)}; font-weight:800;">${e(c.name)}${clSubTagsHtml(c)}</td><td class="${na(c.biz)}">${e(c.biz)}</td><td class="${c.type === '개인' ? 'cl-off' : na(c.corpNo)}">${e(c.corpNo)}</td><td class="${na(c.ceo)}">${e(c.ceo)}</td><td class="num ${na(c.fee)}">${e(c.fee)}</td>
       <td class="${na(c.contractDate)}">${e(c.contractDate)}</td><td class="${na(c.start)}">${e(c.start)}</td>
       ${terminated ? `<td class="${na(c.terminationDate)}">${e(c.terminationDate)}</td><td class="${na(c.terminationMonth)}">${e(c.terminationMonth)}</td><td class="${na(c.terminationReason)}">${e(c.terminationReason)}</td>` : ''}
     </tr>`).join('')}</tbody></table></div>`;
@@ -4599,7 +4619,7 @@ function renderClients(){
       </div>
       <div class="table-scroll">
       <table class="cl-table">
-        <thead><tr><th>순번</th><th>수임구분</th><th>사업자구분</th><th>상호명</th><th>사업자번호</th><th>법인등록번호</th><th>대표자</th><th>수임료</th><th>계약일</th><th>수임시작일</th><th style="text-align:center;">관리</th></tr></thead>
+        <thead><tr><th>순번</th><th>수임구분</th><th>사업자구분</th><th class="cl-name-th">상호명</th><th>사업자번호</th><th>법인등록번호</th><th>대표자</th><th>수임료</th><th>계약일</th><th>수임시작일</th><th style="text-align:center;">관리</th></tr></thead>
         <tbody>
           ${sortedClients().map(c => {
             const ov = c.overrides || {};
@@ -4614,7 +4634,7 @@ function renderClients(){
               <td class="${na('seq', c.seq)}">${cellV('seq', c.seq)}</td>
               <td class="cl-taxtype ${c.taxType === '기장대행' ? 'kj' : c.taxType === '신고대리' ? 'sd' : ''}${na('taxType', c.taxType)}">${cellV('taxType', c.taxType)}</td>
               <td style="color:${ec}; font-weight:800;">${c.type || '-'}</td>
-              <td class="cl-name-cell" onclick="openClientDetail(${c.id})" title="거래처 모아보기" style="color:${ec}; font-weight:800;">${cellV('name', c.name)}</td>
+              <td class="cl-name-cell" onclick="openClientDetail(${c.id})" title="거래처 모아보기" style="color:${ec}; font-weight:800;">${cellV('name', c.name)}${clSubTagsHtml(c)}</td>
               <td class="${na('biz', c.biz)}">${cellV('biz', c.biz)}</td>
               <td class="${c.type === '개인' ? 'cl-off' : na('corpNo', c.corpNo)}">${cellV('corpNo', c.corpNo)}</td>
               <td class="${na('ceo', c.ceo)}">${cellV('ceo', c.ceo)}</td>
