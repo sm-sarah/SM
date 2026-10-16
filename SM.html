@@ -1109,6 +1109,18 @@
   .vat-prog .vp-th{ font:inherit; color:inherit; background:transparent; border:none; padding:2px; cursor:pointer; text-align:inherit; line-height:1.3; }
   .vat-prog .vp-th:hover{ color:var(--primary-dark); }
   .vat-prog .vp-prev-btn{ width:26px; height:26px; }   /* [2026.10.16] 전기 보기 */
+  .vat-prog thead th.vp-grp{ color:var(--primary-dark); font-size:12px; box-shadow:inset 0 -1px 0 var(--border), inset -1px 0 0 var(--border), inset 1px 0 0 var(--border); }   /* [2026.10.16] 묶음 머리글 */
+  .vat-prog .vp-range{ display:inline-flex; align-items:center; gap:2px; white-space:nowrap; color:var(--muted-soft); }
+  .vat-prog .vp-range .vp-in{ width:122px; }
+  .vp-arr-top{ display:flex; justify-content:flex-end; margin-bottom:8px; }
+  .vp-arr{ display:flex; flex-direction:column; border:1px solid var(--border); border-radius:12px; overflow:hidden; max-height:52vh; overflow-y:auto; text-align:left; }
+  .vp-arr-row{ display:flex; align-items:center; gap:6px; padding:6px 10px; border-top:1px solid var(--border); font-size:13px; }
+  .vp-arr-row:first-child{ border-top:none; }
+  .vp-arr-row.off .vp-arr-name{ color:var(--muted-soft); }
+  .vp-arr-mv{ border:none; background:transparent; color:var(--muted); cursor:pointer; font-size:11px; padding:2px 4px; }
+  .vp-arr-mv:disabled{ opacity:.3; cursor:default; }
+  .vp-arr-name{ flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--text); }
+  .vp-arr-grp{ width:96px; font:inherit; font-size:12.5px; border:1px solid var(--border); border-radius:8px; padding:4px 8px; }
   .vp-prev{ display:flex; flex-direction:column; text-align:left; border:1px solid var(--border); border-radius:12px; overflow:hidden; }
   .vp-prev-row{ display:grid; grid-template-columns:minmax(110px, 38%) 1fr; gap:10px; padding:8px 12px; font-size:13px; border-top:1px solid var(--border); }
   .vp-prev-row:first-child{ border-top:none; }
@@ -3425,7 +3437,7 @@ let vatView = 'overview';
 const VAT_VIEWS = [['overview','총괄'], ['prog','진행']];
 function setVatView(v){ vatView = v; if(activeTab !== 'vat') switchTab('vat'); else renderVat(); }
 function vatViewTabsHtml(){ return `<div class="cl-subtabs pay-maintabs">${VAT_VIEWS.map(([k, l]) => `<button class="cl-subtab ${vatView === k ? 'on' : ''}" onclick="setVatView('${k}')">${l}</button>`).join('')}</div>`; }
-const VAT_PROG_TYPES = [['text','글자'], ['check','체크'], ['num','숫자'], ['date','날짜'], ['select','드롭다운']];   // [2026.10.16] 날짜·드롭다운 추가(요청). 드롭다운 선택지는 col.opts
+const VAT_PROG_TYPES = [['text','글자'], ['check','체크'], ['num','숫자'], ['date','날짜'], ['range','기간'], ['select','드롭다운']];   // [2026.10.16] 날짜·기간·드롭다운 추가(요청). 드롭다운 선택지는 col.opts, 기간은 'YYYY-MM-DD~YYYY-MM-DD'
 // 회사웹에서 연결하는 칸 - 엑셀 머리글이 이 이름(공백 무시)이면 내 항목으로 만들지 않음
 const VAT_PROG_LINK_RE = /^(순번|상호|개업일|사업자번호|예정고지대상|예정고지\(부과\)제외사유|제외사유|신고의무여부|직전과세기간공급가액합계액|예정|관할세무서|담당자전화번호)$/;
 // 처음 엑셀에서 항목을 만들 때 '다음 기수로 이어받기'를 켜 둘 항목(거래처 특이사항). 항목 수정에서 바꿀 수 있음
@@ -3584,9 +3596,10 @@ function vatProgSet(cid, colId, val, rerender){
 }
 function vatProgNumInput(el, cid, colId){ const v = vatProgToNum(el.value); el.value = vatProgFmtNum(v); vatProgSet(cid, colId, v); }
 async function vatProgAddCol(){
-  const r = await smForm('진행 항목 추가', [{ label:'항목 이름', placeholder:'예: 자료 요청' }, { label:'입력 방식', options: VAT_PROG_TYPES.map(x => x[1]), value:'글자' }, { label:'다음 기수로 이어받기', options:['아니오','예'], value:'아니오' }], { okText:'추가' });
+  const r = await smForm('진행 항목 추가', [{ label:'항목 이름', placeholder:'예: 자료 요청' }, { label:'입력 방식', options: VAT_PROG_TYPES.map(x => x[1]), value:'글자' }, { label:'다음 기수로 이어받기', options:['아니오','예'], value:'아니오' }, { label:'묶음 (위 머리글, 예: 매출·매입 - 비우면 묶지 않음)', placeholder:'예: 매출', value:'' }], { okText:'추가' });
   if(!r || !r[0].trim()) return;
   const col = { id: vatProgUid('c'), label: r[0].trim(), type: (VAT_PROG_TYPES.find(x => x[1] === r[1]) || VAT_PROG_TYPES[0])[0], carry: r[2] === '예' };
+  if((r[3] || '').trim()) col.group = r[3].trim();   // [2026.10.16] 묶음(두 줄 머리글)
   if(col.type === 'select' && !(await vatProgEditOpts(col))) return;
   vatProgCols.push(col);
   renderVat(); scheduleGoogleSave();
@@ -3601,7 +3614,7 @@ async function vatProgEditOpts(col){
 }
 async function vatProgEditCol(id){
   const col = vatProgCols.find(c => c.id === id); if(!col) return;
-  const r = await smForm('진행 항목 수정', [{ label:'항목 이름', type:'textarea', rows:2, value: col.label }, { label:'입력 방식', options: VAT_PROG_TYPES.map(x => x[1]), value: (VAT_PROG_TYPES.find(x => x[0] === col.type) || VAT_PROG_TYPES[0])[1] }, { label:'다음 기수로 이어받기', options:['아니오','예'], value: col.carry ? '예' : '아니오' }], { okText:'저장', cancelText:'삭제', icon:'✎' });
+  const r = await smForm('진행 항목 수정', [{ label:'항목 이름', type:'textarea', rows:2, value: col.label }, { label:'입력 방식', options: VAT_PROG_TYPES.map(x => x[1]), value: (VAT_PROG_TYPES.find(x => x[0] === col.type) || VAT_PROG_TYPES[0])[1] }, { label:'다음 기수로 이어받기', options:['아니오','예'], value: col.carry ? '예' : '아니오' }, { label:'묶음 (위 머리글, 예: 매출·매입 - 비우면 묶지 않음)', placeholder:'예: 매출', value: col.group || '' }], { okText:'저장', cancelText:'삭제', icon:'✎' });
   if(r === undefined) return;   // [2026.10.15] 닫기(X) - 아무것도 안 바꿈
   if(r === null){
     const key = vatProgKey(), cur = vatProgKeyOrder(key);
@@ -3627,6 +3640,7 @@ async function vatProgEditCol(id){
     if(r[0].trim()) col.label = r[0].trim();
     col.type = (VAT_PROG_TYPES.find(x => x[1] === r[1]) || VAT_PROG_TYPES[0])[0];
     col.carry = r[2] === '예';
+    if((r[3] || '').trim()) col.group = r[3].trim(); else delete col.group;
     if(col.type === 'select') await vatProgEditOpts(col);   // 드롭다운이면 선택지 고치기(입력하고 추가 · 순서 · 삭제)
   }
   renderVat(); scheduleGoogleSave();
@@ -3653,25 +3667,71 @@ async function vatProgHideCols(){
   if(v.freeze && v.hidden.includes(v.freeze)) v.freeze = 'name';
   renderVat(); scheduleGoogleSave();
 }
+// [2026.10.16] "매출 밑에 여러 항목, 매입 밑에 여러 항목 두 줄로 + 항목 배치 순서"(요청) - 항목마다 묶음(col.group)을 두고, 붙어 있는 같은 묶음은 위 머리글 한 칸으로 합침.
+// 배치 창: ▲▼로 순서, 오른쪽 칸에 묶음 이름. '(매출)·(매입)으로 묶기'는 이름 끝 (매출)/(매입)을 떼어 묶음으로 옮김
+async function vatProgArrange(){
+  const live = vatProgLiveCols(); if(!live.length) return smAlert('배치할 항목이 없어요');
+  const tmp = live.map(c => ({ c, label: c.label, group: c.group || '' }));
+  const hid = vatProgViewObj().hidden;
+  const draw = () => {
+    const box = document.getElementById('vpArrList'); if(!box) return;
+    box.innerHTML = tmp.map((x, i) => `<div class="vp-arr-row${hid.includes(x.c.id) ? ' off' : ''}">
+      <button type="button" class="vp-arr-mv" data-mv="${i},-1" ${i ? '' : 'disabled'} title="위로">▲</button><button type="button" class="vp-arr-mv" data-mv="${i},1" ${i < tmp.length - 1 ? '' : 'disabled'} title="아래로">▼</button>
+      <span class="vp-arr-name" title="${escapeAttr(x.label)}">${taxjEsc(String(x.label).replace(/\s+/g, ' '))}${hid.includes(x.c.id) ? ' <small>(숨김)</small>' : ''}</span>
+      <input class="vp-arr-grp" data-g="${i}" value="${escapeAttr(x.group)}" placeholder="묶음" list="vpArrGroups"></div>`).join('')
+      + `<datalist id="vpArrGroups">${[...new Set(tmp.map(x => x.group).filter(Boolean).concat(['매출','매입']))].map(g => `<option value="${escapeAttr(g)}">`).join('')}</datalist>`;
+  };
+  const html = `<div class="vp-arr-top"><button type="button" class="btn ghost xs" id="vpArrAuto" title="이름 끝의 (매출)·(매입)을 떼어 묶음으로 옮겨요">(매출)·(매입)으로 묶기</button></div><div id="vpArrList" class="vp-arr"></div>`;
+  const p = smDialog({ title:'항목 배치', message:'▲▼로 순서를 바꾸고, 묶음에 같은 이름(예: 매출)을 적으면 붙어 있는 항목끼리 위 머리글 한 칸으로 묶여요.', html, icon:'✎', okText:'적용', wide:true });
+  draw();
+  const box = document.getElementById('vpArrList');
+  if(box){
+    box.addEventListener('click', e => { const b = e.target.closest('[data-mv]'); if(!b) return; const [i, d] = b.dataset.mv.split(',').map(Number); const j = i + d; if(j < 0 || j >= tmp.length) return; [tmp[i], tmp[j]] = [tmp[j], tmp[i]]; draw(); });
+    box.addEventListener('input', e => { const g = e.target.closest('[data-g]'); if(g) tmp[Number(g.dataset.g)].group = g.value.trim(); });
+  }
+  const auto = document.getElementById('vpArrAuto');
+  if(auto) auto.addEventListener('click', () => {
+    tmp.forEach(x => { const m = String(x.label).match(/^([\s\S]*?)\s*\((매출|매입)\)\s*$/); if(m && m[1].trim()){ x.label = m[1].trim(); x.group = m[2]; } });
+    // 같은 묶음이 떨어져 있으면 첫 자리 쪽으로 모음(묶음 없는 항목 순서는 그대로)
+    const out = [], done = new Set();
+    tmp.forEach(x => { if(!x.group){ out.push(x); return; } if(done.has(x.group)) return; done.add(x.group); tmp.filter(y => y.group === x.group).forEach(y => out.push(y)); });
+    tmp.splice(0, tmp.length, ...out); draw();
+  });
+  if(!(await p)) return;
+  tmp.forEach(x => { x.c.label = x.label; if(x.group) x.c.group = x.group; else delete x.c.group; });
+  vatProgCols = tmp.map(x => x.c).concat(vatProgCols.filter(c => !vatProgColLive(c)));   // 이 기수부터 뺀 항목은 뒤에 그대로
+  renderVat(); scheduleGoogleSave();
+}
+// [2026.10.16] 기간 입력 - 시작일·종료일 두 칸 → 'YYYY-MM-DD~YYYY-MM-DD'로 저장
+function vatProgRangeInput(el, cid, colId){
+  const td = el.closest('td'), [a, b] = [...td.querySelectorAll('input[type=date]')].map(x => x.value);
+  vatProgSet(cid, colId, a || b ? `${a || ''}~${b || ''}` : '');
+}
 // 고정할 칸 수만큼 왼쪽에 붙임(칸 폭은 그린 뒤에 재서 맞춤)
 function vatProgApplyFreeze(){
   const t = document.querySelector('#tab-vat .vat-prog table'); if(!t || !t.tHead) return;
   const fk = vatProgViewObj().freeze;
   const vk = vatProgVisibleKeys(), fi = fk ? vk.indexOf(fk) : -1, nLink = vk.filter(k => VAT_PROG_LINK.some(x => x[0] === k)).length;
   const n = fk ? fi + 2 + (t.dataset.prev === '1' && fi >= nLink ? 1 : 0) : 1;   // 순번 + 고른 칸까지 (없음이면 순번만). [2026.10.16] 내 항목까지 고르면 사이의 전기 칸도
-  const hs = t.tHead.rows[0].cells; if(!hs.length) return;
-  const base = hs[0].offsetLeft, lefts = [];
-  for(let i = 0; i < n && i < hs.length; i++) lefts.push(hs[i].offsetLeft - base);
-  for(const r of t.rows){
-    if(r.cells.length < n) continue;
-    for(let i = 0; i < n; i++){ const c = r.cells[i]; c.classList.add('vp-frz'); c.style.left = lefts[i] + 'px'; if(i === n - 1) c.classList.add('vp-frz-last'); }
-  }
+  // [2026.10.16] 두 줄 머리글(묶음)이면 칸 번호가 줄마다 달라 → 본문 첫 줄로 고정 끝 위치를 재고, 모든 칸을 위치로 판단
+  const hr = t.tHead.rows; if(!hr.length) return;
+  if(hr.length > 1){ const h0 = hr[0].offsetHeight; [...hr[1].cells].forEach(c => { c.style.top = h0 + 'px'; }); }
+  const ref = [...(t.tBodies[0] ? t.tBodies[0].rows : [])].find(r => r.cells.length >= n) || (hr.length === 1 ? hr[0] : null);
+  if(!ref || !ref.cells.length) return;
+  const base = ref.cells[0].getBoundingClientRect().left; let edge = ref.cells[Math.min(n, ref.cells.length) - 1].getBoundingClientRect().right - base;   // 머리글(sticky)은 offsetLeft 기준이 달라 화면 위치로 잼
+  let edge2 = edge;   // 묶음 머리글 중간까지 고정하면 그 묶음 끝까지 고정(위 머리글이 반만 붙어 겹치지 않게)
+  for(const c of t.tHead.rows[0].cells){ const b = c.getBoundingClientRect(); if(b.left - base < edge - 1 && b.right - base > edge + 1) edge2 = Math.max(edge2, b.right - base); }
+  edge = edge2;
+  const marks = [];
+  for(const r of t.rows) for(const c of r.cells){ const b = c.getBoundingClientRect(), l = b.left - base, rr = b.right - base; if(rr <= edge + 1) marks.push([c, l, rr >= edge - 1]); }
+  marks.forEach(([c, l, last]) => { c.classList.add('vp-frz'); c.style.left = l + 'px'; if(last) c.classList.add('vp-frz-last'); });
 }
 function vatProgHtml(docs){
   const key = vatProgKey(), plab = vatProgKeyLabel(key), per = vatProg[key] || {}, pk = vatProgPrevKey();
   const bar = `<div class="toolbar"><div class="spacer"></div>
     ${!vatProgHasData(key) && pk ? `<button class="btn primary xs" onclick="vatProgFromPrev()" title="이어받기 항목(↻)만 가져와요">${vatProgKeyLabel(pk)}에서 이어받기</button>` : ''}
     <span class="vp-view">열 고정 <select onchange="vatProgSetFreeze(this.value)"><option value="" ${!vatProgViewObj().freeze ? 'selected' : ''}>순번만</option>${vatProgAllCols().filter(c => vatProgVisibleKeys().includes(c.key)).map(c => `<option value="${escapeAttr(c.key)}" ${vatProgViewObj().freeze === c.key ? 'selected' : ''}>${taxjEsc(c.label)}까지</option>`).join('')}</select></span>
+    <button class="btn ghost xs" onclick="vatProgArrange()" title="항목 순서와 묶음(매출·매입 등 두 줄 머리글)을 정해요">항목 배치</button>
     <button class="btn ghost xs" onclick="vatProgHideCols()" title="안 쓰는 칸을 숨겨요">칸 숨기기${vatProgViewObj().hidden.length ? ` (${vatProgViewObj().hidden.length})` : ''}</button>
     <button class="sm-tool-ic" onclick="vatProgAddCol()" title="항목 추가" aria-label="항목 추가">${ICON_PLUS}</button>
     ${vatProgHasData(key) ? '<button class="btn ghost xs" onclick="vatProgMove()" title="이 기수에 넣은 값을 다른 기수로 옮겨요">다른 기수로 옮기기</button><button class="btn ghost xs danger" onclick="vatProgClear()" title="이 기수에 적은 내 항목 값을 지워요">비우기</button>' : ''}
@@ -3702,6 +3762,20 @@ function vatProgHtml(docs){
   // [2026.10.16] 전기 보기 칸 - 전 기수에 이 거래처 값이 있을 때만 아이콘
   const prevOn = !!pk && Object.keys(vatProg[pk] || {}).some(id => vatProgPrevVals(pk, id).length);
   const prevHead = prevOn ? `<th style="text-align:center;" title="${escapeAttr(vatProgKeyLabel(pk))} 입력 보기">전기</th>` : '';
+  const myCols = vatProgCols.filter(c => shown(c.id)), grouped = myCols.some(c => c.group);
+  const thOf = (c, rs) => `<th${rs ? ' rowspan="2"' : ''} style="${c.type === 'check' ? 'text-align:center;' : ''}"><button class="vp-th" onclick="vatProgEditCol('${c.id}')" title="눌러서 이름·입력 방식·이어받기·묶음 수정 또는 삭제${c.carry ? '\n(다음 기수로 이어받는 항목)' : ''}">${taxjEsc(c.label).replace(/\n/g, '<br>')}${c.carry ? '<span class="vp-carry">↻</span>' : ''}</button></th>`;
+  // [2026.10.16] 묶음이 있으면 두 줄 머리글: 위 = 묶음 이름(붙어 있는 같은 묶음 합침) / 묶음 없는 칸은 두 줄 합침
+  let head1 = '', head2 = '';
+  if(grouped){
+    for(let i = 0; i < myCols.length; ){
+      const g = myCols[i].group;
+      if(!g){ head1 += thOf(myCols[i], true); i++; continue; }
+      let j = i; while(j < myCols.length && myCols[j].group === g) j++;
+      head1 += `<th colspan="${j - i}" class="vp-grp"><button class="vp-th" onclick="vatProgArrange()" title="눌러서 항목 배치·묶음 바꾸기">${taxjEsc(g)}</button></th>`;
+      head2 += myCols.slice(i, j).map(c => thOf(c, false)).join('');
+      i = j;
+    }
+  }
   const head = prevHead + vatProgCols.filter(c => shown(c.id)).map(c => `<th style="${c.type === 'check' ? 'text-align:center;' : ''}"><button class="vp-th" onclick="vatProgEditCol('${c.id}')" title="눌러서 이름·입력 방식·이어받기 수정 또는 삭제${c.carry ? '\n(다음 기수로 이어받는 항목)' : ''}">${taxjEsc(c.label).replace(/\n/g, '<br>')}${c.carry ? '<span class="vp-carry">↻</span>' : ''}</button></th>`).join('');
   const rows = list.map((x, n) => {
     const cid = escapeAttr(x.c.id), v = per[x.c.id] || {}, t = s => s || s === 0 ? taxjEsc(String(s)) : na;
@@ -3718,13 +3792,16 @@ function vatProgHtml(docs){
       const s = vatProgFmtNum(val);
       if(c.type === 'num') return `<td><input class="vp-in" style="width:${w[c.id]}px; text-align:right;" value="${escapeAttr(s)}" onchange="vatProgNumInput(this,'${cid}','${c.id}')"></td>`;
       if(c.type === 'date') return `<td><input type="date" class="vp-in" style="width:128px;" value="${escapeAttr(/^\d{4}-\d{2}-\d{2}$/.test(s) ? s : '')}" title="${escapeAttr(s)}" onchange="vatProgSet('${cid}','${c.id}',this.value)"></td>`;
+      if(c.type === 'range'){ const [ra, rb] = String(val || '').split('~'); const dv = x => /^\d{4}-\d{2}-\d{2}$/.test(x || '') ? x : ''; return `<td><span class="vp-range"><input type="date" class="vp-in" value="${dv(ra)}" onchange="vatProgRangeInput(this,'${cid}','${c.id}')"><span>~</span><input type="date" class="vp-in" value="${dv(rb)}" onchange="vatProgRangeInput(this,'${cid}','${c.id}')"></span></td>`; }
       if(c.type === 'select'){ const opts = c.opts || []; return `<td><select class="vp-in" style="min-width:84px;" onchange="vatProgSet('${cid}','${c.id}',this.value)"><option value=""></option>${(s && !opts.includes(s) ? [s] : []).concat(opts).map(o => `<option ${o === s ? 'selected' : ''}>${taxjEsc(o)}</option>`).join('')}</select></td>`; }
       return `<td><input class="vp-in" style="width:${w[c.id]}px;" value="${escapeAttr(s)}" title="${escapeAttr(s)}" onchange="this.title=this.value; vatProgSet('${cid}','${c.id}',this.value.trim())"></td>`;
     }).join('');
     const prevCell = prevOn ? `<td style="text-align:center;">${vatProgPrevVals(pk, x.c.id).length ? `<button class="sm-tool-ic vp-prev-btn" onclick="vatProgShowPrev('${cid}')" title="${escapeAttr(vatProgKeyLabel(pk))} 입력 보기" aria-label="전기 보기">${ICON_HISTORY}</button>` : ''}</td>` : '';
     return `<tr><td class="tx-seq">${n + 1}</td>${link}${prevCell}${mine}</tr>`;
   }).join('');
-  return bar + segRow + `<div class="table-scroll vat-prog" style="margin-top:8px;"><table data-prev="${prevOn ? 1 : 0}"><thead><tr><th class="tx-seq">순번</th>${linkHead}${head}</tr></thead>
+  return bar + segRow + `<div class="table-scroll vat-prog" style="margin-top:8px;"><table data-prev="${prevOn ? 1 : 0}"><thead>${grouped
+      ? `<tr><th class="tx-seq" rowspan="2">순번</th>${linkHead.replace(/<th /g, '<th rowspan="2" ')}${prevHead.replace('<th ', '<th rowspan="2" ')}${head1}</tr><tr>${head2}</tr>`
+      : `<tr><th class="tx-seq">순번</th>${linkHead}${head}</tr>`}</thead>
     <tbody>${rows || `<tr><td colspan="${vis.length + 1 + (prevOn ? 1 : 0)}"><div class="empty" style="padding:18px;">${q ? '검색 결과가 없어요.' : '거래처가 없어요.'}</div></td></tr>`}</tbody></table></div>`;
 }
 // [2026.10.14] "스크롤이 끝으로 가면 다시 처음으로 온다"(요청) - 회사웹 실시간 연결이 바뀔 때마다 화면을 다시 그려 표 스크롤이 0으로 돌아갔음.
