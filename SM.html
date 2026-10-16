@@ -7358,7 +7358,8 @@ function innerCorpHtml(docs){
     return [l, l === '폴더 링크' ? innerLink(v) : taxjEsc(l === '사업자번호' ? innerBizNo(v) : v) + innerCopyBtn(l === '사업자번호' ? innerBizNo(v) : v)];
   });
   const extra = info.filter(it => !INNER_CORP_ORDER.includes(it.label) && it.label !== '회사명');
-  return `<div style="display:flex; gap:12px; flex-wrap:wrap; align-items:flex-start;">
+  // [2026.10.16] "나란히 놓인 카드 세로폭이 다 같으면 통일감"(요청) - 같은 줄 카드는 더 큰 카드 높이에 맞춰 늘림(align-items:stretch)
+  return `<div style="display:flex; gap:12px; flex-wrap:wrap; align-items:stretch;">
     ${innerProfileCard(docs.s__companyName || '회사명 미등록', 'CORPORATE PROFILE', rows, '회사웹 설정 › 회사정보에 등록된 기본정보가 없어요.')}
     ${innerKeysCard('공용정보', acc.concat(extra), '등록된 계정이 없어요.', true)}</div>`;
 }
@@ -7369,10 +7370,10 @@ function innerTeamHtml(docs){
   if(String(ti.webUrl || '').trim()) rows.push(['웹주소', innerLink(ti.webUrl)]);
   if(String(ti.note || '').trim()) rows.push(['메모', taxjEsc(ti.note)]);
   const members = (ci.team || []).filter(p => p && p.person && (p.items || []).length);
-  return `<div style="display:flex; gap:12px; flex-wrap:wrap; align-items:flex-start;">
+  return `<div style="display:flex; gap:12px; flex-wrap:wrap; align-items:stretch;">
       ${innerProfileCard(ti.teamName || '팀명 미등록', 'TEAM PROFILE', rows, '회사웹 설정 › 팀정보에 등록된 내용이 없어요.')}
       ${innerKeysCard('팀 공용정보', ci.teamGeneral || [], '등록된 항목이 없어요.', true)}</div>
-    ${members.length ? `<div style="font-weight:800; margin:16px 0 8px;">팀원별 정보</div><div style="display:flex; gap:12px; flex-wrap:wrap; align-items:flex-start;">${members.map(p => innerKeysCard(`${p.person}${p.title ? ' · ' + p.title : ''}`, p.items, '')).join('')}</div>` : ''}`;
+    ${members.length ? `<div style="font-weight:800; margin:16px 0 8px;">팀원별 정보</div><div style="display:flex; gap:12px; flex-wrap:wrap; align-items:stretch;">${members.map(p => innerKeysCard(`${p.person}${p.title ? ' · ' + p.title : ''}`, p.items, '')).join('')}</div>` : ''}`;
 }
 // ── 세무일정 (Tax.J getTaxScheduleForMonth와 같은 계산) ──
 const INNER_TAX_ANNUAL = [
