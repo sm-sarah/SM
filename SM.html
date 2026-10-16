@@ -849,6 +849,12 @@
   .wl-side .notice-card{ background:linear-gradient(180deg,#eaf6ff 0%,#f8fcff 55%); border:1px solid #cfe6f7; border-top:4px solid #7cc4ee; }
   .wl-layout > .card.wl-today-card{ background:#fff; border-top:4px solid var(--primary); box-shadow:0 2px 4px rgba(150,50,90,.08), 0 18px 36px -14px rgba(150,50,90,.35); }
   .wl-main > .card{ background:#fbf6f9; border-top:4px solid #d9bfcd; box-shadow:var(--shadow-sm); }
+  /* [2026.10.16] Today 아래 메모 - 가운데 칸을 Today + Memo 세로 묶음으로. Memo는 오른쪽 카드들과 같은 옅은 바탕 */
+  .wl-col2{ min-width:0; display:flex; flex-direction:column; gap:18px; }
+  .wl-col2 > .card{ margin:0; min-width:0; }
+  .wl-col2 > .card.wl-today-card{ background:#fff; border-top:4px solid var(--primary); box-shadow:0 2px 4px rgba(150,50,90,.08), 0 18px 36px -14px rgba(150,50,90,.35); }
+  .wl-col2 > #wlMemo{ background:#fbf6f9; border-top:4px solid #d9bfcd; box-shadow:var(--shadow-sm); }
+  #wlMemo:not(.wl-memo-closed) .wl-memo-list{ max-height:320px; overflow-y:auto; }
   .wl-hist-agenda{ max-height:340px; }
   /* [2026.10.15] 홈 빠른 메모 */
   .wl-memo-new{ display:flex; gap:8px; align-items:flex-end; margin-top:8px; }
@@ -869,6 +875,9 @@
     .wl-layout > aside{ min-height:0; }
     .wl-side .notice-card{ position:static; height:100%; max-height:none; overflow-y:auto; }
     .wl-layout > .card.wl-today-card{ display:flex; flex-direction:column; min-height:0; }
+    .wl-layout > .wl-col2{ height:100%; min-height:0; }
+    .wl-col2 > .card.wl-today-card{ flex:1 1 0; display:flex; flex-direction:column; min-height:0; }
+    .wl-col2 > #wlMemo{ flex:0 0 auto; }
     .wl-today-card .wl-agenda{ flex:1 1 0; max-height:none; min-height:120px; }
     .wl-layout > .wl-main{ height:100%; min-height:0; }
     .wl-main > #wlHistory{ flex:1 1 0; min-height:0; display:flex; flex-direction:column; }
@@ -1300,6 +1309,19 @@
   /* [2026.10.16] 도구줄 아이콘 버튼(날짜 일괄 입력·항목 추가) - 돋보기 버튼과 같은 크기·모양 */
   .sm-tool-ic{ display:inline-flex; align-items:center; justify-content:center; width:34px; height:34px; flex:none; border:1px solid var(--border); border-radius:10px; background:#fff; color:var(--muted); cursor:pointer; padding:0; }
   .sm-tool-ic:hover{ color:var(--primary-dark); border-color:var(--primary); }
+  /* [2026.10.16] 부가세 Tip 조회 창(회사웹 Tip 말풍선과 같은 짜임, works 색) */
+  .vtip{ text-align:left; font-size:12.5px; }
+  .vtip-h{ display:flex; align-items:center; justify-content:space-between; gap:10px; font-weight:800; color:var(--primary-dark); padding-bottom:7px; border-bottom:1px solid var(--border); }
+  .vtip-period{ font-size:11.5px; font-weight:800; color:var(--primary-dark); background:var(--primary-soft); border-radius:999px; padding:2px 10px; white-space:nowrap; }
+  .vtip-sec{ display:grid; grid-template-columns:84px minmax(0,1fr); gap:10px; padding:8px 0; border-bottom:1px dashed var(--border); }
+  .vtip-k{ color:var(--muted); font-weight:700; font-size:12px; }
+  .vtip-k i{ display:block; font-style:normal; font-size:10.5px; font-weight:600; opacity:.85; margin-top:1px; }
+  .vtip-v{ display:flex; flex-direction:column; gap:4px; color:var(--text); line-height:1.5; }
+  .vtip-v b{ font-weight:800; }
+  .vtip-chip{ display:inline-block; font-size:11px; font-weight:700; color:var(--primary-dark); background:var(--primary-soft); border-radius:6px; padding:0 7px; margin:1px 0; white-space:nowrap; }
+  .vtip-dim{ color:var(--muted); font-size:11.5px; }
+  .vtip-memo{ margin-top:9px; background:#fbf6f9; border:1px solid var(--border); border-radius:10px; padding:8px 11px; color:var(--text); white-space:pre-wrap; line-height:1.55; }
+  .vtip-memo .vtip-k{ margin-bottom:3px; }
 </style>
 </head>
 <body>
@@ -2600,6 +2622,7 @@ function renderWorklist(){
   el.innerHTML = `
     <div class="wl-layout ${refSections ? '' : 'no-side'}">
     <aside class="wl-side">${refSections}</aside>
+    <div class="wl-col2"><!-- [2026.10.16] "메모는 평소엔 접히고, Today 아래로"(요청) -->
     <div class="card wl-today-card">
       <div class="notice-top">
         <span id="wlTodayBtnSlot"></span>
@@ -2630,9 +2653,10 @@ function renderWorklist(){
         <button class="btn primary" onclick="addTask()">추가</button>
       </div>
     </div>
+    <div class="card" id="wlMemo"></div>
+    </div>
     <div class="wl-main">
       <div class="card" id="wlMonthCal"></div>
-      <div class="card" id="wlMemo"></div>
       <div class="card" id="wlHistory"></div>
     </div>
     </div>
@@ -2885,7 +2909,7 @@ function renderWlHistory(){
 }
 
 // [2026.10.15] "홈에 메모장 - 급하게 메모, 목록도 기록되고 검색도"(요청) - 적으면 날짜·시간과 함께 목록에 쌓이고(최신 위), 검색·수정·삭제
-let wlMemoSearch = '', wlMemoOpen = true;
+let wlMemoSearch = '', wlMemoOpen = false;   // [2026.10.16] 평소엔 접힘(요청)
 function wlMemoNow(){ const d = new Date(); return `${todayStr()} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`; }
 function wlMemoAdd(){
   const ta = document.getElementById('wlMemoInput'); if(!ta) return;
@@ -3221,10 +3245,31 @@ function vatTHelpRows(h, year, period){
   if(h.memo) rows.push(['특이사항', h.memo]);   // [2026.10.16] 회사웹 Tip '메모' → '특이사항'
   return rows;
 }
+// [2026.10.16] "Tip 조회 창을 회사웹처럼 깔끔하게"(요청) - Tax.J vatHelpTipHtml과 같은 짜임(과세기간 칩, 항목별 점선 구분, 차량·직원 한 줄에 하나, 칩, 특이사항 상자)
+function vatTHelpHtml(h, year, period){
+  const e = taxjEsc, RG = { '1기예정':['01-01','03-31'], '1기확정':['04-01','06-30'], '2기예정':['07-01','09-30'], '2기확정':['10-01','12-31'] }[period] || ['',''];
+  const isPre = /예정/.test(period || ''), md = d => d ? `${Number(d.slice(0, 2))}.${Number(d.slice(3, 5))}` : '';
+  const from = isPre ? RG[0] : (/^1기/.test(period || '') ? '01-01' : '07-01');
+  const asOf = RG[1] ? `<i>${md(RG[1])} 기준</i>` : '';
+  const sec = (label, items, sub) => `<div class="vtip-sec"><div class="vtip-k">${label}${sub || ''}</div><div class="vtip-v">${items.map(x => `<div>${x}</div>`).join('')}</div></div>`;
+  const chip = t => `<span class="vtip-chip">${e(t)}</span>`, out = [];
+  const vs = (h.vehicles || []).filter(v => v && (v.type || v.no || v.own));
+  if(h.vehicleYn === '없음') out.push(sec('차량', ['무'], asOf));
+  else if(h.vehicleYn === '있음' || vs.length) out.push(sec('차량', vs.length ? vs.map(v => { const own = v.own === '기타' ? (v.ownEtc || '기타') : (v.own || '');
+    return `<b>${e(v.type || '')}</b> ${e(v.no || '')} ${[own, v.deduct].filter(Boolean).map(chip).join(' ')}${v.memo ? ` <span class="vtip-dim">${e(v.memo)}</span>` : ''}`; }) : ['유'], asOf));
+  let st = (h.staff || {})[`${year}-${period}`];
+  if(Array.isArray(st)){ const o = {}; st.forEach(k => o[k] = 0); st = o; }
+  if(st) out.push(sec('직원', Object.keys(st).length ? Object.entries(st).map(([k, n]) => k === '있음' ? '유' : `${e(k)}${n ? ` <b>${n}명</b>` : ''}`) : ['무'], asOf));
+  if((h.kinds || []).length) out.push(sec('신고유형', [h.kinds.map(k => chip(k === '기타' && h.kindEtc ? `기타(${h.kindEtc})` : k === '특이사항없음' ? '일반' : k)).join(' ')]));
+  if((h.recv || []).length) out.push(sec('수령자료', [h.recv.map(chip).join(' ')]));
+  const memo = String(h.memo || '').trim();
+  return `<div class="vtip"><div class="vtip-h"><span>Tip</span>${year && RG[1] ? `<span class="vtip-period">${e(year)}년 ${e(String(period).replace(/(\d기)/, '$1 '))} · ${md(from)}~${md(RG[1])}</span>` : ''}</div>
+    ${out.join('') || '<div class="hint" style="margin:8px 0 0;">적힌 내용이 없어요.</div>'}${memo ? `<div class="vtip-memo"><div class="vtip-k">특이사항</div><div>${e(memo)}</div></div>` : ''}</div>`;
+}
 function vatTShowHelp(cid){
   const docs = taxjFull && taxjFull.docs; if(!docs) return;
   const c = taxjClientIndex(docs).byId[cid] || {};
-  vatTMemo(c.name || '', 'Tip', vatTHelpRows(vatTHelp(docs, cid), vatYear, vatTPeriod()).map(([k, v]) => `${k}: ${v}`).join('\n') || '없어요');
+  smDialog({ title: c.name || '', html: vatTHelpHtml(vatTHelp(docs, cid), vatYear, vatTPeriod()), icon:'i', okText:'닫기', cancelText:null });
 }
 function vatTShowDocs(cid){
   const docs = taxjFull && taxjFull.docs; if(!docs) return;
@@ -3545,8 +3590,11 @@ async function vatProgEditCol(id){
   renderVat(); scheduleGoogleSave();
 }
 // [2026.10.16] "스크롤 생길 때 틀고정·열고정·숨기기"(요청) - 머리글은 이미 위에 고정. 열 고정은 고른 칸까지 왼쪽에 고정, 숨기기는 고른 칸을 안 보이게
-const VAT_PROG_LINK = [['name','상호'],['openDate','개업일'],['bizNo','사업자번호'],['noticeYn','예정고지 대상'],['excludeReason','예정고지(부과) 제외사유'],['filingDuty','신고의무 여부'],['prevSupply','직전 과세기간 공급가액 합계액'],['noticeTax','예정'],['office','관할 세무서'],['tel','담당자 전화번호']];
-function vatProgViewObj(){ if(!vatProgView || typeof vatProgView !== 'object') vatProgView = { freeze:'name', hidden:[] }; if(!Array.isArray(vatProgView.hidden)) vatProgView.hidden = []; return vatProgView; }
+const VAT_PROG_LINK = [['name','상호'],['openDate','개업일'],['bizNo','사업자번호'],['noticeYn','예정고지 대상'],['excludeReason','예정고지(부과) 제외사유'],['filingDuty','신고의무 여부'],['prevSupply','직전 과세기간 공급가액 합계액'],['noticeTax','예정'],['office','관할 세무서'],['tel','담당자 전화번호'],['tip','Tip']];   // [2026.10.16] 회사웹 Tip도 진행에서 바로(요청)
+function vatProgViewObj(){ if(!vatProgView || typeof vatProgView !== 'object') vatProgView = { freeze:'name', hidden:[] }; if(!Array.isArray(vatProgView.hidden)) vatProgView.hidden = [];
+  // [2026.10.16] "직원·차량은 회사웹 Tip과 연동되니 진행에선 빼도 됨"(요청) - 내 항목 중 '직원…'·'차량…' 칸을 처음 한 번 숨김(지우지 않음 - '칸 숨기기'에서 다시 켤 수 있음)
+  if(!vatProgView.tipHid && vatProgCols.length){ vatProgView.tipHid = 1; vatProgCols.filter(c => /^\s*(직원|차량)/.test(String(c.label))).forEach(c => { if(!vatProgView.hidden.includes(c.id)) vatProgView.hidden.push(c.id); }); }
+  return vatProgView; }
 function vatProgAllCols(){ return VAT_PROG_LINK.map(([k, l]) => ({ key:k, label:l })).concat(vatProgCols.map(c => ({ key:c.id, label: String(c.label).replace(/\s+/g, ' ') }))); }
 function vatProgVisibleKeys(){ const h = vatProgViewObj().hidden; return vatProgAllCols().filter(c => c.key === 'name' || !h.includes(c.key)).map(c => c.key); }
 function vatProgSetFreeze(k){ vatProgViewObj().freeze = k; renderVat(); scheduleGoogleSave(); }
@@ -3602,7 +3650,7 @@ function vatProgHtml(docs){
   });
   const vis = vatProgVisibleKeys(), shown = k => vis.includes(k);
   const lastLink = VAT_PROG_LINK.map(x => x[0]).filter(shown).pop();
-  const linkHead = ['상호','개업일','사업자번호','예정고지<br>대상','예정고지(부과)<br>제외사유','신고의무<br>여부','직전 과세기간<br>공급가액 합계액','예정','관할 세무서','담당자<br>전화번호']
+  const linkHead = ['상호','개업일','사업자번호','예정고지<br>대상','예정고지(부과)<br>제외사유','신고의무<br>여부','직전 과세기간<br>공급가액 합계액','예정','관할 세무서','담당자<br>전화번호','Tip']
     .map((l, i) => shown(VAT_PROG_LINK[i][0]) ? `<th class="vp-link${VAT_PROG_LINK[i][0] === lastLink ? ' vp-div' : ''}" title="회사웹 값(조회만)">${l}</th>` : '').join('');
   const head = vatProgCols.filter(c => shown(c.id)).map(c => `<th style="${c.type === 'check' ? 'text-align:center;' : ''}"><button class="vp-th" onclick="vatProgEditCol('${c.id}')" title="눌러서 이름·입력 방식·이어받기 수정 또는 삭제${c.carry ? '\n(다음 기수로 이어받는 항목)' : ''}">${taxjEsc(c.label).replace(/\n/g, '<br>')}${c.carry ? '<span class="vp-carry">↻</span>' : ''}</button></th>`).join('');
   const rows = list.map((x, n) => {
@@ -3610,7 +3658,8 @@ function vatProgHtml(docs){
     const lk = v.__link || {}, tb = x.hasTb ? x.tb : lk;   // 회사웹 값이 있으면 회사웹, 없으면 엑셀에서 넣은 값
     if(!x.hasTb){ x.office = lk.office || ''; x.tel = lk.tel || ''; }
     const cellv = { openDate: t(x.c.openDate), bizNo: t(innerBizNo(x.c.bizNo || '')), noticeYn: t(tb.noticeYn), excludeReason: t(tb.excludeReason), filingDuty: t(tb.filingDuty),
-      prevSupply: num(tb.prevSupply), noticeTax: tb.noticeTax == null || tb.noticeTax === '' ? na : num(tb.noticeTax), office: t(x.office), tel: t(x.tel) };
+      prevSupply: num(tb.prevSupply), noticeTax: tb.noticeTax == null || tb.noticeTax === '' ? na : num(tb.noticeTax), office: t(x.office), tel: t(x.tel),
+      tip: (() => { const h = vatTHelp(docs, x.c.id); return (h.vehicleYn || (h.vehicles || []).length || (h.kinds || []).length || (h.recv || []).length || h.memo || Object.keys(h.staff || {}).length) ? `<button class="btn ghost xs" onclick="vatTShowHelp('${cid}')" title="회사웹 Tip 보기">Tip</button>` : na; })() };
     const link = `<td class="${lastLink === 'name' ? 'vp-div' : ''}" style="font-weight:800; color:${x.c.entityType === '법인' ? '#0b5a78' : x.c.entityType === '개인' ? '#be185d' : 'inherit'};">${taxjEsc(x.c.name)}</td>`
       + VAT_PROG_LINK.slice(1).filter(([k]) => shown(k)).map(([k]) => `<td class="vp-sm${k === lastLink ? ' vp-div' : ''}"${k === 'prevSupply' || k === 'noticeTax' ? ' style="text-align:right;"' : ''}>${cellv[k]}</td>`).join('');
     const mine = vatProgCols.filter(c => shown(c.id)).map(c => {
@@ -5830,9 +5879,32 @@ function taxjLoadScript(src){ return new Promise((res, rej)=>{ if(document.query
 function taxjUsageSet(html){ taxjUsageHtml = html; const box = document.getElementById('taxjUsageBox'); if(box) box.innerHTML = html; }
 function taxjEsc(v){ return String(v == null ? '' : v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function taxjWhen(v){ if(!v) return '-'; const d = new Date(typeof v === 'number' ? v : String(v)); if(isNaN(d)) return '-'; return `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`; }
+// [2026.10.16] "사용 현황이 '회사 계정만'이라며 안 뜸"(요청) - 서버(sendPush)가 개인계정 요청을 받지 않음.
+// 회사웹 실시간 연결(회사 계정 로그인)이 돼 있으면 서버를 거치지 않고 회사 저장소에서 직접 모아 보여줌:
+// 직원 = profiles, 지금 접속 = Realtime Database presence(회사웹 실시간 근무현황과 같은 곳, 90초 안 신호면 접속 중),
+// 기기·알림 = s__pushTokens(알림을 허용해 토큰이 등록된 기기), 출퇴근 알림 = s__notificationPrefs[이메일].clockReminder
+async function taxjUsageFromCompany(){
+  if(!(taxjFull && taxjFull.docs)) return null;
+  const app = await taxjCompanyApp(), user = app.auth().currentUser;
+  if(!user || !String(user.email || '').toLowerCase().endsWith(TAXJ_COMPANY_DOMAIN)) return null;
+  await taxjLoadScript('https://www.gstatic.com/firebasejs/10.13.1/firebase-database-compat.js');
+  const pres = (await app.database('https://taxj-a3e01-default-rtdb.asia-southeast1.firebasedatabase.app').ref('presence').once('value')).val() || {};
+  const docs = taxjFull.docs, now = Date.now(), key = em => String(em || '').toLowerCase().replace(/[^a-z0-9]/g, '_');
+  const toks = Array.isArray(docs.s__pushTokens) ? docs.s__pushTokens : ((docs.s__pushTokens || {}).list || []);
+  const prefs = docs.s__notificationPrefs || {};
+  const people = (docs.profiles || []).filter(p => p && p.email).map(p => {
+    const em = String(p.email).toLowerCase(), k = key(em);
+    const presence = [pres[k], pres[k + '__alt']].filter(Boolean).map(v => ({ online: now - (v.at || 0) < 90000, device: v.device || (v.mob ? '휴대폰' : 'PC'), screen: v.label || '', at: v.at || 0 }));
+    const devices = toks.filter(t => t && String(t.email || '').toLowerCase() === em).map(t => ({ dev: t.deviceName || (t.mob ? '휴대폰' : 'PC'), mob: t.mob, notif: 'granted', at: t.updatedAt }));
+    return { name: p.name || em, position: p.position || p.title || '', status: p.status || '', presence, devices, clockReminder: !!(prefs[em] && prefs[em].clockReminder), clock: [] };
+  });
+  return { at: now, people };
+}
 async function loadTaxjUsage(){
   const btn = document.getElementById('taxjUsageBtn'); if(btn) btn.disabled = true;
   try{
+    const local = await taxjUsageFromCompany().catch(e => { console.warn('회사 저장소에서 사용 현황 읽기 실패', e); return null; });
+    if(local){ taxjUsageSet(taxjUsageTableHtml(local)); return; }
     taxjUsageSet('<div class="hint">불러오는 중…</div>');
     await taxjLoadScript('https://www.gstatic.com/firebasejs/10.13.1/firebase-app-compat.js');
     await taxjLoadScript('https://www.gstatic.com/firebasejs/10.13.1/firebase-auth-compat.js');
