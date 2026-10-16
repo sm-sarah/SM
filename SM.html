@@ -1108,6 +1108,13 @@
   .vat-prog thead th.vp-div{ box-shadow:inset -1px 0 0 var(--border), 0 1px 0 var(--border); }
   .vat-prog .vp-th{ font:inherit; color:inherit; background:transparent; border:none; padding:2px; cursor:pointer; text-align:inherit; line-height:1.3; }
   .vat-prog .vp-th:hover{ color:var(--primary-dark); }
+  .vat-prog .vp-prev-btn{ width:26px; height:26px; }   /* [2026.10.16] 전기 보기 */
+  .vp-prev{ display:flex; flex-direction:column; text-align:left; border:1px solid var(--border); border-radius:12px; overflow:hidden; }
+  .vp-prev-row{ display:grid; grid-template-columns:minmax(110px, 38%) 1fr; gap:10px; padding:8px 12px; font-size:13px; border-top:1px solid var(--border); }
+  .vp-prev-row:first-child{ border-top:none; }
+  .vp-prev-k{ color:var(--muted); font-weight:700; }
+  .vp-prev-v{ color:var(--text); word-break:break-all; }
+  .vp-prev .vp-carry{ color:var(--muted-soft); font-size:10px; }
   .vat-prog .vp-carry{ margin-left:2px; color:var(--muted-soft); font-size:9.5px; font-weight:600; }
   .vat-prog .vp-in{ font:inherit; font-size:12.5px; color:var(--text); border:1px solid transparent; border-radius:6px; background:transparent; padding:4px 5px; text-overflow:ellipsis; text-align:left; }
   .vat-prog .vp-in:hover{ border-color:var(--border); }
@@ -3418,7 +3425,7 @@ let vatView = 'overview';
 const VAT_VIEWS = [['overview','총괄'], ['prog','진행']];
 function setVatView(v){ vatView = v; if(activeTab !== 'vat') switchTab('vat'); else renderVat(); }
 function vatViewTabsHtml(){ return `<div class="cl-subtabs pay-maintabs">${VAT_VIEWS.map(([k, l]) => `<button class="cl-subtab ${vatView === k ? 'on' : ''}" onclick="setVatView('${k}')">${l}</button>`).join('')}</div>`; }
-const VAT_PROG_TYPES = [['text','글자'], ['check','체크'], ['num','숫자']];
+const VAT_PROG_TYPES = [['text','글자'], ['check','체크'], ['num','숫자'], ['date','날짜'], ['select','드롭다운']];   // [2026.10.16] 날짜·드롭다운 추가(요청). 드롭다운 선택지는 col.opts
 // 회사웹에서 연결하는 칸 - 엑셀 머리글이 이 이름(공백 무시)이면 내 항목으로 만들지 않음
 const VAT_PROG_LINK_RE = /^(순번|상호|개업일|사업자번호|예정고지대상|예정고지\(부과\)제외사유|제외사유|신고의무여부|직전과세기간공급가액합계액|예정|관할세무서|담당자전화번호)$/;
 // 처음 엑셀에서 항목을 만들 때 '다음 기수로 이어받기'를 켜 둘 항목(거래처 특이사항). 항목 수정에서 바꿀 수 있음
@@ -3489,7 +3496,7 @@ async function vatProgImport(input){
       const n = vatProgNorm(h);
       if(!n || VAT_PROG_LINK_RE.test(n)) return;
       const occ = used[n] = (used[n] || 0) + 1;
-      let col = vatProgCols.filter(c => vatProgNorm(c.label) === n)[occ - 1];
+      let col = vatProgLiveCols().filter(c => vatProgNorm(c.label) === n)[occ - 1];   // [2026.10.16] 이 기수부터 뺀 항목은 짝짓지 않음
       if(!col){
         const vals = body.map(r => r[j]).filter(v => v != null && v !== '');
         const type = vals.length && vals.every(v => typeof v === 'boolean' || /^(true|false)$/i.test(String(v))) ? 'check' : VAT_PROG_NUM_RE.test(n) ? 'num' : 'text';
@@ -3530,9 +3537,17 @@ async function vatProgImport(input){
     smAlert('가져오지 못했어요', '엑셀 파일을 읽지 못했어요. 파일을 다시 확인해 주세요.');
   }
 }
+// [2026.10.16] "전기 입력한 걸 아이콘 하나로 볼 수 있게"(요청) - 거래처 한 곳의 전 기수 진행 값(그 기수에 있던 항목 전부, 빈 칸 제외)을 창으로 보여 줌(조회만)
+function vatProgPrevVals(pk, cid){ const v = (vatProg[pk] || {})[cid] || {}; return vatProgLiveCols(pk).filter(c => v[c.id] != null && v[c.id] !== '' && v[c.id] !== false).map(c => [c, v[c.id]]); }
+function vatProgShowPrev(cid){
+  const pk = vatProgPrevKey(); if(!pk) return;
+  const docs = taxjFull && taxjFull.docs, c = (docs && taxjClientIndex(docs).byId[cid]) || {};
+  const rows = vatProgPrevVals(pk, cid).map(([col, val]) => `<div class="vp-prev-row"><span class="vp-prev-k">${taxjEsc(String(col.label).replace(/\s+/g, ' '))}${col.carry ? ' <span class="vp-carry">↻</span>' : ''}</span><span class="vp-prev-v">${col.type === 'check' ? '✓' : taxjEsc(vatProgFmtNum(val)).replace(/\n/g, '<br>')}</span></div>`).join('');
+  smDialog({ title: `${c.name || ''} · ${vatProgKeyLabel(pk)}`, html: `<div class="vp-prev">${rows || '<div class="empty" style="padding:12px;">전기에 적은 값이 없어요.</div>'}</div>`, icon:'↺', okText:'닫기', cancelText:null, wide:true });
+}
 async function vatProgFromPrev(){
   const pk = vatProgPrevKey(), key = vatProgKey(); if(!pk) return;
-  const carry = vatProgCols.filter(c => c.carry);
+  const carry = vatProgLiveCols().filter(c => c.carry);
   if(!carry.length) return smAlert('이어받을 항목이 없어요', '항목 이름을 눌러 "다음 기수로 이어받기"를 켜 주세요.');
   if(!(await smConfirm(`${vatProgKeyLabel(pk)}에서 이어받을까요?`, `이어받기 항목 ${carry.length}개(${carry.map(c => vatProgNorm(c.label)).join('·')})만 가져오고, 나머지 진행 칸은 비워요.`, { okText:'이어받기', icon:'+' }))) return;
   const out = {};
@@ -3571,21 +3586,48 @@ function vatProgNumInput(el, cid, colId){ const v = vatProgToNum(el.value); el.v
 async function vatProgAddCol(){
   const r = await smForm('진행 항목 추가', [{ label:'항목 이름', placeholder:'예: 자료 요청' }, { label:'입력 방식', options: VAT_PROG_TYPES.map(x => x[1]), value:'글자' }, { label:'다음 기수로 이어받기', options:['아니오','예'], value:'아니오' }], { okText:'추가' });
   if(!r || !r[0].trim()) return;
-  vatProgCols.push({ id: vatProgUid('c'), label: r[0].trim(), type: (VAT_PROG_TYPES.find(x => x[1] === r[1]) || VAT_PROG_TYPES[0])[0], carry: r[2] === '예' });
+  const col = { id: vatProgUid('c'), label: r[0].trim(), type: (VAT_PROG_TYPES.find(x => x[1] === r[1]) || VAT_PROG_TYPES[0])[0], carry: r[2] === '예' };
+  if(col.type === 'select' && !(await vatProgEditOpts(col))) return;
+  vatProgCols.push(col);
   renderVat(); scheduleGoogleSave();
+}
+// [2026.10.16] 드롭다운 선택지 - 분야 관리와 같은 창(입력칸 + 추가, 이름 바꾸기·순서·삭제). 하나 이상 있어야 저장
+async function vatProgEditOpts(col){
+  const r = await smCatEditor(`'${col.label}' 드롭다운 선택지`, col.opts || [], { placeholder:'예: 요청함, 받음, 확인' });
+  if(!r) return !!(col.opts && col.opts.length);
+  if(!r.length){ smAlert('선택지를 하나 이상 넣어 주세요'); return false; }
+  col.opts = r.map(x => x.name);
+  return true;
 }
 async function vatProgEditCol(id){
   const col = vatProgCols.find(c => c.id === id); if(!col) return;
   const r = await smForm('진행 항목 수정', [{ label:'항목 이름', type:'textarea', rows:2, value: col.label }, { label:'입력 방식', options: VAT_PROG_TYPES.map(x => x[1]), value: (VAT_PROG_TYPES.find(x => x[0] === col.type) || VAT_PROG_TYPES[0])[1] }, { label:'다음 기수로 이어받기', options:['아니오','예'], value: col.carry ? '예' : '아니오' }], { okText:'저장', cancelText:'삭제', icon:'✎' });
   if(r === undefined) return;   // [2026.10.15] 닫기(X) - 아무것도 안 바꿈
   if(r === null){
-    if(!(await smConfirm(`'${vatProgNorm(col.label)}' 항목을 지울까요?`, '모든 기수에서 이 항목에 적어 둔 값도 지워져요.', { tone:'danger', icon:'!', okText:'삭제' }))) return;
-    vatProgCols = vatProgCols.filter(c => c.id !== id);
-    Object.values(vatProg).forEach(per => Object.values(per).forEach(v => { delete v[id]; }));
+    const key = vatProgKey(), cur = vatProgKeyOrder(key);
+    const hasPast = Object.keys(vatProg).some(k => vatProgKeyOrder(k) < cur && Object.values(vatProg[k] || {}).some(v => v && v[id] != null));
+    if(hasPast){
+      // [2026.10.16] 전 기수에 적은 값이 있으면 기본은 '이 기수부터 빼기'(전 기수 값은 그대로 남김)
+      const d = await smForm(`'${vatProgNorm(col.label)}' 항목을 뺄까요?`, [{ label:'빼는 범위', options:[`${vatProgKeyLabel(key)}부터 빼기 (전 기수 값은 그대로)`, '모든 기수에서 지우기 (적어 둔 값도 삭제)'], value:`${vatProgKeyLabel(key)}부터 빼기 (전 기수 값은 그대로)` }], { okText:'빼기', icon:'!' });
+      if(!d) return;
+      if(/^모든/.test(d[0])){
+        if(!(await smConfirm('모든 기수에서 지울까요?', '전 기수에 적어 둔 값까지 모두 지워지고 되돌릴 수 없어요.', { tone:'danger', icon:'!', okText:'삭제' }))) return;
+        vatProgCols = vatProgCols.filter(c => c.id !== id);
+        Object.values(vatProg).forEach(per => Object.values(per).forEach(v => { delete v[id]; }));
+      }else{
+        col.endKey = key;   // 이 기수와 그 뒤 기수에 적은 값만 지움
+        Object.keys(vatProg).forEach(k => { if(vatProgKeyOrder(k) >= cur) Object.values(vatProg[k]).forEach(v => { delete v[id]; }); });
+      }
+    }else{
+      if(!(await smConfirm(`'${vatProgNorm(col.label)}' 항목을 지울까요?`, '전 기수에 적은 값은 없어요. 이 항목과 이 기수 값이 지워져요.', { tone:'danger', icon:'!', okText:'삭제' }))) return;
+      vatProgCols = vatProgCols.filter(c => c.id !== id);
+      Object.values(vatProg).forEach(per => Object.values(per).forEach(v => { delete v[id]; }));
+    }
   }else{
     if(r[0].trim()) col.label = r[0].trim();
     col.type = (VAT_PROG_TYPES.find(x => x[1] === r[1]) || VAT_PROG_TYPES[0])[0];
     col.carry = r[2] === '예';
+    if(col.type === 'select') await vatProgEditOpts(col);   // 드롭다운이면 선택지 고치기(입력하고 추가 · 순서 · 삭제)
   }
   renderVat(); scheduleGoogleSave();
 }
@@ -3595,7 +3637,11 @@ function vatProgViewObj(){ if(!vatProgView || typeof vatProgView !== 'object') v
   // [2026.10.16] "직원·차량은 회사웹 Tip과 연동되니 진행에선 빼도 됨"(요청) - 내 항목 중 '직원…'·'차량…' 칸을 처음 한 번 숨김(지우지 않음 - '칸 숨기기'에서 다시 켤 수 있음)
   if(!vatProgView.tipHid && vatProgCols.length){ vatProgView.tipHid = 1; vatProgCols.filter(c => /^\s*(직원|차량)/.test(String(c.label))).forEach(c => { if(!vatProgView.hidden.includes(c.id)) vatProgView.hidden.push(c.id); }); }
   return vatProgView; }
-function vatProgAllCols(){ return VAT_PROG_LINK.map(([k, l]) => ({ key:k, label:l })).concat(vatProgCols.map(c => ({ key:c.id, label: String(c.label).replace(/\s+/g, ' ') }))); }
+// [2026.10.16] "항목 이어받고 삭제해도 전에 입력된 건 영향 없게"(요청) - 항목 삭제 때 '이 기수부터 빼기'를 고르면 col.endKey(빠진 기수)만 적고 값은 그대로.
+// 그 이전 기수에서는 항목과 값이 그대로 보이고, endKey 기수부터는 안 보임
+function vatProgColLive(c, key){ return !c.endKey || vatProgKeyOrder(key || vatProgKey()) < vatProgKeyOrder(c.endKey); }
+function vatProgLiveCols(key){ return vatProgCols.filter(c => vatProgColLive(c, key)); }
+function vatProgAllCols(){ return VAT_PROG_LINK.map(([k, l]) => ({ key:k, label:l })).concat(vatProgLiveCols().map(c => ({ key:c.id, label: String(c.label).replace(/\s+/g, ' ') }))); }
 function vatProgVisibleKeys(){ const h = vatProgViewObj().hidden; return vatProgAllCols().filter(c => c.key === 'name' || !h.includes(c.key)).map(c => c.key); }
 function vatProgSetFreeze(k){ vatProgViewObj().freeze = k; renderVat(); scheduleGoogleSave(); }
 async function vatProgHideCols(){
@@ -3611,7 +3657,8 @@ async function vatProgHideCols(){
 function vatProgApplyFreeze(){
   const t = document.querySelector('#tab-vat .vat-prog table'); if(!t || !t.tHead) return;
   const fk = vatProgViewObj().freeze;
-  const n = fk ? vatProgVisibleKeys().indexOf(fk) + 2 : 1;   // 순번 + 고른 칸까지 (없음이면 순번만)
+  const vk = vatProgVisibleKeys(), fi = fk ? vk.indexOf(fk) : -1, nLink = vk.filter(k => VAT_PROG_LINK.some(x => x[0] === k)).length;
+  const n = fk ? fi + 2 + (t.dataset.prev === '1' && fi >= nLink ? 1 : 0) : 1;   // 순번 + 고른 칸까지 (없음이면 순번만). [2026.10.16] 내 항목까지 고르면 사이의 전기 칸도
   const hs = t.tHead.rows[0].cells; if(!hs.length) return;
   const base = hs[0].offsetLeft, lefts = [];
   for(let i = 0; i < n && i < hs.length; i++) lefts.push(hs[i].offsetLeft - base);
@@ -3652,7 +3699,10 @@ function vatProgHtml(docs){
   const lastLink = VAT_PROG_LINK.map(x => x[0]).filter(shown).pop();
   const linkHead = ['상호','개업일','사업자번호','예정고지<br>대상','예정고지(부과)<br>제외사유','신고의무<br>여부','직전 과세기간<br>공급가액 합계액','예정','관할 세무서','담당자<br>전화번호','Tip']
     .map((l, i) => shown(VAT_PROG_LINK[i][0]) ? `<th class="vp-link${VAT_PROG_LINK[i][0] === lastLink ? ' vp-div' : ''}" title="회사웹 값(조회만)">${l}</th>` : '').join('');
-  const head = vatProgCols.filter(c => shown(c.id)).map(c => `<th style="${c.type === 'check' ? 'text-align:center;' : ''}"><button class="vp-th" onclick="vatProgEditCol('${c.id}')" title="눌러서 이름·입력 방식·이어받기 수정 또는 삭제${c.carry ? '\n(다음 기수로 이어받는 항목)' : ''}">${taxjEsc(c.label).replace(/\n/g, '<br>')}${c.carry ? '<span class="vp-carry">↻</span>' : ''}</button></th>`).join('');
+  // [2026.10.16] 전기 보기 칸 - 전 기수에 이 거래처 값이 있을 때만 아이콘
+  const prevOn = !!pk && Object.keys(vatProg[pk] || {}).some(id => vatProgPrevVals(pk, id).length);
+  const prevHead = prevOn ? `<th style="text-align:center;" title="${escapeAttr(vatProgKeyLabel(pk))} 입력 보기">전기</th>` : '';
+  const head = prevHead + vatProgCols.filter(c => shown(c.id)).map(c => `<th style="${c.type === 'check' ? 'text-align:center;' : ''}"><button class="vp-th" onclick="vatProgEditCol('${c.id}')" title="눌러서 이름·입력 방식·이어받기 수정 또는 삭제${c.carry ? '\n(다음 기수로 이어받는 항목)' : ''}">${taxjEsc(c.label).replace(/\n/g, '<br>')}${c.carry ? '<span class="vp-carry">↻</span>' : ''}</button></th>`).join('');
   const rows = list.map((x, n) => {
     const cid = escapeAttr(x.c.id), v = per[x.c.id] || {}, t = s => s || s === 0 ? taxjEsc(String(s)) : na;
     const lk = v.__link || {}, tb = x.hasTb ? x.tb : lk;   // 회사웹 값이 있으면 회사웹, 없으면 엑셀에서 넣은 값
@@ -3667,12 +3717,15 @@ function vatProgHtml(docs){
       if(c.type === 'check') return `<td style="text-align:center;"><input type="checkbox" ${val ? 'checked' : ''} onchange="vatProgSet('${cid}','${c.id}',this.checked)"></td>`;
       const s = vatProgFmtNum(val);
       if(c.type === 'num') return `<td><input class="vp-in" style="width:${w[c.id]}px; text-align:right;" value="${escapeAttr(s)}" onchange="vatProgNumInput(this,'${cid}','${c.id}')"></td>`;
+      if(c.type === 'date') return `<td><input type="date" class="vp-in" style="width:128px;" value="${escapeAttr(/^\d{4}-\d{2}-\d{2}$/.test(s) ? s : '')}" title="${escapeAttr(s)}" onchange="vatProgSet('${cid}','${c.id}',this.value)"></td>`;
+      if(c.type === 'select'){ const opts = c.opts || []; return `<td><select class="vp-in" style="min-width:84px;" onchange="vatProgSet('${cid}','${c.id}',this.value)"><option value=""></option>${(s && !opts.includes(s) ? [s] : []).concat(opts).map(o => `<option ${o === s ? 'selected' : ''}>${taxjEsc(o)}</option>`).join('')}</select></td>`; }
       return `<td><input class="vp-in" style="width:${w[c.id]}px;" value="${escapeAttr(s)}" title="${escapeAttr(s)}" onchange="this.title=this.value; vatProgSet('${cid}','${c.id}',this.value.trim())"></td>`;
     }).join('');
-    return `<tr><td class="tx-seq">${n + 1}</td>${link}${mine}</tr>`;
+    const prevCell = prevOn ? `<td style="text-align:center;">${vatProgPrevVals(pk, x.c.id).length ? `<button class="sm-tool-ic vp-prev-btn" onclick="vatProgShowPrev('${cid}')" title="${escapeAttr(vatProgKeyLabel(pk))} 입력 보기" aria-label="전기 보기">${ICON_HISTORY}</button>` : ''}</td>` : '';
+    return `<tr><td class="tx-seq">${n + 1}</td>${link}${prevCell}${mine}</tr>`;
   }).join('');
-  return bar + segRow + `<div class="table-scroll vat-prog" style="margin-top:8px;"><table><thead><tr><th class="tx-seq">순번</th>${linkHead}${head}</tr></thead>
-    <tbody>${rows || `<tr><td colspan="${vis.length + 1}"><div class="empty" style="padding:18px;">${q ? '검색 결과가 없어요.' : '거래처가 없어요.'}</div></td></tr>`}</tbody></table></div>`;
+  return bar + segRow + `<div class="table-scroll vat-prog" style="margin-top:8px;"><table data-prev="${prevOn ? 1 : 0}"><thead><tr><th class="tx-seq">순번</th>${linkHead}${head}</tr></thead>
+    <tbody>${rows || `<tr><td colspan="${vis.length + 1 + (prevOn ? 1 : 0)}"><div class="empty" style="padding:18px;">${q ? '검색 결과가 없어요.' : '거래처가 없어요.'}</div></td></tr>`}</tbody></table></div>`;
 }
 // [2026.10.14] "스크롤이 끝으로 가면 다시 처음으로 온다"(요청) - 회사웹 실시간 연결이 바뀔 때마다 화면을 다시 그려 표 스크롤이 0으로 돌아갔음.
 // 다시 그릴 때 표 스크롤 위치를 그대로 두고, 진행표 칸에 입력 중이면 입력을 마친 뒤(blur)에 다시 그림
