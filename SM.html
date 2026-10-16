@@ -1376,7 +1376,7 @@ let resumeTried = false;
 function saveGoogleToken(resp){
   try{
     const sec = Number(resp.expires_in) || 3600;
-    localStorage.setItem(GOOGLE_TOKEN_KEY, JSON.stringify({ t: resp.access_token, exp: Date.now() + (sec - 120) * 1000 }));
+    localStorage.setItem(GOOGLE_TOKEN_KEY, JSON.stringify({ t: resp.access_token, exp: Date.now() + (sec - 120) * 1000, scope: resp.scope || '' }));   // [2026.10.16] 받은 권한(scope)도 저장 - 첨부 업로드 전 드라이브 권한 확인용
   }catch(e){}
 }
 function clearGoogleToken(){ try{ localStorage.removeItem(GOOGLE_TOKEN_KEY); }catch(e){} }
@@ -1430,8 +1430,10 @@ let tokenRefreshing = false;
 function googleTokenExp(){
   try{ const v = JSON.parse(localStorage.getItem(GOOGLE_TOKEN_KEY) || 'null'); return v && v.exp ? v.exp : 0; }catch(e){ return 0; }
 }
-document.addEventListener('pointerdown', () => {
+document.addEventListener('pointerdown', (ev) => {
   if(!googleAccessToken || !googleTokenClient || tokenRefreshing) return;
+  // [2026.10.16] 첨부 '+ 파일'을 누를 때 여기서 Google 창이 먼저 뜨면 파일 선택 창이 막혀 업로드가 안 되던 문제(요청) → 그 버튼은 건너뜀
+  if(ev && ev.target && ev.target.closest && ev.target.closest('.att-add')) return;
   if(Date.now() < googleTokenExp() - TOKEN_REFRESH_BEFORE_MS) return;
   tokenRefreshing = true;
   googleTokenClient.callback = resp => {
@@ -7629,7 +7631,13 @@ let smAttachFolderId = null;
 async function smDriveFetch(url, opt){
   if(!googleAccessToken) throw new Error('Google에 연결된 뒤에 할 수 있어요. 위쪽 "Google 연결하고 불러오기"를 먼저 눌러 주세요.');
   const res = await fetch(url, Object.assign({}, opt, { headers: Object.assign({ Authorization: 'Bearer ' + googleAccessToken }, (opt && opt.headers) || {}) }));
-  if(!res.ok){ const t = await res.text().catch(() => ''); throw new Error(`드라이브 응답 ${res.status} ${t.slice(0, 120)}`); }
+  if(!res.ok){
+    const t = await res.text().catch(() => '');
+    // [2026.10.16] 권한 없음·만료일 때 알아볼 수 있는 안내로(요청: 파일 업로드가 안 됨)
+    if(res.status === 401) throw new Error('Google 로그인이 만료됐어요. 아무 곳이나 한 번 누른 뒤(자동 갱신) 다시 첨부해 주세요. 계속되면 설정에서 Google을 다시 연결해 주세요.');
+    if(res.status === 403 && /insufficient|scope|permission/i.test(t)){ smDriveScopeOk = false; throw new Error('Google 드라이브 권한이 없어요. 다시 "+ 파일"을 누르면 권한 확인 창이 뜨니, 드라이브(파일) 항목에 체크하고 허용해 주세요.'); }
+    throw new Error(`드라이브 응답 ${res.status} ${t.slice(0, 120)}`);
+  }
   return res.status === 204 ? null : res.json();
 }
 async function smAttachFolder(){
@@ -7652,7 +7660,32 @@ async function smDriveTrash(id){
   try{ await smDriveFetch(`https://www.googleapis.com/drive/v3/files/${id}`, { method:'PATCH', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ trashed:true }) }); }catch(e){ console.warn('첨부 휴지통 이동 실패', e); }
 }
 let linkUploadTarget = null;
-function linkPickFiles(id){ linkUploadTarget = id; const inp = document.getElementById('linkFileInput'); if(inp){ inp.value = ''; inp.click(); } }
+// [2026.10.16] 업로드 전 드라이브 권한 확인. Google 동의 화면에서 드라이브 항목 체크를 빼면 토큰에 권한이 없어 업로드가 실패함
+let smDriveScopeOk = null;   // false = 드라이브 업로드가 권한 없음으로 실패함
+function smTokenHasDrive(){
+  if(smDriveScopeOk === false) return false;
+  try{ const v = JSON.parse(localStorage.getItem(GOOGLE_TOKEN_KEY) || 'null'); if(v && v.scope) return /\/auth\/drive(\.file)?(\s|$)/.test(v.scope); }catch(e){}
+  return true;   // 예전에 저장된 토큰(권한 기록 없음)은 일단 시도
+}
+function smRequestDriveScope(){
+  googleTokenClient.callback = resp => {
+    if(resp.error || !resp.access_token){ smAlert('권한을 받지 못했어요', '다시 "+ 파일"을 눌러 주세요.'); return; }
+    googleAccessToken = resp.access_token;
+    gapi.client.setToken({ access_token: googleAccessToken });
+    saveGoogleToken(resp);
+    smDriveScopeOk = null;
+    if(smTokenHasDrive()) smAlert('드라이브 권한을 받았어요', '이제 "+ 파일"을 다시 눌러 첨부해 주세요.');
+    else smAlert('드라이브 권한이 아직 없어요', 'Google 창에서 드라이브(파일) 항목에 체크한 뒤 허용해 주세요.', { tone:'danger' });
+  };
+  let hint = '';
+  try{ hint = localStorage.getItem(AUTH_STORAGE_KEY) || ''; }catch(e){}
+  googleTokenClient.requestAccessToken(Object.assign({ prompt:'consent', scope: GOOGLE_SCOPES }, hint ? { hint } : {}));
+}
+function linkPickFiles(id){
+  if(!googleAccessToken){ smAlert('Google 연결이 필요해요', '파일은 내 Google 드라이브에 올라가요. 먼저 Google에 연결해 주세요.'); return; }
+  if(!smTokenHasDrive() && googleTokenClient){ smRequestDriveScope(); return; }
+  linkUploadTarget = id; const inp = document.getElementById('linkFileInput'); if(inp){ inp.value = ''; inp.click(); }
+}
 async function linkUploadFiles(input){
   const x = links.find(l => l.id === linkUploadTarget);
   const files = Array.from((input && input.files) || []);
