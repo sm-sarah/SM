@@ -911,6 +911,9 @@
   .sm-modal.wide{ max-width:460px; }
   .sm-modal-field select{ width:100%; border-radius:12px; padding:10px 12px; }
   .sm-modal-html{ text-align:left; max-height:50vh; overflow:auto; }
+  .sm-modal-html #attendYearBody{ font-size:13px; }
+  .sm-modal:has(#attendYearBody){ max-width:760px; }
+  .sm-modal-html:has(#attendYearBody){ max-height:70vh; }
   /* [2026.10.16] 분야 관리 창: 줄바꿈 입력 대신 입력칸+추가 버튼, 목록에서 이름 바꾸기·순서·삭제(요청) */
   .sm-cat-add{ display:flex; gap:6px; margin-top:12px; }
   .sm-cat-add input{ flex:1; border-radius:12px; padding:10px 12px; }
@@ -6419,6 +6422,95 @@ function attendMineCells(key){
     <td class="note-cell"><input type="text" value="${escapeAttr(m.note)}" onchange="updateAttendMine('${k}','note',this.value)" style="width:100%"></td>`;
 }
 function attendDateTd(ds){ const d = new Date(ds + 'T00:00:00'); const w = d.getDay(); return `<td style="white-space:nowrap;${w === 0 ? 'color:#e11d48;' : w === 6 ? 'color:#2563eb;' : ''}">${Number(ds.slice(5,7))}/${Number(ds.slice(8,10))} (${ATTEND_WEEK[w]})</td>`; }
+/* [2026.10.16] "출퇴근현황·근태현황·경비정산도 회사웹처럼 전체현황을 볼 수 있게 - 한 사람의 1년 전체"(요청)
+   고른 직원의 한 해를 월별 표로. 월을 누르면 그 달 화면으로 이동. 회사 원본은 읽기만.
+   출퇴근 지각·야근은 Tax.J isLateClockIn / isOvertimeClockOut(연간 전체보기)과 같은 기준으로 판정:
+   표준 근무시간 = data__<직원>.settings.standardWorkHours(상반기 h1Start/h1End, 하반기 h2Start/h2End, 상반기 끝 달 h1EndMonth),
+   근무시간 예외기간 = s__workHourExceptions, 반차·반반차인 날은 그 휴가 시간만큼 출근 기준을 늦춤(종일 휴가는 지각 판정 안 함), 야근 = 퇴근 기준 15분 이상 */
+let attendYear = 0;
+const ATT_OVERTIME_MIN = 15;
+function attStd(pd){ return (pd && pd.settings && pd.settings.standardWorkHours) || {}; }
+function attH1(ds, std){ const m = Number(String(ds).split('-')[1]); return m >= 1 && m <= (std.h1EndMonth || 7); }
+function attWhx(ds){ const w = taxjDoc('workHourExceptions'); return (Array.isArray(w) ? w : []).find(ex => ex && !ex.deleted && ds >= ex.startDate && ds <= ex.endDate); }
+function attEndTime(ds, std){ const x = attWhx(ds); if(x && x.endTime) return x.endTime; return attH1(ds, std) ? (std.h1End || '17:30') : (std.h2End || '17:00'); }
+function attStartTime(ds, std){ const x = attWhx(ds); if(x && x.startTime) return x.startTime; return attH1(ds, std) ? (std.h1Start || '09:30') : (std.h2Start || '09:30'); }
+function attLeaveRange(ds, type, sub, std){
+  const h1 = attH1(ds, std), end = attEndTime(ds, std);
+  if(type === '반차'){ if(sub === '오전반차') return '09:30~14:00'; if(sub === '오후반차_식사O') return `14:00~${end}`; if(sub === '오후반차_식사X') return `${h1 ? '13:00' : '12:30'}~${end}`; }
+  if(type === '반반차'){ if(sub === '늦은출근') return '09:30~11:00'; if(sub === '점심연장') return '11:00~14:00'; if(sub === '조기퇴근') return `${h1 ? '16:00' : '15:30'}~${end}`; }
+  return '';
+}
+function attIsLate(ds, checkIn, att, std){
+  let st = attendMin(attStartTime(ds, std)); const actual = attendMin(checkIn);
+  if(st == null || actual == null) return false;
+  let full = false;
+  (att.leaveUsage || []).filter(u => u && u.date === ds).forEach(u => {
+    if(u.type !== '반차' && u.type !== '반반차'){ full = true; return; }
+    const m = /^(\d{1,2}:\d{2})~(\d{1,2}:\d{2})$/.exec(attLeaveRange(ds, u.type, u.subtype, std) || ''); if(!m) return;
+    const a = attendMin(m[1]), b = attendMin(m[2]);
+    if(a <= st + 1 && b > st) st = b;
+  });
+  return !full && actual > st;
+}
+function attIsOvertime(ds, checkOut, std){ const e = attendMin(attEndTime(ds, std)), a = attendMin(checkOut); return e != null && a != null && a - e >= ATT_OVERTIME_MIN; }
+function attendYearHtml(){
+  const pd = (taxjFull && taxjFull.docs['data__' + attendPerson]) || {};
+  const att = pd.attendance || {}, ex = pd.expense || {}, std = attStd(pd), y = String(attendYear);
+  const person = (attendPeople().find(p => p.id === attendPerson) || {}).name || '';
+  const inYear = e => e && String(e.date || '').startsWith(y + '-');
+  const mOf = e => Number(String(e.date).slice(5, 7));
+  const na = '<span style="color:#d4c6cd;">-</span>', n0 = v => v ? v.toLocaleString() : na;
+  const months = Array.from({ length:12 }, (_, i) => i + 1);
+  const monthTd = m => `<td><button class="btn ghost xs" onclick="attendGoMonth(${m})" title="${m}월 화면으로">${m}월</button></td>`;
+  let head = '', rows = '', foot = '', extra = '';
+  if(attendView === 'clock'){
+    const log = (att.clockLog || []).filter(inYear).sort((a, b) => a.date < b.date ? -1 : 1);
+    const late = log.filter(e => e.checkIn && attIsLate(e.date, e.checkIn, att, std));
+    const over = log.filter(e => e.checkOut && attIsOvertime(e.date, e.checkOut, std));
+    const durMin = e => { const t = attendDur(e); if(!t) return 0; const [h, mi] = t.split(':').map(Number); return h * 60 + mi; };
+    const hm = v => v ? `${Math.floor(v / 60)}:${pad2(v % 60)}` : na;
+    const calc = l => ({ days: l.filter(e => e.checkIn).length, late: late.filter(e => l.includes(e)).length, over: over.filter(e => l.includes(e)).length,
+      remote: l.filter(e => e.status && e.status !== '사무실').length, miss: l.filter(e => e.checkIn && !e.checkOut).length, min: l.reduce((a, e) => a + durMin(e), 0) });
+    const tr = (c, first) => `${first}<td>${n0(c.days)}</td><td style="color:${c.late ? '#e11d48' : 'inherit'}; font-weight:${c.late ? 800 : 400};">${n0(c.late)}</td><td style="color:${c.over ? '#4f46e5' : 'inherit'}; font-weight:${c.over ? 800 : 400};">${n0(c.over)}</td><td>${n0(c.remote)}</td><td>${n0(c.miss)}</td><td>${hm(c.min)}</td>`;
+    head = '<th>월</th><th>출근일수</th><th>지각</th><th>야근</th><th>사무실 외</th><th>퇴근 기록 없음</th><th>출퇴근 간격 합계</th>';
+    rows = months.map(m => `<tr>${tr(calc(log.filter(e => mOf(e) === m)), monthTd(m))}</tr>`).join('');
+    foot = `<tr style="font-weight:800; background:#faf0f5;">${tr(calc(log), '<td>합계</td>')}</tr>`;
+    const list = (l, color, title) => `<div style="margin-top:14px;"><div style="font-weight:800; font-size:13px; color:${color}; margin-bottom:6px;">${title} ${l.length}</div>${l.length ? `<div style="display:flex; flex-wrap:wrap; gap:6px;">${l.map(e => `<span style="font-size:12px; border:1px solid var(--border); border-radius:8px; padding:4px 8px; background:#fff;"><b>${Number(e.date.slice(5, 7))}/${Number(e.date.slice(8, 10))}</b> ${title.startsWith('지각') ? '출근 ' + taxjEsc(e.checkIn) : '퇴근 ' + taxjEsc(e.checkOut)}</span>`).join('')}</div>` : '<div class="hint" style="margin:0;">없어요.</div>'}</div>`;
+    extra = list(late, '#e11d48', '지각 이력') + list(over, '#4f46e5', `야근 이력 (퇴근 기준 ${ATT_OVERTIME_MIN}분 이상)`)
+      + '<div class="hint" style="margin:10px 0 0;">지각·야근은 회사웹 연간 전체보기와 같은 기준(표준 근무시간·근무시간 예외기간·반차)으로 판정했어요.</div>';
+  }else if(attendView === 'leave'){
+    const lu = (att.leaveUsage || []).filter(inYear), rm = (att.remoteEntries || []).filter(inYear), gr = (att.leaveGrants || []).filter(inYear);
+    const other = u => !['연차','반차','반반차'].includes(u.type);
+    const calc = (l, r, g) => [l.filter(u => u.type === '연차').length, l.filter(u => u.type === '반차').length, l.filter(u => u.type === '반반차').length, l.filter(other).length, r.length, g.reduce((a, x) => a + (Number(x.days) || 0), 0)];
+    const tr = (c, first) => first + c.map(v => `<td>${n0(v)}</td>`).join('');
+    head = '<th>월</th><th>연차</th><th>반차</th><th>반반차</th><th>그 밖의 휴가</th><th>재택</th><th>휴가 부여(일)</th>';
+    rows = months.map(m => `<tr>${tr(calc(lu.filter(e => mOf(e) === m), rm.filter(e => mOf(e) === m), gr.filter(e => mOf(e) === m)), monthTd(m))}</tr>`).join('');
+    foot = `<tr style="font-weight:800; background:#faf0f5;">${tr(calc(lu, rm, gr), '<td>합계</td>')}</tr>`;
+    const types = {}; lu.filter(other).forEach(u => { types[u.type || '기타'] = (types[u.type || '기타'] || 0) + 1; });
+    extra = (Object.keys(types).length ? `<div class="hint" style="margin:10px 0 0;">그 밖의 휴가: ${Object.entries(types).map(([k, v]) => `${taxjEsc(k)} ${v}건`).join(' · ')}</div>` : '')
+      + '<div class="hint" style="margin:6px 0 0;">회사웹 기록 건수(하루 1건)예요. 잔여 연차는 회사 규칙으로 계산하는 값이라 회사웹에서 확인해 주세요.</div>';
+  }else{
+    const all = ATTEND_EXP_KINDS.map(([f]) => (ex[f] || []).filter(inYear));
+    const amt = l => l.reduce((a, e) => a + (Number(e.amount) || 0), 0);
+    const tr = (cols, first) => first + cols.map(v => `<td style="text-align:right;">${n0(v)}</td>`).join('') + `<td style="text-align:right; font-weight:800;">${n0(cols.reduce((a, v) => a + v, 0))}</td>`;
+    head = '<th>월</th>' + ATTEND_EXP_KINDS.map(([, l]) => `<th>${l}</th>`).join('') + '<th>합계</th>';
+    rows = months.map(m => `<tr>${tr(all.map(l => amt(l.filter(e => mOf(e) === m))), monthTd(m))}</tr>`).join('');
+    foot = `<tr style="font-weight:800; background:#faf0f5;">${tr(all.map(amt), '<td>합계</td>')}</tr>`;
+    extra = '<div class="hint" style="margin:10px 0 0;">회사웹에 적힌 금액 그대로 더했어요(원).</div>';
+  }
+  return `<div style="display:flex; align-items:center; justify-content:center; gap:12px; margin-bottom:12px;">
+      <button class="btn ghost xs" onclick="attendYearNav(-1)" title="이전 해">‹</button>
+      <span style="font-weight:800; font-size:15px; color:var(--text);">${taxjEsc(person)} · ${y}년</span>
+      <button class="btn ghost xs" onclick="attendYearNav(1)" title="다음 해">›</button></div>
+    <div class="table-scroll"><table><thead><tr>${head}</tr></thead><tbody>${rows}${foot}</tbody></table></div>${extra}`;
+}
+function attendYearNav(n){ attendYear += n; const b = document.getElementById('attendYearBody'); if(b) b.innerHTML = attendYearHtml(); }
+function attendGoMonth(m){ attendMonth = `${attendYear}-${pad2(m)}`; const ok = document.querySelector('.sm-modal-ok'); if(ok) ok.click(); renderAttend(); }
+function attendOpenYear(){
+  attendYear = Number(String(attendMonth).slice(0, 4)) || new Date().getFullYear();
+  const t = (ATTEND_VIEWS.find(v => v[0] === attendView) || [, ''])[1];
+  smDialog({ title:`${t} 연간 전체보기`, html:`<div id="attendYearBody">${attendYearHtml()}</div>`, icon:'≡', okText:'닫기', cancelText:null, wide:true });
+}
 function renderAttend(){
   const el = document.getElementById('tab-attend');
   if(!el) return;
@@ -6523,6 +6615,7 @@ function renderAttend(){
         <button class="btn ghost xs" onclick="attendShiftMonth(-1)" title="이전 달">‹</button>
         <span style="font-weight:800;">${yy}년 ${mm}월</span>
         <button class="btn ghost xs" onclick="attendShiftMonth(1)" title="다음 달">›</button>
+        ${taxjFull && attendView !== 'cal' ? '<button class="btn xs" onclick="attendOpenYear()" title="고른 직원의 한 해를 월별로 봐요">연간 전체보기</button>' : ''}<!-- [2026.10.16] 연간 전체보기(요청) -->
         <div class="spacer"></div>
         ${people.length > 1 ? `<select onchange="attendPerson=this.value; renderAttend();">${people.map(p => `<option value="${escapeAttr(p.id)}" ${p.id === attendPerson ? 'selected' : ''}>${taxjEsc(p.name || p.email || p.id)}</option>`).join('')}</select>` : ''}
       </div>
