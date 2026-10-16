@@ -16,7 +16,7 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,600;1,600&family=IBM+Plex+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,600;1,600&family=Noto+Serif+KR:wght@700&family=IBM+Plex+Mono:wght@500;600;700&display=swap" rel="stylesheet">
 <script src="https://apis.google.com/js/api.js"></script>
 <script src="https://accounts.google.com/gsi/client"></script>
 <style>
@@ -202,6 +202,8 @@
     margin:0 auto 8px;
   }
   .page-head .subtitle{ color:var(--muted); font-size:13px; }
+  .page-head h1:has(+ .page-sub){ margin-bottom:2px; }
+  .page-head .page-sub{ font-size:14.5px; font-weight:700; color:var(--primary-dark); }   /* [2026.10.16] 대제목 아래 소제목(요청) */
 
   .tab{ display:none; }
   .tab.active{ display:block; }
@@ -912,6 +914,15 @@
   .sm-modal-field select{ width:100%; border-radius:12px; padding:10px 12px; }
   .sm-modal-html{ text-align:left; max-height:50vh; overflow:auto; }
   .sm-modal-html #attendYearBody{ font-size:13px; }
+  /* [2026.10.16] 연간 전체보기 상세내역(근태·휴가·재택·경비) */
+  .ay-tag{ display:inline-block; padding:3px 9px; border-radius:999px; font-size:11.5px; font-weight:700; white-space:nowrap; }
+  .ay-tag.gr{ background:#fff4dc; color:#a16207; } .ay-tag.us{ background:#fde7ee; color:#be185d; }
+  .ay-tag.rm{ background:#e3f3fb; color:#0b5a78; } .ay-tag.rs{ background:#e3f6ec; color:#047857; }
+  .ay-fold{ margin-bottom:8px; }
+  .ay-fold > summary{ cursor:pointer; list-style:none; padding:9px 14px; border-radius:10px; background:#f8eef3; border-left:3px solid transparent; font-weight:800; color:var(--muted); text-align:center; }
+  .ay-fold[open] > summary{ background:#fbe3ee; color:var(--primary-dark); border-left-color:var(--primary); margin-bottom:6px; }
+  .ay-fold > summary span{ font-weight:600; font-size:11.5px; opacity:.85; }
+  .ay-lunch{ font-size:12.5px; color:var(--text); background:#fbf6f9; border:1px solid var(--border); border-radius:10px; padding:8px 12px; margin:0 0 6px; text-align:center; }
   .sm-modal:has(#attendYearBody){ max-width:760px; }
   .sm-modal-html:has(#attendYearBody){ max-height:70vh; }
   /* [2026.10.16] 분야 관리 창: 줄바꿈 입력 대신 입력칸+추가 버튼, 목록에서 이름 바꾸기·순서·삭제(요청) */
@@ -1226,6 +1237,46 @@
   .vat-prog thead th.vp-frz-last{ box-shadow:1px 0 0 var(--border), 0 1px 0 var(--border); }
   .vp-view{ display:inline-flex; align-items:center; gap:6px; font-size:12.5px; color:var(--muted); font-weight:700; }
   .vp-view select{ font-size:12.5px; padding:4px 8px; }
+  /* [2026.10.16] "내부 화면이 회사웹 틀만 가져오고 스타일이 빠졌다 - 회사 제목·열 구분·행제목"(요청)
+     Tax.J 사내정보 조회(.ci-side 등록증 / .ci-keys 공용정보)와 같은 짜임: 명조 큰 제목 + 영문 소제목 + 굵은 밑줄,
+     항목명 칸은 옅은 바탕 띠 + 세로 구분선, 줄마다 점선. 색은 works(핑크) */
+  .sm-ci-side, .sm-ci-keys{ background:var(--card); border:1px solid var(--border); border-radius:14px; box-shadow:0 1px 2px rgba(42,29,38,0.04); }
+  .sm-ci-side{ padding:20px 20px 12px; }
+  .sm-ci-head{ text-align:center; padding-bottom:14px; margin:0 0 6px; border-bottom:2px solid var(--primary-dark); }
+  .sm-ci-name{ font-family:'Noto Serif KR','Pretendard',serif; font-size:24px; font-weight:700; color:var(--primary-dark); letter-spacing:.04em; }
+  .sm-ci-eyebrow{ font-size:11.5px; color:var(--muted); letter-spacing:.08em; margin-top:4px; }
+  .sm-ci-dl{ display:grid; grid-template-columns:auto minmax(0,1fr); margin:0; text-align:left; }
+  .sm-ci-dl dt{ color:#a8406b; font-weight:800; font-size:12px; padding:9px 14px; background:#fbf1f6; border-right:1px solid #f0d9e4; border-bottom:1px dashed var(--border); white-space:nowrap; display:flex; align-items:center; }
+  .sm-ci-dl dd{ margin:0; font-weight:600; font-size:13px; color:var(--text); padding:9px 0 9px 14px; border-bottom:1px dashed var(--border); overflow-wrap:anywhere; white-space:pre-wrap; display:flex; align-items:center; gap:4px; }
+  .sm-ci-dl dt:last-of-type, .sm-ci-dl dd:last-of-type{ border-bottom:none; }
+  .sm-ci-dl a{ color:var(--primary-dark); font-weight:700; }
+  .sm-ci-keys{ overflow:hidden; }
+  .sm-ci-keys.doc{ padding:20px 20px 12px; }
+  .sm-ci-keys.doc .sm-ci-khead{ display:flex; align-items:baseline; gap:8px; padding-bottom:10px; margin:0 0 4px; border-bottom:1px solid var(--border); }
+  .sm-ci-khead .t{ font-size:14px; font-weight:800; color:var(--primary-dark); }
+  .sm-ci-khead .e{ font-size:10px; color:var(--muted); letter-spacing:.08em; }
+  .sm-ci-keys:not(.doc) .sm-ci-khead{ display:flex; align-items:center; gap:6px; padding:11px 14px; border-bottom:1px solid var(--border); }
+  .sm-ci-keys:not(.doc) .sm-ci-khead .t{ font-size:13px; }
+  .sm-ci-krow{ display:grid; grid-template-columns:120px minmax(0,1fr); align-items:stretch; border-bottom:1px dashed var(--border); }
+  .sm-ci-krow:last-child{ border-bottom:none; }
+  .sm-ci-klabel{ background:#fbf1f6; border-right:1px solid #f0d9e4; padding:9px 10px 9px 14px; color:#a8406b; font-weight:800; font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; display:flex; align-items:center; }
+  .sm-ci-kline{ display:flex; align-items:center; gap:10px; min-width:0; padding:8px 4px 8px 12px; white-space:nowrap; font-size:13px; font-weight:600; color:var(--text); }
+  .sm-ci-kpair{ display:inline-flex; align-items:center; gap:4px; min-width:0; flex:0 1 auto; }
+  .sm-ci-kpair .k{ font-size:10.5px; font-weight:800; color:var(--muted); flex:none; }
+  .sm-ci-kpair .v{ min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .sm-ci-knote{ margin-left:auto; padding-left:6px; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:11.5px; font-weight:500; color:var(--muted); }
+  .sm-ci-knote a{ color:var(--primary-dark); font-weight:700; }
+  .sm-ci-kempty{ padding:14px; font-size:13px; color:var(--muted); text-align:center; }
+  .sm-ci-krow:hover .sm-kcopy, .sm-ci-dl dd:hover .sm-kcopy{ opacity:1; }
+  /* [2026.10.16] "모든 메뉴의 검색은 아이콘으로만"(요청) - 돋보기를 누르면 검색칸이 열리고, 비우고 나가면 다시 닫힘 */
+  .sm-sx-btn{ display:inline-flex; align-items:center; justify-content:center; width:34px; height:34px; flex:none; border:1px solid var(--border); border-radius:10px; background:#fff; color:var(--muted); cursor:pointer; padding:0; }
+  .sm-sx-btn:hover, .sm-sx-btn.on{ color:var(--primary-dark); border-color:var(--primary); }
+  .sm-sx-btn.grow:has(+ input.sm-sx:not(.open)){ margin-right:auto; }
+  input.sm-sx:not(.open){ display:none !important; }
+  /* [2026.10.16] "자잘한 안내 문구는 도움말 아이콘으로 - 누르면 팝업"(요청) */
+  .toolbar > .hint.sm-hx{ display:none !important; }
+  .sm-help-btn{ display:inline-flex; align-items:center; justify-content:center; width:24px; height:24px; flex:none; border:1px solid var(--border); border-radius:50%; background:#fff; color:var(--muted); font-size:12px; font-weight:800; cursor:pointer; padding:0; font-family:inherit; }
+  .sm-help-btn:hover{ color:var(--primary-dark); border-color:var(--primary); }
 </style>
 </head>
 <body>
@@ -1544,6 +1595,8 @@ let accountSearch = '';
 let accountView = 'all';   // all | mine | taxj
 const accountShown = new Set();
 let accountIdleTimer = null;
+let accountCats = [];   // [2026.10.16] 계정 분야(보관함 안에 같이 암호화해서 저장)
+let accountOpenedData = null, accountOpening = false, accountOpenFailed = null;   // [2026.10.16] 지금 풀어 둔 보관함 내용(다른 기기에서 바뀌면 다시 풀기)
 const _todayForCal = new Date(todayStr());
 let calYear = _todayForCal.getFullYear();
 let calMonth = _todayForCal.getMonth(); // 0-indexed
@@ -1759,13 +1812,30 @@ function renderNav(){
     `;
   }).join('');
 
-  {
-    const [title, subtitle] = activeTab === 'home' ? ['홈', ''] : TAB_TITLES[activeTab];   // [2026.10.15] 홈 = To do 화면
-    document.getElementById('pageHead').innerHTML = `
-      <div class="underline-bar"></div>
-      <h1>${title}</h1>
-    `;   // [2026.10.14] 대메뉴 아래 설명 문구는 안 보이게(요청)
-  }
+  updatePageHead();   // [2026.10.14] 대메뉴 아래 설명 문구는 안 보이게(요청)
+}
+// [2026.10.16] "메뉴 제목은 점(·)으로 잇지 말고 대제목(메뉴 이름) 아래 소제목(하위메뉴)으로"(요청)
+function pageSubtitle(){
+  const pick = (views, v) => (views.find(x => x[0] === v) || [])[1] || '';
+  const nav = v => ((NAV_SUBMENUS[activeTab] || []).find(x => x.js && x.js.includes(`'${v}'`)) || {}).label || '';
+  try{
+    switch(activeTab){
+      case 'pay': return pick(PAY_VIEWS, payView);
+      case 'vat': return pick(VAT_VIEWS, vatView);
+      case 'inner': return pick(INNER_VIEWS, innerView);
+      case 'attend': return pick(ATTEND_VIEWS, attendView);
+      case 'clients': return nav(clientsView);
+      case 'taxj': return nav(taxjFullView);
+      case 'manuals': return manualCat || '전체';
+    }
+  }catch(e){}
+  return '';
+}
+function updatePageHead(){
+  const el = document.getElementById('pageHead'); if(!el) return;
+  const title = (TABS.find(t => t.id === activeTab) || {}).label || (TAB_TITLES[activeTab] || [''])[0];
+  const sub = pageSubtitle();
+  el.innerHTML = `<div class="underline-bar"></div><h1>${title}</h1>${sub ? `<div class="page-sub">${taxjEsc(sub)}</div>` : ''}`;
 }
 
 let prevTab = null;
@@ -6427,7 +6497,7 @@ function attendDateTd(ds){ const d = new Date(ds + 'T00:00:00'); const w = d.get
    출퇴근 지각·야근은 Tax.J isLateClockIn / isOvertimeClockOut(연간 전체보기)과 같은 기준으로 판정:
    표준 근무시간 = data__<직원>.settings.standardWorkHours(상반기 h1Start/h1End, 하반기 h2Start/h2End, 상반기 끝 달 h1EndMonth),
    근무시간 예외기간 = s__workHourExceptions, 반차·반반차인 날은 그 휴가 시간만큼 출근 기준을 늦춤(종일 휴가는 지각 판정 안 함), 야근 = 퇴근 기준 15분 이상 */
-let attendYear = 0;
+let attendYear = 0, attendYearTab = '', attendExpKind = '';
 const ATT_OVERTIME_MIN = 15;
 function attStd(pd){ return (pd && pd.settings && pd.settings.standardWorkHours) || {}; }
 function attH1(ds, std){ const m = Number(String(ds).split('-')[1]); return m >= 1 && m <= (std.h1EndMonth || 7); }
@@ -6462,8 +6532,10 @@ function attendYearHtml(){
   const na = '<span style="color:#d4c6cd;">-</span>', n0 = v => v ? v.toLocaleString() : na;
   const months = Array.from({ length:12 }, (_, i) => i + 1);
   const monthTd = m => `<td><button class="btn ghost xs" onclick="attendGoMonth(${m})" title="${m}월 화면으로">${m}월</button></td>`;
-  let head = '', rows = '', foot = '', extra = '';
+  let head = '', rows = '', foot = '', extra = '', body = null, tabs = [];
   if(attendView === 'clock'){
+    // [2026.10.16] "연간 전체보기는 요약 + 상세(월별 목록)로"(요청) - 상세 = 회사웹 출퇴근현황 표(날짜·출근·퇴근·근무시간·근무지)를 월별로 접어서
+    tabs = [['sum','요약'], ['detail','상세']];
     const log = (att.clockLog || []).filter(inYear).sort((a, b) => a.date < b.date ? -1 : 1);
     const late = log.filter(e => e.checkIn && attIsLate(e.date, e.checkIn, att, std));
     const over = log.filter(e => e.checkOut && attIsOvertime(e.date, e.checkOut, std));
@@ -6478,35 +6550,181 @@ function attendYearHtml(){
     const list = (l, color, title) => `<div style="margin-top:14px;"><div style="font-weight:800; font-size:13px; color:${color}; margin-bottom:6px;">${title} ${l.length}</div>${l.length ? `<div style="display:flex; flex-wrap:wrap; gap:6px;">${l.map(e => `<span style="font-size:12px; border:1px solid var(--border); border-radius:8px; padding:4px 8px; background:#fff;"><b>${Number(e.date.slice(5, 7))}/${Number(e.date.slice(8, 10))}</b> ${title.startsWith('지각') ? '출근 ' + taxjEsc(e.checkIn) : '퇴근 ' + taxjEsc(e.checkOut)}</span>`).join('')}</div>` : '<div class="hint" style="margin:0;">없어요.</div>'}</div>`;
     extra = list(late, '#e11d48', '지각 이력') + list(over, '#4f46e5', `야근 이력 (퇴근 기준 ${ATT_OVERTIME_MIN}분 이상)`)
       + '<div class="hint" style="margin:10px 0 0;">지각·야근은 회사웹 연간 전체보기와 같은 기준(표준 근무시간·근무시간 예외기간·반차)으로 판정했어요.</div>';
+    if(attendYearTab === 'detail'){
+      const byM = {}; [...log].reverse().forEach(e => { const k = String(e.date).slice(0, 7); (byM[k] = byM[k] || []).push(e); });
+      const ks = Object.keys(byM).sort().reverse();
+      const dur = e => { const t = attendDur(e); if(!t) return na; const [h, mi] = t.split(':').map(Number); return `${h}h ${mi}m`; };
+      const place = st => { const v = st || '사무실'; return `<b style="color:${v === '사무실' ? '#4f46e5' : '#059669'};">${taxjEsc(v)}</b>`; };
+      body = ks.length ? ks.map(k => {
+        const l = byM[k], days = l.filter(e => e.checkIn).length, mins = l.reduce((a, e) => a + durMin(e), 0);
+        return `<details class="ay-fold" ${k === attendMonth || (attendMonth.slice(0, 4) !== y && k === ks[0]) ? 'open' : ''}><summary>${Number(k.slice(0, 4))}년 ${Number(k.slice(5))}월 <span>(출근 ${days}일 · 총 ${(mins / 60).toFixed(1)}h · 하루 평균 ${days ? (mins / 60 / days).toFixed(1) : 0}h)</span></summary>
+          <div class="table-scroll"><table><thead><tr><th>날짜</th><th>출근</th><th>퇴근</th><th>근무시간</th><th>근무지</th></tr></thead><tbody>${l.map(e => {
+            const isLate = late.includes(e), isOver = over.includes(e);
+            return `<tr>${attendDateTd(e.date)}<td style="color:#059669; font-weight:700; font-family:ui-monospace,Consolas,monospace;">${taxjEsc(e.checkInFull || e.checkIn || '') || na}${isLate ? ' <span class="ay-tag us">지각</span>' : ''}</td>
+              <td style="color:#e11d48; font-weight:700; font-family:ui-monospace,Consolas,monospace;">${taxjEsc(e.checkOutFull || e.checkOut || '') || na}${e.checkOutNextDay ? ' <span class="hint" style="margin:0;">다음날</span>' : ''}${isOver ? ' <span class="ay-tag rm">야근</span>' : ''}</td>
+              <td>${dur(e)}</td><td>${place(e.status)}</td></tr>`;
+          }).join('')}</tbody></table></div></details>`;
+      }).join('') : `<div class="empty" style="padding:14px;">${y}년 출퇴근 기록이 없어요.</div>`;
+      extra = '';
+    }
   }else if(attendView === 'leave'){
+    // [2026.10.16] "근태현황은 건수가 아니라 상세내역 - 근태내역·휴가 내역·재택 내역을 따로"(요청) - Tax.J 근태내역(renderAttendance 표)·
+    // 휴가 내역(renderAllLeaveHistory: 연속된 같은 휴가는 한 기간으로 묶음)·재택 내역(renderAllRemoteHistory: 월별로 접음)과 같은 표기
+    const tab = ['ledger','leave','remote'].includes(attendYearTab) ? attendYearTab : 'sum';
+    tabs = [['sum','요약'], ['ledger','근태내역'], ['leave','휴가 내역'], ['remote','재택 내역']];
     const lu = (att.leaveUsage || []).filter(inYear), rm = (att.remoteEntries || []).filter(inYear), gr = (att.leaveGrants || []).filter(inYear);
-    const other = u => !['연차','반차','반반차'].includes(u.type);
-    const calc = (l, r, g) => [l.filter(u => u.type === '연차').length, l.filter(u => u.type === '반차').length, l.filter(u => u.type === '반반차').length, l.filter(other).length, r.length, g.reduce((a, x) => a + (Number(x.days) || 0), 0)];
-    const tr = (c, first) => first + c.map(v => `<td>${n0(v)}</td>`).join('');
-    head = '<th>월</th><th>연차</th><th>반차</th><th>반반차</th><th>그 밖의 휴가</th><th>재택</th><th>휴가 부여(일)</th>';
-    rows = months.map(m => `<tr>${tr(calc(lu.filter(e => mOf(e) === m), rm.filter(e => mOf(e) === m), gr.filter(e => mOf(e) === m)), monthTd(m))}</tr>`).join('');
-    foot = `<tr style="font-weight:800; background:#faf0f5;">${tr(calc(lu, rm, gr), '<td>합계</td>')}</tr>`;
-    const types = {}; lu.filter(other).forEach(u => { types[u.type || '기타'] = (types[u.type || '기타'] || 0) + 1; });
-    extra = (Object.keys(types).length ? `<div class="hint" style="margin:10px 0 0;">그 밖의 휴가: ${Object.entries(types).map(([k, v]) => `${taxjEsc(k)} ${v}건`).join(' · ')}</div>` : '')
-      + '<div class="hint" style="margin:6px 0 0;">회사웹 기록 건수(하루 1건)예요. 잔여 연차는 회사 규칙으로 계산하는 값이라 회사웹에서 확인해 주세요.</div>';
+    const SUBL = { '오전반차':'오전', '오후반차_식사O':'오후·식사O', '오후반차_식사X':'오후·식사X' };
+    const SPECIAL = ['포상휴가','경조사휴가','공가','기타휴가'];
+    const tag = (txt, kind) => `<span class="ay-tag ${kind}">${txt}</span>`;
+    const remoteTag = r => {
+      const lab = r.half ? `반일재택 · ${r.half === 'am' ? '오전' : r.half === 'pm' ? '오후' : r.half}` : r.bonus ? '특별재택' : '정기재택';
+      const adv = r.advance ? ` <b style="color:#4f46e5;">» ${taxjEsc(r.creditMonth || String(r.date).slice(0, 7))} 한도차감</b>` : '';
+      const noLunch = ((r.bonus && !r.half && String(r.date).slice(0, 7) >= '2026-09') || r.noLunch) ? ' <b style="color:#8a6d1e;">· 식대제외</b>' : '';
+      return tag(lab + adv + noLunch, r.bonus ? 'rs' : 'rm');
+    };
+    const tbl = (ths, body) => `<div class="table-scroll"><table><thead><tr>${ths.map(t => `<th>${t}</th>`).join('')}</tr></thead><tbody>${body}</tbody></table></div>`;
+    const empty = n => `<tr><td colspan="${n}"><div class="empty" style="padding:14px;">${y}년 기록이 없어요.</div></td></tr>`;
+    const desc = (p, q) => p.date < q.date ? 1 : p.date > q.date ? -1 : 0;
+    if(tab === 'sum'){
+      const other = u => !['연차','반차','반반차'].includes(u.type);
+      const calc = (l, r, g) => [l.filter(u => u.type === '연차').length, l.filter(u => u.type === '반차').length, l.filter(u => u.type === '반반차').length, l.filter(other).length, r.length, g.reduce((a, x) => a + (Number(x.days) || 0), 0)];
+      const tr = (c, first) => first + c.map(v => `<td>${n0(v)}</td>`).join('');
+      const types = {}; lu.filter(other).forEach(u => { types[u.type || '기타'] = (types[u.type || '기타'] || 0) + 1; });
+      body = tbl(['월','연차','반차','반반차','그 밖의 휴가','재택','휴가 부여(일)'], months.map(m => `<tr>${tr(calc(lu.filter(e => mOf(e) === m), rm.filter(e => mOf(e) === m), gr.filter(e => mOf(e) === m)), monthTd(m))}</tr>`).join('')
+        + `<tr style="font-weight:800; background:#faf0f5;">${tr(calc(lu, rm, gr), '<td>합계</td>')}</tr>`)
+        + (Object.keys(types).length ? `<div class="hint" style="margin:10px 0 0;">그 밖의 휴가: ${Object.entries(types).map(([k, v]) => `${taxjEsc(k)} ${v}건`).join(' · ')}</div>` : '');
+    }else if(tab === 'ledger'){
+      const all = [...gr.map(g => ({ ...g, kind:'grant' })), ...lu.map(u => ({ ...u, kind:'usage' })), ...rm.map(r => ({ ...r, kind:'remote' }))].sort(desc);
+      body = `<div class="hint" style="margin:0 0 6px;">${y}년 ${all.length}건</div>` + tbl(['날짜','구분','일수','메모'], all.length ? all.map(en => {
+        let t, d;
+        if(en.kind === 'grant'){ t = tag(`부여 · ${taxjEsc(en.type || '')}`, 'gr'); d = `+${en.days}일`; }
+        else if(en.kind === 'usage'){
+          if(SPECIAL.includes(en.type)){ t = tag(`사용 · ${taxjEsc(en.type)}`, 'us'); d = `${en.days}일 (차감없음)`; }
+          else{
+            const rng = (en.type === '반차' || en.type === '반반차') ? attLeaveRange(en.date, en.type, en.subtype, std) : '';
+            t = tag(`사용 · ${taxjEsc(en.type)}${en.subtype ? ` (${taxjEsc(SUBL[en.subtype] || en.subtype)})` : ''}${rng ? ' ' + rng : ''}${en.advance ? ' <b style="color:#4f46e5;">» 당겨씀</b>' : ''}`, 'us');
+            d = `-${en.type === '연차' ? 1 : en.type === '반차' ? 0.5 : 0.25}일`;
+          }
+        }else{ t = remoteTag(en); d = na; }
+        return `<tr><td style="white-space:nowrap;">${en.date}</td><td>${t}</td><td style="white-space:nowrap; font-weight:700;">${d}</td><td>${taxjEsc(en.memo || '')}</td></tr>`;
+      }).join('') : empty(4));
+    }else if(tab === 'leave'){
+      // 연속된 평일의 같은 휴가(연차·포상·경조사·공가·기타휴가, 메모·사유 같음)는 한 기간으로 묶음
+      const nextWd = ds => { const d = new Date(ds + 'T00:00:00'); do{ d.setDate(d.getDate() + 1); }while(d.getDay() === 0 || d.getDay() === 6); return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`; };
+      const groups = [];
+      [...lu].sort((p, q) => p.date < q.date ? -1 : 1).forEach(u => {
+        const last = groups[groups.length - 1];
+        if(last && ['연차', ...SPECIAL].includes(u.type) && last.type === u.type && (last.memo || '') === (u.memo || '') && (last.publicReason || '') === (u.publicReason || '') && nextWd(last.end) === u.date){
+          last.end = u.date; last.total += u.type === '연차' ? 1 : (Number(u.days) || 0);
+        }else groups.push({ type:u.type, subtype:u.subtype, memo:u.memo, publicReason:u.publicReason, start:u.date, end:u.date, total: u.type === '연차' ? 1 : (Number(u.days) || 0) });
+      });
+      groups.reverse();
+      body = `<div class="hint" style="margin:0 0 6px;">${y}년 ${groups.length}건</div>` + tbl(['날짜','구분','메모'], groups.length ? groups.map(g => {
+        let lab;
+        if(g.type === '연차') lab = `연차 (${g.total}일)`;
+        else if(g.type === '반차' || g.type === '반반차'){ const rng = attLeaveRange(g.start, g.type, g.subtype, std); lab = `${g.type} (${SUBL[g.subtype] || g.subtype || ''}${rng ? ' · ' + rng : ''}, ${g.type === '반차' ? '0.5일' : '0.25일'})`; }
+        else lab = `${g.type === '공가' && g.publicReason ? '공가_' + g.publicReason : g.type} (${g.total}일, 연차차감 없음)`;
+        return `<tr><td style="white-space:nowrap;">${g.start === g.end ? g.start : `${g.start} ~ ${g.end}`}</td><td>${taxjEsc(lab)}</td><td>${taxjEsc(g.memo || '')}</td></tr>`;
+      }).join('') : empty(3));
+    }else{
+      const byM = {}; [...rm].sort(desc).forEach(r => { const k = String(r.date).slice(0, 7); (byM[k] = byM[k] || []).push(r); });
+      const ks = Object.keys(byM).sort().reverse();
+      body = ks.length ? ks.map((k, i) => `<details class="ay-fold" ${i === 0 || k === attendMonth ? 'open' : ''}><summary>${Number(k.slice(0, 4))}년 ${Number(k.slice(5))}월 <span>(${byM[k].length}건)</span></summary>
+          ${tbl(['날짜','구분','메모'], byM[k].map(r => `<tr><td style="white-space:nowrap;">${r.date}</td><td>${remoteTag(r)}</td><td>${taxjEsc(r.memo || '')}</td></tr>`).join(''))}</details>`).join('')
+        : `<div class="empty" style="padding:14px;">${y}년 재택 기록이 없어요.</div>`;
+    }
+    extra = '<div class="hint" style="margin:10px 0 0;">회사웹 기록 그대로예요(조회만). 잔여 연차는 회사웹에서 확인해 주세요.</div>';
   }else{
-    const all = ATTEND_EXP_KINDS.map(([f]) => (ex[f] || []).filter(inYear));
+    // [2026.10.16] "경비정산은 월별·연도별 상세내역 + 매달 식대한도와 식대·미사용분·경비·차액정산 구분"(요청)
+    // 식대 한도 = Tax.J calcExpenseSummary와 같은 계산: 식대기준일수(calcWorkdays) × 1일 한도(s__lunchLimitHistory, 그 달 말일 기준 최신)
+    //   미사용분 = 한도 − 점심식대(0 미만이면 0), 경비청구액 = 점심 + 저녁 + 택시 + 경비 + 차액정산(경비청구로 반영분), 네이버페이 반영 차액정산은 따로
+    const tab = attendYearTab === 'detail' ? 'detail' : 'sum';
+    tabs = [['sum','요약'], ['detail','상세']];
     const amt = l => l.reduce((a, e) => a + (Number(e.amount) || 0), 0);
-    const tr = (cols, first) => first + cols.map(v => `<td style="text-align:right;">${n0(v)}</td>`).join('') + `<td style="text-align:right; font-weight:800;">${n0(cols.reduce((a, v) => a + v, 0))}</td>`;
-    head = '<th>월</th>' + ATTEND_EXP_KINDS.map(([, l]) => `<th>${l}</th>`).join('') + '<th>합계</th>';
-    rows = months.map(m => `<tr>${tr(all.map(l => amt(l.filter(e => mOf(e) === m))), monthTd(m))}</tr>`).join('');
-    foot = `<tr style="font-weight:800; background:#faf0f5;">${tr(all.map(amt), '<td>합계</td>')}</tr>`;
-    extra = '<div class="hint" style="margin:10px 0 0;">회사웹에 적힌 금액 그대로 더했어요(원).</div>';
+    const byKind = Object.fromEntries(ATTEND_EXP_KINDS.map(([f]) => [f, (ex[f] || []).filter(inYear)]));
+    const nowM = todayStr().slice(0, 7);
+    const monthCalc = m => {
+      const ms = `${y}-${pad2(m)}`, inM = l => l.filter(e => String(e.date).startsWith(ms));
+      const lunch = amt(inM(byKind.lunchEntries)), dinner = amt(inM(byKind.dinnerEntries)), taxi = amt(inM(byKind.taxiEntries)), other = amt(inM(byKind.otherExpenses));
+      const pre = inM(byKind.prepaidEntries), preClaim = amt(pre.filter(e => e.settleTo !== 'naverpay')), preNaver = amt(pre.filter(e => e.settleTo === 'naverpay'));
+      const future = ms > nowM;
+      const wd = future ? null : attWorkdays(ms, att, pd);
+      const daily = attLunchDaily(ms), limit = wd ? wd.workdays * daily : 0;
+      const unused = wd && daily ? Math.max(0, limit - lunch) : 0;
+      return { ms, wd, daily, limit, lunch, unused, over: Math.max(0, lunch - limit), dinner, taxi, other, preClaim, preNaver, claim: Math.max(0, lunch + dinner + other + taxi + preClaim) };
+    };
+    const mc = months.map(monthCalc);
+    if(tab === 'sum'){
+      const cols = [['기준일수', c => c.wd ? c.wd.workdays + '일' : na], ['식대 한도', c => n0(c.limit)], ['점심식대', c => n0(c.lunch)], ['미사용분', c => `<span style="color:#059669; font-weight:700;">${n0(c.unused)}</span>`],
+        ['저녁식대', c => n0(c.dinner)], ['택시비', c => n0(c.taxi)], ['경비', c => n0(c.other)], ['차액정산', c => n0(c.preClaim + c.preNaver)], ['경비청구액', c => `<b>${n0(c.claim)}</b>`]];
+      const sum = k => mc.reduce((a, c) => a + c[k], 0);
+      head = '<th>월</th>' + cols.map(([l]) => `<th>${l}</th>`).join('');
+      rows = mc.map((c, i) => `<tr>${monthTd(i + 1)}${cols.map(([, f]) => `<td style="text-align:right;">${f(c)}</td>`).join('')}</tr>`).join('');
+      const tot = { wd: { workdays: mc.reduce((a, c) => a + (c.wd ? c.wd.workdays : 0), 0) }, limit: sum('limit'), lunch: sum('lunch'), unused: sum('unused'), dinner: sum('dinner'), taxi: sum('taxi'), other: sum('other'), preClaim: sum('preClaim'), preNaver: sum('preNaver'), claim: sum('claim') };
+      foot = `<tr style="font-weight:800; background:#faf0f5;"><td>합계</td>${cols.map(([, f]) => `<td style="text-align:right;">${f(tot)}</td>`).join('')}</tr>`;
+      extra = '<div class="hint" style="margin:10px 0 0;">식대 한도 = 식대기준일수 × 1일 한도(회사웹과 같은 계산). 미사용분 = 한도 − 점심식대. 경비청구액은 네이버페이로 반영한 차액정산을 빼고 더한 값이에요. 아직 오지 않은 달은 한도를 계산하지 않아요.</div>';
+    }else{
+      const kinds = ['', ...ATTEND_EXP_KINDS.map(k => k[0])];
+      const kf = kinds.includes(attendExpKind) ? attendExpKind : '';
+      const chips = `<div class="sm-seg wrap" style="flex-wrap:wrap; height:auto; min-height:37px; margin:0 auto 10px; display:flex; width:max-content; max-width:100%;">${[['', '전체']].concat(ATTEND_EXP_KINDS).map(([f, l]) => `<button class="${kf === f ? 'on' : ''}" onclick="attendExpKind='${f}'; attendYearNav(0);">${l}</button>`).join('')}</div>`;
+      const sections = mc.slice().reverse().map(c => {
+        const list = [];
+        ATTEND_EXP_KINDS.forEach(([f, l]) => { if(!kf || kf === f) byKind[f].filter(e => String(e.date).startsWith(c.ms)).forEach(e => list.push({ e, l })); });
+        const showLunch = !kf || kf === 'lunchEntries';
+        if(!list.length && !(showLunch && c.wd && c.daily && c.ms <= nowM && (c.lunch || mc.some(x => x.lunch)))) return '';
+        list.sort((p, q) => p.e.date < q.e.date ? 1 : -1);
+        const subtotal = amt(list.map(x => x.e));
+        const lunchInfo = showLunch && c.wd && c.daily ? `<div class="ay-lunch">식대기준일수 <b>${c.wd.workdays}일</b> × 1일 ${c.daily.toLocaleString()}원 = 한도 <b>${c.limit.toLocaleString()}</b> · 점심식대 <b>${c.lunch.toLocaleString()}</b> · 미사용분 <b style="color:#059669;">${c.unused.toLocaleString()}</b>${c.over ? ` · 초과 <b style="color:#e11d48;">${c.over.toLocaleString()}</b>` : ''}</div>` : '';
+        return `<details class="ay-fold" ${c.ms === attendMonth || (attendMonth.slice(0, 4) !== y && c.ms === `${y}-12`) ? 'open' : ''}><summary>${Number(c.ms.slice(5))}월 <span>(${list.length}건 · ${subtotal.toLocaleString()}원)</span></summary>${lunchInfo}
+          <div class="table-scroll"><table><thead><tr><th>날짜</th><th>구분</th><th>금액</th><th>메모</th></tr></thead><tbody>${list.length ? list.map(x => `<tr><td style="white-space:nowrap;">${x.e.date}</td><td>${x.l}${x.e.settleTo === 'naverpay' ? ' <span class="hint" style="margin:0;">네이버페이</span>' : ''}</td><td style="text-align:right; font-weight:700;">${(Number(x.e.amount) || 0).toLocaleString()}</td><td>${taxjEsc(x.e.memo || '')}</td></tr>`).join('') : `<tr><td colspan="4"><div class="empty" style="padding:10px;">기록이 없어요.</div></td></tr>`}</tbody></table></div></details>`;
+      }).join('');
+      const yearTotal = ATTEND_EXP_KINDS.filter(([f]) => !kf || kf === f).reduce((a, [f]) => a + amt(byKind[f]), 0);
+      body = chips + `<div class="hint" style="margin:0 0 6px; text-align:center;">${y}년 ${kf ? (ATTEND_EXP_KINDS.find(k => k[0] === kf) || [])[1] : '전체'} 합계 <b>${yearTotal.toLocaleString()}원</b></div>` + (sections || `<div class="empty" style="padding:14px;">${y}년 기록이 없어요.</div>`);
+    }
   }
+  const tabBar = tabs.length ? `<div class="sm-seg wrap" style="flex-wrap:wrap; height:auto; min-height:37px; margin:0 auto 12px; display:flex; width:max-content; max-width:100%;">${tabs.map(([k, l]) => `<button class="${(attendYearTab || tabs[0][0]) === k || (!tabs.some(t => t[0] === attendYearTab) && k === tabs[0][0]) ? 'on' : ''}" onclick="attendYearTab='${k}'; attendYearNav(0);">${l}</button>`).join('')}</div>` : '';
   return `<div style="display:flex; align-items:center; justify-content:center; gap:12px; margin-bottom:12px;">
       <button class="btn ghost xs" onclick="attendYearNav(-1)" title="이전 해">‹</button>
       <span style="font-weight:800; font-size:15px; color:var(--text);">${taxjEsc(person)} · ${y}년</span>
       <button class="btn ghost xs" onclick="attendYearNav(1)" title="다음 해">›</button></div>
-    <div class="table-scroll"><table><thead><tr>${head}</tr></thead><tbody>${rows}${foot}</tbody></table></div>${extra}`;
+    ${tabBar}${body != null ? body : `<div class="table-scroll"><table><thead><tr>${head}</tr></thead><tbody>${rows}${foot}</tbody></table></div>`}${extra}`;
+}
+// Tax.J calcWorkdays와 같은 식대기준일수 계산(직원 data__<id>의 휴가·재택 + s__exclusionDays, 입사한 달은 입사일부터)
+function attWorkdays(ms, att, pd){
+  const [yy, mm] = ms.split('-').map(Number), total = new Date(yy, mm, 0).getDate();
+  const hire = String((pd.settings && pd.settings.hireDate) || ''), hireFrom = hire.startsWith(ms) ? hire : '';
+  let raw = 0; for(let d = hireFrom ? Number(hireFrom.slice(8, 10)) : 1; d <= total; d++){ const w = new Date(yy, mm - 1, d).getDay(); if(w && w !== 6) raw++; }
+  const SPECIAL = ['포상휴가','경조사휴가','공가','기타휴가'];
+  const usage = (att.leaveUsage || []).filter(u => String(u.date || '').startsWith(ms));
+  let noLunch = 0; const noLunchDates = new Set();
+  usage.forEach(u => {
+    if(u.type === '연차'){ noLunch += 1; noLunchDates.add(u.date); }
+    else if(u.type === '반차' && (u.subtype === '오전반차' || u.subtype === '오후반차_식사X')){ noLunch += 1; noLunchDates.add(u.date); }
+    else if(SPECIAL.includes(u.type)){ noLunch += Number(u.days) || 0; noLunchDates.add(u.date); }
+  });
+  const exc = taxjDoc('exclusionDays'), list = (Array.isArray(exc) ? exc : []).filter(x => x && String(x.date || '').startsWith(ms) && (!hireFrom || x.date >= hireFrom));
+  const isWd = ds => { const w = new Date(ds + 'T00:00:00').getDay(); return w && w !== 6; };
+  const hol = list.filter(x => x.reason === '공휴일' && isWd(x.date)).length;
+  const exclusion = list.filter(x => x.reason === '점심회식' || x.reason === '기타').length;
+  const remoteNoLunch = (att.remoteEntries || []).filter(r => {
+    if(!String(r.date || '').startsWith(ms)) return false;
+    if(r.half) return !!r.noLunch && !noLunchDates.has(r.date);
+    if(r.bonus) return ms >= '2026-09';
+    return !!r.noLunch;
+  }).length;
+  const weekdays = Math.max(0, raw - hol);
+  return { weekdays, workdays: Math.max(0, weekdays - noLunch - exclusion - remoteNoLunch) };
+}
+// Tax.J getLunchLimitFor와 같음: 그 달 말일까지 적용된 가장 최근 1일 한도
+function attLunchDaily(ms){
+  const [yy, mm] = ms.split('-').map(Number), end = `${ms}-${pad2(new Date(yy, mm, 0).getDate())}`;
+  const h = taxjDoc('lunchLimitHistory'), ap = (Array.isArray(h) ? h : []).filter(x => x && x.effectiveDate && x.effectiveDate <= end).sort((p, q) => p.effectiveDate < q.effectiveDate ? 1 : -1);
+  return ap.length ? (Number(ap[0].dailyAmount !== undefined ? ap[0].dailyAmount : ap[0].amount) || 0) : 0;
 }
 function attendYearNav(n){ attendYear += n; const b = document.getElementById('attendYearBody'); if(b) b.innerHTML = attendYearHtml(); }
 function attendGoMonth(m){ attendMonth = `${attendYear}-${pad2(m)}`; const ok = document.querySelector('.sm-modal-ok'); if(ok) ok.click(); renderAttend(); }
 function attendOpenYear(){
+  attendYearTab = ''; attendExpKind = '';
   attendYear = Number(String(attendMonth).slice(0, 4)) || new Date().getFullYear();
   const t = (ATTEND_VIEWS.find(v => v[0] === attendView) || [, ''])[1];
   smDialog({ title:`${t} 연간 전체보기`, html:`<div id="attendYearBody">${attendYearHtml()}</div>`, icon:'≡', okText:'닫기', cancelText:null, wide:true });
@@ -7067,28 +7285,31 @@ function innerCopy(btn){
 function innerCopyBtn(v){ return v ? ` <button type="button" class="sm-kcopy" data-v="${escapeAttr(v)}" onclick="innerCopy(this)" title="복사" aria-label="복사">${SM_ICON_COPY}</button>` : ''; }
 function innerLink(u){ return `<a href="${escapeAttr(u)}" target="_blank" rel="noopener">${taxjEsc(u)}</a>`; }
 // 왼쪽 등록증 카드: [항목명, 값] 목록
+// [2026.10.16] Tax.J buildCiProfileSideHtml과 같은 짜임(명조 제목 + 영문 소제목 + 밑줄, 항목명 띠·세로 구분선·점선)(요청)
 function innerProfileCard(title, eyebrow, rows, empty){
-  return `<div class="card" style="flex:1 1 300px; min-width:280px;">
-    <div style="text-align:center; margin-bottom:12px;"><div style="font-size:20px; font-weight:800;">${taxjEsc(title)}</div><div class="hint" style="margin:2px 0 0; letter-spacing:.12em; font-weight:700;">${eyebrow}</div></div>
-    ${rows.length ? `<div style="display:grid; grid-template-columns:max-content 1fr; gap:8px 14px; font-size:13.5px;">${rows.map(([k, v]) => `<div style="color:var(--muted);">${taxjEsc(k)}</div><div style="font-weight:700; word-break:break-all;">${v}</div>`).join('')}</div>`
+  return `<div class="sm-ci-side" style="flex:1 1 300px; min-width:280px;">
+    <div class="sm-ci-head"><div class="sm-ci-name">${taxjEsc(title)}</div><div class="sm-ci-eyebrow">${eyebrow}</div></div>
+    ${rows.length ? `<dl class="sm-ci-dl">${rows.map(([k, v]) => `<dt>${taxjEsc(k)}</dt><dd>${v}</dd>`).join('')}</dl>`
       : `<div class="empty">${empty}</div>`}
   </div>`;
 }
 // 오른쪽 공용정보 목록: 계정(ID·PW) / 정보(내용) 한 줄씩, 복사 버튼
-function innerKeysCard(title, list, empty){
+// [2026.10.16] Tax.J ciKRowHtml·buildCiKeychainHtml과 같은 짜임(항목명 띠 | ID·PW 값 … 메모는 오른쪽 끝). doc=true면 소제목 + 얇은 밑줄 머리글
+function innerKeysCard(title, list, empty, doc, eyebrow){
+  const pair = (k, v) => `<span class="sm-ci-kpair">${k ? `<span class="k">${k}</span>` : ''}<span class="v" title="${escapeAttr(v || '')}">${v ? taxjEsc(v) : '-'}</span>${innerCopyBtn(v)}</span>`;
   const rows = (list || []).map(it => {
     const acc = (it.type || 'account') === 'account';
     const href = it.noteIsLink ? (it.note || it.link || '') : (it.link && !it.note ? it.link : '');
-    const note = href ? `<a href="${escapeAttr(href)}" target="_blank" rel="noopener">🔗 열기</a>` : (it.note ? taxjEsc(it.note) : '');
+    const note = href ? `<span class="sm-ci-knote"><a href="${escapeAttr(href)}" target="_blank" rel="noopener">🔗 열기</a></span>` : (it.note ? `<span class="sm-ci-knote" title="${escapeAttr(it.note)}">${taxjEsc(it.note)}</span>` : '');
     let val;
-    if(it.sensitiveEnc) val = '<span class="hint" style="margin:0;">🔒 암호화된 항목 · 회사웹에서 확인</span>';
-    else if(acc) val = `${it.idVal ? `<span class="hint" style="margin:0;">ID</span> <b>${taxjEsc(it.idVal)}</b>${innerCopyBtn(it.idVal)} &nbsp;` : ''}<span class="hint" style="margin:0;">PW</span> <b>${it.pwVal ? taxjEsc(it.pwVal) : '-'}</b>${innerCopyBtn(it.pwVal)}`;
-    else val = `<b>${it.content ? taxjEsc(it.content) : '-'}</b>${innerCopyBtn(it.content)}`;
-    return `<tr><td style="font-weight:700; white-space:nowrap; text-align:left;">${taxjEsc(it.label || '')}</td><td style="text-align:left;">${val}</td><td class="hint" style="margin:0; text-align:left; font-size:12.5px;">${note}</td></tr>`;
+    if(it.sensitiveEnc) val = '<span class="sm-ci-kpair"><span class="v" style="color:var(--muted);">🔒 암호화된 항목 · 회사웹에서 확인</span></span>';
+    else if(acc) val = (it.idVal ? pair('ID', it.idVal) : '') + pair('PW', it.pwVal);
+    else val = pair('', it.content);
+    return `<div class="sm-ci-krow"><div class="sm-ci-klabel" title="${escapeAttr(it.label || '')}">${taxjEsc(it.label || '')}</div><div class="sm-ci-kline">${val}${note}</div></div>`;
   }).join('');
-  return `<div class="card" style="flex:2 1 460px; min-width:300px;">
-    <div style="font-weight:800; margin-bottom:8px;">${taxjEsc(title)} <span class="hint" style="margin:0; font-weight:600;">${(list || []).length}건</span></div>
-    ${rows ? `<div class="table-scroll"><table><tbody>${rows}</tbody></table></div>` : `<div class="empty">${empty}</div>`}
+  return `<div class="sm-ci-keys${doc ? ' doc' : ''}" style="flex:2 1 460px; min-width:300px;">
+    <div class="sm-ci-khead"><span class="t">${taxjEsc(title)}</span>${doc ? `<span class="e">${eyebrow || 'SHARED ACCOUNTS'}</span>` : ''}<span class="e" style="margin-left:auto; letter-spacing:0; font-size:11.5px;">${(list || []).length}건</span></div>
+    ${rows || `<div class="sm-ci-kempty">${empty || '등록된 항목이 없어요.'}</div>`}
   </div>`;
 }
 function innerCorpHtml(docs){
@@ -7102,7 +7323,7 @@ function innerCorpHtml(docs){
   const extra = info.filter(it => !INNER_CORP_ORDER.includes(it.label) && it.label !== '회사명');
   return `<div style="display:flex; gap:12px; flex-wrap:wrap; align-items:flex-start;">
     ${innerProfileCard(docs.s__companyName || '회사명 미등록', 'CORPORATE PROFILE', rows, '회사웹 설정 › 회사정보에 등록된 기본정보가 없어요.')}
-    ${innerKeysCard('공용정보', acc.concat(extra), '등록된 계정이 없어요.')}</div>`;
+    ${innerKeysCard('공용정보', acc.concat(extra), '등록된 계정이 없어요.', true)}</div>`;
 }
 function innerTeamHtml(docs){
   const ti = docs.s__teamInfo || {}, ci = docs.s__companyInfo || {};
@@ -7113,7 +7334,7 @@ function innerTeamHtml(docs){
   const members = (ci.team || []).filter(p => p && p.person && (p.items || []).length);
   return `<div style="display:flex; gap:12px; flex-wrap:wrap; align-items:flex-start;">
       ${innerProfileCard(ti.teamName || '팀명 미등록', 'TEAM PROFILE', rows, '회사웹 설정 › 팀정보에 등록된 내용이 없어요.')}
-      ${innerKeysCard('팀 공용정보', ci.teamGeneral || [], '등록된 항목이 없어요.')}</div>
+      ${innerKeysCard('팀 공용정보', ci.teamGeneral || [], '등록된 항목이 없어요.', true)}</div>
     ${members.length ? `<div style="font-weight:800; margin:16px 0 8px;">팀원별 정보</div><div style="display:flex; gap:12px; flex-wrap:wrap; align-items:flex-start;">${members.map(p => innerKeysCard(`${p.person}${p.title ? ' · ' + p.title : ''}`, p.items, '')).join('')}</div>` : ''}`;
 }
 // ── 세무일정 (Tax.J getTaxScheduleForMonth와 같은 계산) ──
@@ -7178,7 +7399,7 @@ function renderInner(){
   const tabs = `<div class="cl-subtabs pay-maintabs">${INNER_VIEWS.map(([k, l]) => `<button class="cl-subtab ${innerView === k ? 'on' : ''}" onclick="setInnerView('${k}')">${l}</button>`).join('')}</div>`;
   const body = !docs ? '<div class="card"><div class="empty">Tax.J에 연결하면 회사웹 내부 정보가 여기에 채워져요.</div></div>'
     : innerView === 'team' ? innerTeamHtml(docs) : innerView === 'sched' ? `<div class="card">${innerSchedHtml(docs)}</div>` : innerCorpHtml(docs);
-  el.innerHTML = `<div class="card" style="margin-bottom:12px;">${taxjLiveBarHtml().replace('margin-bottom:10px;', 'margin-bottom:0;')}</div>${body}`;   // [2026.10.14] 왼쪽 하위메뉴와 같은 가로 메뉴는 없앰(요청)
+  el.innerHTML = `<div style="margin-bottom:8px;">${taxjLiveBarHtml().replace('margin-bottom:10px;', 'margin-bottom:0;')}</div>${body}`;   // [2026.10.16] 연결 상태는 흰 박스 없이 글자만(요청)   // [2026.10.14] 왼쪽 하위메뉴와 같은 가로 메뉴는 없앰(요청)
 }
 
 function setTaxjFullView(v){ taxjFullView = v; if(activeTab !== 'taxj') switchTab('taxj'); else renderTaxjFull(); }
@@ -7975,17 +8196,44 @@ function accB64(buf){ const a = new Uint8Array(buf); let s = ''; for(let i = 0; 
 function accUnB64(str){ const b = atob(str); const a = new Uint8Array(b.length); for(let i = 0; i < b.length; i++) a[i] = b.charCodeAt(i); return a; }
 async function accDeriveKey(pw, salt){
   const base = await crypto.subtle.importKey('raw', new TextEncoder().encode(pw), 'PBKDF2', false, ['deriveKey']);
-  return crypto.subtle.deriveKey({ name:'PBKDF2', salt, iterations:250000, hash:'SHA-256' }, base, { name:'AES-GCM', length:256 }, false, ['encrypt','decrypt']);
+  return crypto.subtle.deriveKey({ name:'PBKDF2', salt, iterations:250000, hash:'SHA-256' }, base, { name:'AES-GCM', length:256 }, true, ['encrypt','decrypt']);   // [2026.10.16] 이 기기에 기억해 두려고 내보낼 수 있게
 }
 async function accEncryptAndStore(){
   const iv = crypto.getRandomValues(new Uint8Array(12));
-  const plain = new TextEncoder().encode(JSON.stringify({ items: accountItems, nextId: accountNextId }));
+  const plain = new TextEncoder().encode(JSON.stringify({ items: accountItems, nextId: accountNextId, cats: accountCats }));
   const data = await crypto.subtle.encrypt({ name:'AES-GCM', iv }, accountKey, plain);
   accountVault = { v:1, salt: accB64(accountSalt), iv: accB64(iv), data: accB64(data) };
+  accountOpenedData = accountVault.data;
 }
-function accTouch(){
-  clearTimeout(accountIdleTimer);
-  if(accountKey) accountIdleTimer = setTimeout(() => { accLock(); }, ACC_IDLE_MS);
+// [2026.10.16] "잠그기 기능 없는 게 나을 것 같아, 불편해"(요청) - 잠그기 버튼·2시간 자동 잠금을 없애고,
+// 이 기기에서 보관함 비밀번호를 한 번 입력하면 키를 이 기기에 기억해 다음부터 바로 열림(Google 시트에는 계속 암호화된 채로 저장).
+// 새 기기에서는 처음 한 번만 보관함 비밀번호를 입력
+const ACC_KEY_STORE = 'sm_acc_key';
+function accTouch(){}
+async function accRememberKey(key, salt){
+  try{ const raw = await crypto.subtle.exportKey('raw', key); localStorage.setItem(ACC_KEY_STORE, JSON.stringify({ salt: accB64(salt), k: accB64(raw) })); }catch(e){ console.warn('보관함 키 기억 실패', e); }
+}
+function accApplyPlain(o){
+  accountItems = Array.isArray(o.items) ? o.items : [];
+  accountNextId = o.nextId || (accountItems.reduce((m, x) => Math.max(m, x.id || 0), 0) + 1);
+  accountCats = Array.isArray(o.cats) ? o.cats : [];
+}
+// 기억해 둔 키(또는 지금 키)로 보관함을 풂. 열리면 true
+async function accAutoOpen(){
+  if(!accountVault) return false;
+  let key = null, salt = null;
+  if(accountKey && accountSalt && accB64(accountSalt) === accountVault.salt){ key = accountKey; salt = accountSalt; }
+  else{
+    let st = null; try{ st = JSON.parse(localStorage.getItem(ACC_KEY_STORE) || 'null'); }catch(e){}
+    if(!st || st.salt !== accountVault.salt) return false;
+    try{ key = await crypto.subtle.importKey('raw', accUnB64(st.k), { name:'AES-GCM' }, true, ['encrypt','decrypt']); salt = accUnB64(st.salt); }catch(e){ return false; }
+  }
+  try{
+    const plain = await crypto.subtle.decrypt({ name:'AES-GCM', iv: accUnB64(accountVault.iv) }, key, accUnB64(accountVault.data));
+    accApplyPlain(JSON.parse(new TextDecoder().decode(plain)));
+    accountKey = key; accountSalt = salt; accountOpenedData = accountVault.data;
+    return true;
+  }catch(e){ return false; }
 }
 function accLock(silent){
   accountKey = null; accountSalt = null; accountItems = null; accountShown.clear();
@@ -8005,7 +8253,8 @@ async function accCreateVault(){
   if(p1 !== p2){ smAlert('두 비밀번호가 달라요', '한 번 더 입력한 비밀번호가 같은지 확인해 주세요.'); return; }
   accountSalt = crypto.getRandomValues(new Uint8Array(16));
   accountKey = await accDeriveKey(p1, accountSalt);
-  accountItems = []; accountNextId = 1;
+  accountItems = []; accountNextId = 1; accountCats = [];
+  accRememberKey(accountKey, accountSalt);
   await accSave();
 }
 async function accUnlock(){
@@ -8016,11 +8265,9 @@ async function accUnlock(){
     const salt = accUnB64(accountVault.salt);
     const key = await accDeriveKey(pw, salt);
     const plain = await crypto.subtle.decrypt({ name:'AES-GCM', iv: accUnB64(accountVault.iv) }, key, accUnB64(accountVault.data));
-    const o = JSON.parse(new TextDecoder().decode(plain));
-    accountKey = key; accountSalt = salt;
-    accountItems = Array.isArray(o.items) ? o.items : [];
-    accountNextId = o.nextId || (accountItems.reduce((m, x) => Math.max(m, x.id || 0), 0) + 1);
-    accTouch();
+    accApplyPlain(JSON.parse(new TextDecoder().decode(plain)));
+    accountKey = key; accountSalt = salt; accountOpenedData = accountVault.data;
+    accRememberKey(key, salt);
     renderAccounts();
   }catch(e){
     if(inp){ inp.value = ''; inp.focus(); }
@@ -8037,35 +8284,82 @@ async function accChangeMaster(){
   if(r[0] !== r[1]){ smAlert('두 비밀번호가 달라요', '한 번 더 입력한 비밀번호가 같은지 확인해 주세요.'); return; }
   accountSalt = crypto.getRandomValues(new Uint8Array(16));
   accountKey = await accDeriveKey(r[0], accountSalt);
+  accRememberKey(accountKey, accountSalt);
   await accSave();
-  smAlert('바꿨어요', '다음부터는 새 비밀번호로 열어 주세요.', { icon:'✓' });
+  smAlert('바꿨어요', '다른 기기에서 처음 열 때는 새 비밀번호를 입력해 주세요.', { icon:'✓' });
+}
+// [2026.10.16] "항목/ID/PW/링크/메모/관리로, 분야 관리 추가, 수정이력"(요청)
+function accGroups(){
+  const cats = (accountCats || []).filter(c => c && c !== '기타');
+  const extra = [...new Set((accountItems || []).filter(a => a.src !== 'taxj').map(a => a.group || '기타'))].filter(g => !cats.includes(g)).sort((a, b) => (a === '기타') - (b === '기타') || a.localeCompare(b, 'ko'));
+  return cats.concat(extra);
 }
 function accFields(x){
   x = x || {};
   return [
-    { label:'사이트·서비스', value:x.site || '', placeholder:'예: 홈택스' },
-    { label:'주소 (선택)', value:x.url || '', placeholder:'예: hometax.go.kr' },
-    { label:'아이디', value:x.user || '' },
-    { label:'비밀번호', value:x.pw || '' },
+    { label:'항목', value:x.site || '', placeholder:'예: 홈택스' },
+    { label:'분야', options: [...new Set([...accGroups(), '기타'])].concat(['+ 새 분야']), value: x.group || accGroups()[0] || '기타' },
+    { label:'ID', value:x.user || '' },
+    { label:'PW', value:x.pw || '' },
+    { label:'링크 (선택)', value:x.url || '', placeholder:'예: hometax.go.kr' },
     { label:'메모 (선택)', type:'textarea', rows:2, value:x.memo || '', placeholder:'예: 공인인증서 위치, 보안질문 힌트' },
   ];
 }
+async function accPickGroup(g){
+  if(g !== '+ 새 분야') return g === '기타' ? '' : g;
+  const r = await smForm('새 분야', [{ label:'분야 이름', placeholder:'예: 은행, 쇼핑, 세무' }], { okText:'확인' });
+  const name = r && r[0].trim() ? r[0].trim() : null;
+  if(name && name !== '기타' && !accountCats.includes(name)) accountCats = accGroups().filter(x => x !== '기타').concat(name);
+  return name;
+}
 async function accAdd(){
   if(!accountItems) return;
-  accTouch();
   const r = await smForm('계정 추가', accFields(), { okText:'추가', icon:'+', wide:true });
   if(!r) return;
-  if(!r[0].trim() && !r[2].trim()){ smAlert('사이트나 아이디를 입력해 주세요', ''); return; }
-  accountItems.push({ id: accountNextId++, site:r[0].trim(), url:r[1].trim(), user:r[2].trim(), pw:r[3], memo:r[4].trim(), at: todayStr() });
+  const group = await accPickGroup(r[1]); if(group === null) return;
+  if(!r[0].trim() && !r[2].trim()){ smAlert('항목이나 ID를 입력해 주세요', ''); return; }
+  accountItems.push({ id: accountNextId++, site:r[0].trim(), group, user:r[2].trim(), pw:r[3], url:r[4].trim(), memo:r[5].trim(), at: todayStr() });
   await accSave();
 }
+const ACC_HIST_FIELDS = [['site','항목'], ['group','분야'], ['user','ID'], ['pw','PW'], ['url','링크'], ['memo','메모']];
 async function accEdit(id){
   const x = (accountItems || []).find(a => a.id === id);
   if(!x) return;
-  accTouch();
   const r = await smForm('계정 수정', accFields(x), { okText:'저장', icon:'✎', wide:true });
   if(!r) return;
-  Object.assign(x, { site:r[0].trim(), url:r[1].trim(), user:r[2].trim(), pw:r[3], memo:r[4].trim(), at: todayStr() });
+  const group = await accPickGroup(r[1]); if(group === null) return;
+  const next = { site:r[0].trim(), group, user:r[2].trim(), pw:r[3], url:r[4].trim(), memo:r[5].trim() };
+  const ch = ACC_HIST_FIELDS.filter(([f]) => String(x[f] || '') !== String(next[f] || '')).map(([f]) => ({ f, from: x[f] || '', to: next[f] || '' }));
+  if(!ch.length) return;
+  const d = new Date();
+  (x.history = x.history || []).unshift({ at: `${todayStr()} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`, ch });
+  if(x.history.length > 30) x.history.length = 30;
+  Object.assign(x, next, { at: todayStr() });
+  await accSave();
+}
+function accHistory(id){
+  const x = (accountItems || []).find(a => a.id === id);
+  if(!x) return;
+  const lab = f => (ACC_HIST_FIELDS.find(v => v[0] === f) || [, f])[1];
+  const v = t => t ? taxjEsc(t) : '<span style="color:#d4c6cd;">(없음)</span>';
+  const html = (x.history || []).length ? `<div style="display:flex; flex-direction:column; gap:8px;">${x.history.map(h => `<div style="border:1px solid var(--border); border-radius:10px; padding:8px 12px; font-size:13px;">
+      <div style="font-weight:800; color:var(--primary-dark); margin-bottom:4px;">${taxjEsc(h.at)}</div>
+      ${h.ch.map(c => `<div><b>${lab(c.f)}</b> <span style="color:var(--muted);">${v(c.from)} → </span>${v(c.to)}</div>`).join('')}</div>`).join('')}</div>`
+    : `<div class="hint" style="margin:0; text-align:center;">${x.at ? `마지막 수정 ${taxjEsc(x.at)} · ` : ''}고친 기록이 아직 없어요.</div>`;
+  smDialog({ title:`${x.site || x.user || ''} 수정이력`, html, icon:'↺', okText:'닫기', cancelText:null, wide:true });
+}
+async function accEditCats(){
+  const cur = accGroups().filter(g => g !== '기타');
+  const mine = accountItems.filter(a => a.src !== 'taxj');
+  const r = await smCatEditor('계정 분야 관리', cur, { countOf: g => mine.filter(a => (a.group || '기타') === g).length, placeholder:'예: 은행, 쇼핑, 세무' });
+  if(!r) return;
+  const next = r.map(x => x.name).filter(x => x !== '기타');
+  const ren = Object.create(null); r.forEach(x => { if(x.orig != null && x.orig !== x.name) ren[x.orig] = x.name === '기타' ? '' : x.name; });
+  const orphan = mine.filter(a => a.group && !(a.group in ren) && !next.includes(a.group));
+  if(orphan.length && !(await smConfirm('없어지는 분야가 있어요', `계정 ${orphan.length}개는 '기타'로 옮겨져요.`, { okText:'저장' }))) return;
+  mine.forEach(a => { if(a.group && a.group in ren) a.group = ren[a.group]; });
+  orphan.forEach(a => { a.group = ''; });
+  accountCats = next;
   await accSave();
 }
 async function accDelete(id){
@@ -8082,7 +8376,7 @@ async function accCopy(id, field, btn){
   accTouch();
   try{
     await navigator.clipboard.writeText(x[field] || '');
-    if(btn){ const t = btn.textContent; btn.textContent = '복사됨'; setTimeout(() => { btn.textContent = t; }, 1200); }
+    if(btn){ btn.innerHTML = SM_ICON_CHECK; btn.classList.add('ok'); setTimeout(() => { btn.innerHTML = SM_ICON_COPY; btn.classList.remove('ok'); }, 900); }
   }catch(e){ smAlert('복사하지 못했어요', '브라우저가 클립보드 사용을 막았어요.'); }
 }
 function accOnSearch(v){ accountSearch = v; accTouch(); renderAccounts(); const s = document.getElementById('accSearch'); if(s){ s.focus(); s.setSelectionRange(v.length, v.length); } }
@@ -8198,63 +8492,69 @@ function renderAccounts(){
       </div></div>`;
     return;
   }
-  if(!accountItems){
-    el.innerHTML = `
+  // [2026.10.16] 이 기기에 기억해 둔 키로 바로 열기(잠금 화면 없이). 다른 기기에서 바뀐 내용이 들어오면 다시 풂
+  if(!accountItems || accountOpenedData !== accountVault.data){
+    if(!accountOpening && accountOpenFailed !== accountVault.data){
+      accountOpening = true;
+      accAutoOpen().then(ok => {
+        accountOpening = false;
+        if(!ok){ accountOpenFailed = accountVault && accountVault.data; accountItems = null; accountOpenedData = null; }
+        renderAccounts();
+      });
+    }
+    if(!accountItems){
+      el.innerHTML = `
       <div class="card acc-wrap"><div class="acc-lock">
         <div class="acc-lock-ic">${lockIc}</div>
-        <h3 style="margin:0 0 6px;">보관함이 잠겨 있어요</h3>
-        <div class="hint" style="margin-bottom:14px;">보관함 비밀번호를 입력하면 열려요. 2시간 동안 손대지 않거나 새로고침하면 다시 잠겨요.</div>
+        <h3 style="margin:0 0 6px;">보관함 비밀번호를 한 번 입력해 주세요</h3>
+        <div class="hint" style="margin-bottom:14px;">이 기기에서 처음 열 때만 물어봐요. 한 번 열면 다음부터는 바로 열려요.</div>
         <input type="password" id="accPw" placeholder="보관함 비밀번호" autocomplete="current-password" onkeydown="if(event.key==='Enter') accUnlock()">
         <button class="btn primary" onclick="accUnlock()">열기</button>
       </div></div>`;
-    return;
+      return;
+    }
   }
+  // [2026.10.16] 전체·개인·회사 구분, Tax.J 불러오기·엑셀 가져오기, 잠그기 없앰(요청: 회사 것은 내부 메뉴에서 봄, 내 것만 씀).
+  // 예전에 가져온 회사 항목(src:'taxj')은 지우지 않고 화면에서만 뺌
   const q = accountSearch.trim().toLowerCase();
-  const nMine = accountItems.filter(a => a.src !== 'taxj').length, nTaxj = accountItems.length - nMine;
-  const list = accountItems
-    .filter(a => accountView === 'all' || (accountView === 'taxj') === (a.src === 'taxj'))
-    .filter(a => !q || [a.site, a.url, a.user, a.memo, a.group].some(v => String(v || '').toLowerCase().includes(q)))
-    .sort((a, b) => ((a.src === 'taxj') - (b.src === 'taxj')) || String(a.group || '').localeCompare(String(b.group || ''), 'ko') || String(a.site || '').localeCompare(String(b.site || ''), 'ko'));
-  el.innerHTML = `
-    <div class="card acc-wrap">
-      <div class="cl-head">
-        <div class="cl-subtabs">
-          ${[['all','전체', accountItems.length], ['mine','개인', nMine], ['taxj','회사(Tax.J)', nTaxj]]
-            .map(([k, l, n]) => `<button class="cl-subtab ${accountView === k ? 'on' : ''}" onclick="accSetView('${k}')">${l} <span>${n}</span></button>`).join('')}
-        </div>
-        <div style="text-align:right;">
-          <button class="btn primary xs" onclick="accImportTaxjLive()" title="Tax.J 메뉴에서 받아 둔 회사 자료의 사내정보를 관리비밀번호로 풀어서 가져와요">Tax.J에서 불러오기</button>
-          <button class="btn ghost xs" onclick="document.getElementById('accTaxjXlsx').click()" title="Tax.J → 엑셀 일괄 다운로드 → 회사정보 파일">Tax.J 엑셀 가져오기</button>
-          <input type="file" id="accTaxjXlsx" accept=".xlsx,.xls" style="display:none;" onchange="accImportTaxjExcel(this)">
-          <div class="hint" style="margin-top:4px;">${settings.taxjAccountsImportedAt ? '마지막 가져오기: ' + settings.taxjAccountsImportedAt : 'Tax.J에서 잠금 해제 후 받은 회사정보 엑셀을 올려주세요'}</div>
-        </div>
-      </div>
-      <div class="toolbar">
-        <input type="text" id="accSearch" placeholder="사이트·아이디·메모 검색" value="${escapeAttr(accountSearch)}" oninput="accOnSearch(this.value)" style="flex:1; min-width:200px;">
-        <button class="btn primary" onclick="accAdd()">계정 추가</button>
-        <button class="btn ghost" onclick="accChangeMaster()">보관함 비밀번호 변경</button>
-        <button class="btn ghost" onclick="accLock()">잠그기</button>
-      </div>
-      ${list.length ? `
-      <div class="table-scroll">
-      <table>
-        <thead><tr><th>사이트·서비스</th><th>아이디</th><th>비밀번호</th><th>메모</th><th>수정일</th><th></th></tr></thead>
-        <tbody>
-          ${list.map(a => `
+  const mine = accountItems.filter(a => a.src !== 'taxj');
+  const list = mine.filter(a => !q || [a.site, a.url, a.user, a.memo, a.group].some(v => String(v || '').toLowerCase().includes(q)));
+  const groups = {};
+  list.forEach(a => { const g = a.group || '기타'; (groups[g] = groups[g] || []).push(a); });
+  const order = accGroups();
+  const names = Object.keys(groups).sort((a, b) => order.indexOf(a) - order.indexOf(b));
+  const eye = on => on ? '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>'
+    : '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
+  const cp = (a, f) => `<button type="button" class="sm-kcopy" onclick="accCopy(${a.id}, '${f}', this)" title="복사" aria-label="복사">${SM_ICON_COPY}</button>`;
+  const row = a => `
           <tr>
-            <td class="acc-site">${a.url ? `<a href="${escapeAttr(accHref(a.url))}" target="_blank" rel="noopener noreferrer" title="${escapeAttr(a.url)}">${escapeAttr(a.site || a.url)}</a>` : escapeAttr(a.site || '-')}${a.src === 'taxj' ? `<div class="acc-memo" style="font-weight:600;">회사 · ${escapeAttr(a.group || 'Tax.J')}</div>` : ''}</td>
-            <td><span class="acc-cell"><span class="acc-secret">${escapeAttr(a.user || '-')}</span>${a.user ? `<button class="btn xs" onclick="accCopy(${a.id}, 'user', this)">복사</button>` : ''}</span></td>
-            <td><span class="acc-cell"><span class="acc-secret">${a.pw ? (accountShown.has(a.id) ? escapeAttr(a.pw) : '••••••••') : '-'}</span>${a.pw ? `<button class="btn xs" onclick="accToggle(${a.id})">${accountShown.has(a.id) ? '숨기기' : '보기'}</button><button class="btn xs" onclick="accCopy(${a.id}, 'pw', this)">복사</button>` : ''}</span></td>
+            <td class="acc-site">${escapeAttr(a.site || '-')}</td>
+            <td><span class="acc-cell"><span class="acc-secret">${a.user ? escapeAttr(a.user) : '<span style="color:#d4c6cd;">-</span>'}</span>${a.user ? cp(a, 'user') : ''}</span></td>
+            <td><span class="acc-cell">${a.pw ? `<span class="acc-secret">${accountShown.has(a.id) ? escapeAttr(a.pw) : '••••••••'}</span><button type="button" class="sm-kcopy" onclick="accToggle(${a.id})" title="${accountShown.has(a.id) ? '숨기기' : '보기'}" aria-label="보기">${eye(accountShown.has(a.id))}</button>${cp(a, 'pw')}` : '<span style="color:#d4c6cd;">-</span>'}</span></td>
+            <td>${a.url ? `<a class="icon-btn" href="${escapeAttr(accHref(a.url))}" target="_blank" rel="noopener noreferrer" title="${escapeAttr(a.url)}" aria-label="사이트 열기" style="color:var(--primary-dark); display:inline-flex;">${ICON_LINK}</a>` : ''}</td>
             <td><div class="acc-memo">${escapeAttr(a.memo || '')}</div></td>
-            <td style="white-space:nowrap;">${a.at ? shortDate(a.at) : ''}</td>
-            <td style="white-space:nowrap;"><span class="row-actions">
+            <td style="white-space:nowrap;"><span class="row-actions" style="display:inline-flex; gap:2px;">
+              <button class="icon-btn" onclick="accHistory(${a.id})" title="수정이력${a.at ? ' · 마지막 ' + a.at : ''}" aria-label="수정이력">${ICON_HISTORY}</button>
               <button class="icon-btn" onclick="accEdit(${a.id})" title="수정" aria-label="수정">${ICON_EDIT}</button>
               <button class="icon-btn danger" onclick="accDelete(${a.id})" title="삭제" aria-label="삭제">${ICON_TRASH}</button>
             </span></td>
-          </tr>`).join('')}
-        </tbody>
-      </table>
-      </div>` : `<div class="empty">${q ? `"${escapeAttr(accountSearch)}" 검색 결과가 없어요.` : '아직 보관한 계정이 없어요. \'계정 추가\'로 넣어 주세요.'}</div>`}
+          </tr>`;
+  el.innerHTML = `
+    <div class="card acc-wrap">
+      <div class="toolbar">
+        <input type="text" id="accSearch" placeholder="항목·ID·메모 검색" value="${escapeAttr(accountSearch)}" oninput="accOnSearch(this.value)" style="flex:1; min-width:200px;">
+        <button class="btn" onclick="accEditCats()">분야 관리</button>
+        <button class="btn primary" onclick="accAdd()">계정 추가</button>
+        <button class="btn ghost" onclick="accChangeMaster()">보관함 비밀번호 변경</button>
+      </div>
+      ${!mine.length ? `<div class="empty">아직 보관한 계정이 없어요. '계정 추가'로 넣어 주세요.</div>`
+        : !list.length ? `<div class="empty">"${escapeAttr(accountSearch)}" 검색 결과가 없어요.</div>`
+        : names.map(g => `
+        ${names.length > 1 || g !== '기타' ? `<div style="font-weight:800; font-size:13px; color:var(--primary-dark); margin:14px 0 4px;">${taxjEsc(g)} <span class="hint" style="margin:0; font-weight:600;">${groups[g].length}</span></div>` : ''}
+        <div class="table-scroll"><table>
+          <thead><tr><th style="width:20%;">항목</th><th style="width:22%;">ID</th><th style="width:20%;">PW</th><th style="width:56px;">링크</th><th>메모</th><th style="width:96px;">관리</th></tr></thead>
+          <tbody>${groups[g].sort((a, b) => String(a.site || '').localeCompare(String(b.site || ''), 'ko')).map(row).join('')}</tbody>
+        </table></div>`).join('')}
     </div>`;
 }
 
@@ -8509,6 +8809,49 @@ function smCatEditor(title, cats, opts){
     setTimeout(() => addIn.focus(), 30);
   });
 }
+// [2026.10.16] 검색칸 → 돋보기 아이콘, 도구줄 안내 문구 → 도움말(?) 아이콘. 화면을 다시 그릴 때마다 자동으로 바꿈
+const SM_ICON_SEARCH = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>';
+function smEnhanceUi(root){
+  (root || document).querySelectorAll('input[placeholder*="검색"]:not([data-sx])').forEach(inp => {
+    if(inp.closest('.sm-modal')) return;
+    inp.setAttribute('data-sx', '1');
+    inp.classList.add('sm-sx');
+    if(inp.value || document.activeElement === inp) inp.classList.add('open');
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'sm-sx-btn' + (/^1/.test(inp.style.flex || '') ? ' grow' : '') + (inp.value ? ' on' : '');
+    b.title = inp.placeholder || '검색'; b.setAttribute('aria-label', '검색'); b.innerHTML = SM_ICON_SEARCH;
+    b.onclick = () => { if(inp.classList.contains('open') && !inp.value){ inp.classList.remove('open'); return; } inp.classList.add('open'); inp.focus(); };
+    inp.parentNode.insertBefore(b, inp);
+    inp.addEventListener('blur', () => { setTimeout(() => { if(!inp.value && document.activeElement !== inp) inp.classList.remove('open'); }, 150); });
+    inp.addEventListener('input', () => b.classList.toggle('on', !!inp.value));
+    inp.addEventListener('keydown', e => { if(e.key === 'Escape' && !inp.value) inp.blur(); });
+  });
+  (root || document).querySelectorAll('.toolbar').forEach(tb => {
+    const hs = [...tb.querySelectorAll(':scope > .hint:not(.sm-hx)')].filter(h => h.textContent.trim());
+    if(!hs.length) return;
+    hs.forEach(h => h.classList.add('sm-hx'));
+    let btn = tb.querySelector(':scope > .sm-help-btn');
+    if(!btn){
+      btn = document.createElement('button');
+      btn.type = 'button'; btn.className = 'sm-help-btn'; btn.textContent = '?'; btn.title = '도움말'; btn.setAttribute('aria-label', '도움말');
+      btn.onclick = () => {
+        const txt = [...tb.querySelectorAll(':scope > .hint.sm-hx')].map(h => h.textContent.trim()).filter(Boolean);
+        const head = document.querySelector('#pageHead h1'), sub = document.querySelector('#pageHead .page-sub');
+        smDialog({ title: [head && head.textContent, sub && sub.textContent].filter(Boolean).join(' › ') || '도움말', message: txt.join('\n'), icon:'?', okText:'확인', cancelText:null });
+      };
+      tb.appendChild(btn);
+    }
+  });
+}
+try{
+  new MutationObserver(() => { clearTimeout(window._smEnhT); window._smEnhT = setTimeout(() => smEnhanceUi(), 0); }).observe(document.body, { childList:true, subtree:true });
+  smEnhanceUi();
+}catch(e){ console.warn(e); }
+// 하위메뉴를 바꾸면 소제목도 바로 바뀌게
+['setPayView','setVatView','setInnerView','setAttendView','setClientsView','setTaxjFullView','setManualCat'].forEach(n => {
+  const f = window[n]; if(typeof f !== 'function') return;
+  window[n] = function(){ const r = f.apply(this, arguments); try{ updatePageHead(); }catch(e){} return r; };
+});
 function smConfirm(title, message, opts){ return smDialog(Object.assign({ title, message }, opts || {})); }
 function smAlert(title, message, opts){ return smDialog(Object.assign({ title, message, icon:'!', cancelText:null }, opts || {})); }
 function smForm(title, fields, opts){ return smDialog(Object.assign({ title, fields, icon:'+' }, opts || {})); }
