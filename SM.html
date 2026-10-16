@@ -911,6 +911,22 @@
   .sm-modal.wide{ max-width:460px; }
   .sm-modal-field select{ width:100%; border-radius:12px; padding:10px 12px; }
   .sm-modal-html{ text-align:left; max-height:50vh; overflow:auto; }
+  /* [2026.10.16] 분야 관리 창: 줄바꿈 입력 대신 입력칸+추가 버튼, 목록에서 이름 바꾸기·순서·삭제(요청) */
+  .sm-cat-add{ display:flex; gap:6px; margin-top:12px; }
+  .sm-cat-add input{ flex:1; border-radius:12px; padding:10px 12px; }
+  .sm-cat-add button{ border:none; border-radius:12px; padding:0 16px; background:var(--primary); color:#fff; font-family:inherit; font-size:13px; font-weight:700; cursor:pointer; white-space:nowrap; }
+  .sm-cat-add button:hover{ background:var(--primary-dark); }
+  .sm-cat-list{ text-align:left; margin-top:10px; max-height:46vh; overflow:auto; border:1px solid var(--border); border-radius:12px; }
+  .sm-cat-row{ display:flex; align-items:center; gap:4px; padding:6px 8px 6px 12px; border-bottom:1px solid var(--border); }
+  .sm-cat-row:last-child{ border-bottom:none; }
+  .sm-cat-row .nm{ flex:1; font-size:14px; font-weight:700; color:var(--text); min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .sm-cat-row input{ flex:1; min-width:0; border-radius:8px; padding:6px 8px; font-size:14px; }
+  .sm-cat-row .cnt{ font-size:12px; color:var(--muted); margin-right:4px; white-space:nowrap; }
+  .sm-cat-row button{ border:none; background:transparent; color:var(--muted); width:28px; height:28px; border-radius:8px; cursor:pointer; font-size:13px; display:inline-flex; align-items:center; justify-content:center; padding:0; }
+  .sm-cat-row button:hover:not(:disabled){ background:#f3eef1; color:var(--primary-dark); }
+  .sm-cat-row button.del:hover{ color:#e2445c; }
+  .sm-cat-row button:disabled{ opacity:.3; cursor:default; }
+  .sm-cat-empty{ padding:14px; font-size:13px; color:var(--muted); text-align:center; }
   .cl-hist-meta{ font-size:12.5px; color:var(--muted); margin-bottom:10px; }
   .cl-hist-item{ border-top:1px solid var(--border); padding:9px 0; }
   .cl-hist-head{ display:flex; justify-content:space-between; font-size:13.5px; color:var(--text); }
@@ -1192,6 +1208,21 @@
   .co-spin{ width:16px; height:16px; border-radius:50%; border:2.5px solid var(--primary-soft); border-top-color:var(--primary); animation:cospin .8s linear infinite; }
   @keyframes cospin{ to{ transform:rotate(360deg); } }
 
+  /* [2026.10.16] "각 메뉴 표의 머리글(행제목)에 배경 음영"(요청) - 모든 표 머리글에 옅은 핑크 바탕 */
+  thead th, .vat-prog thead th{ background:#faf0f5; }
+  /* [2026.10.16] "가로 스크롤바 굵게 - 옮기다 보면 범위를 벗어남"(요청) */
+  .table-scroll::-webkit-scrollbar{ height:16px; width:12px; }
+  .table-scroll::-webkit-scrollbar-track{ background:#f6eef2; border-radius:8px; }
+  .table-scroll::-webkit-scrollbar-thumb{ background:#e3b4c8; border-radius:8px; border:3px solid #f6eef2; }
+  .table-scroll::-webkit-scrollbar-thumb:hover{ background:var(--primary); }
+  /* [2026.10.16] 부가세 진행표: 개업일~담당자 전화번호 글자 작게(9pt 정도, 요청) · 열 고정(원하는 칸까지) */
+  .vat-prog td.vp-sm{ font-size:12px; }
+  .vat-prog .vp-frz{ position:sticky; z-index:1; background:var(--card); }
+  .vat-prog thead th.vp-frz{ z-index:3; background:#faf0f5; }
+  .vat-prog .vp-frz-last{ box-shadow:1px 0 0 var(--border); }
+  .vat-prog thead th.vp-frz-last{ box-shadow:1px 0 0 var(--border), 0 1px 0 var(--border); }
+  .vp-view{ display:inline-flex; align-items:center; gap:6px; font-size:12.5px; color:var(--muted); font-weight:700; }
+  .vp-view select{ font-size:12.5px; padding:4px 8px; }
 </style>
 </head>
 <body>
@@ -1492,6 +1523,7 @@ let manuals = [], nextManualId = 1, manualCats = ['개인','회사','신고'];  
 let links = [], nextLinkId = 1, linkCats = [];   // [2026.10.16] linkCats: 내가 추가한 링크 분야(순서대로, 비어 있어도 칩으로 보임) // [2026.10.08] 링크 메뉴: 자주 쓰는 사이트 [{id, name, url, group, memo, at}]
 let payCustomCols = [];   // [2026.10.13] 원천세 신고현황 [{ id, label, type:'date'|'check'|'text' }] - 내가 만든 항목(works에만 저장)
 let vatCustomCols = [];   // [2026.10.13] 부가세 내가 만든 항목 [{ id, label, type }] - works에만 저장
+let vatProgView = { freeze:'name', hidden:[] };   // [2026.10.16] 진행표 보기: 열 고정(이 칸까지), 숨긴 칸
 let vatProgCols = [];   // [2026.10.14] 부가세 진행 항목 [{ id, label, type, carry }] - works에만 저장
 let vatProg = {};       // { '연도-기수': { 회사웹 거래처id: { 항목id: 값 } } }
 let closeCols = [];     // [2026.10.14] 결산 항목 [{ id, label, type, carry }] - works에만 저장
@@ -3388,10 +3420,40 @@ async function vatProgEditCol(id){
   }
   renderVat(); scheduleGoogleSave();
 }
+// [2026.10.16] "스크롤 생길 때 틀고정·열고정·숨기기"(요청) - 머리글은 이미 위에 고정. 열 고정은 고른 칸까지 왼쪽에 고정, 숨기기는 고른 칸을 안 보이게
+const VAT_PROG_LINK = [['name','상호'],['openDate','개업일'],['bizNo','사업자번호'],['noticeYn','예정고지 대상'],['excludeReason','예정고지(부과) 제외사유'],['filingDuty','신고의무 여부'],['prevSupply','직전 과세기간 공급가액 합계액'],['noticeTax','예정'],['office','관할 세무서'],['tel','담당자 전화번호']];
+function vatProgViewObj(){ if(!vatProgView || typeof vatProgView !== 'object') vatProgView = { freeze:'name', hidden:[] }; if(!Array.isArray(vatProgView.hidden)) vatProgView.hidden = []; return vatProgView; }
+function vatProgAllCols(){ return VAT_PROG_LINK.map(([k, l]) => ({ key:k, label:l })).concat(vatProgCols.map(c => ({ key:c.id, label: String(c.label).replace(/\s+/g, ' ') }))); }
+function vatProgVisibleKeys(){ const h = vatProgViewObj().hidden; return vatProgAllCols().filter(c => c.key === 'name' || !h.includes(c.key)).map(c => c.key); }
+function vatProgSetFreeze(k){ vatProgViewObj().freeze = k; renderVat(); scheduleGoogleSave(); }
+async function vatProgHideCols(){
+  const v = vatProgViewObj();
+  const html = `<div style="display:flex; flex-direction:column; gap:6px;">${vatProgAllCols().filter(c => c.key !== 'name').map(c => `<label style="display:flex; align-items:center; gap:8px; font-size:13.5px; color:var(--text); cursor:pointer;"><input type="checkbox" class="vp-hide-ck" data-k="${escapeAttr(c.key)}" ${v.hidden.includes(c.key) ? '' : 'checked'}> ${taxjEsc(c.label)}</label>`).join('')}</div>`;
+  const ok = await smDialog({ title:'보일 칸 고르기', message:'체크를 빼면 그 칸이 숨겨져요. 상호는 늘 보여요.', html, icon:'✎', okText:'적용', wide:true });
+  if(!ok) return;
+  v.hidden = [...document.querySelectorAll('.vp-hide-ck')].filter(x => !x.checked).map(x => x.dataset.k);
+  if(v.freeze && v.hidden.includes(v.freeze)) v.freeze = 'name';
+  renderVat(); scheduleGoogleSave();
+}
+// 고정할 칸 수만큼 왼쪽에 붙임(칸 폭은 그린 뒤에 재서 맞춤)
+function vatProgApplyFreeze(){
+  const t = document.querySelector('#tab-vat .vat-prog table'); if(!t || !t.tHead) return;
+  const fk = vatProgViewObj().freeze;
+  const n = fk ? vatProgVisibleKeys().indexOf(fk) + 2 : 1;   // 순번 + 고른 칸까지 (없음이면 순번만)
+  const hs = t.tHead.rows[0].cells; if(!hs.length) return;
+  const base = hs[0].offsetLeft, lefts = [];
+  for(let i = 0; i < n && i < hs.length; i++) lefts.push(hs[i].offsetLeft - base);
+  for(const r of t.rows){
+    if(r.cells.length < n) continue;
+    for(let i = 0; i < n; i++){ const c = r.cells[i]; c.classList.add('vp-frz'); c.style.left = lefts[i] + 'px'; if(i === n - 1) c.classList.add('vp-frz-last'); }
+  }
+}
 function vatProgHtml(docs){
   const key = vatProgKey(), plab = vatProgKeyLabel(key), per = vatProg[key] || {}, pk = vatProgPrevKey();
   const bar = `<div class="toolbar"><div class="spacer"></div>
     ${!vatProgHasData(key) && pk ? `<button class="btn primary xs" onclick="vatProgFromPrev()" title="이어받기 항목(↻)만 가져와요">${vatProgKeyLabel(pk)}에서 이어받기</button>` : ''}
+    <span class="vp-view">열 고정 <select onchange="vatProgSetFreeze(this.value)"><option value="" ${!vatProgViewObj().freeze ? 'selected' : ''}>순번만</option>${vatProgAllCols().filter(c => vatProgVisibleKeys().includes(c.key)).map(c => `<option value="${escapeAttr(c.key)}" ${vatProgViewObj().freeze === c.key ? 'selected' : ''}>${taxjEsc(c.label)}까지</option>`).join('')}</select></span>
+    <button class="btn ghost xs" onclick="vatProgHideCols()" title="안 쓰는 칸을 숨겨요">칸 숨기기${vatProgViewObj().hidden.length ? ` (${vatProgViewObj().hidden.length})` : ''}</button>
     <button class="btn xs" onclick="vatProgAddCol()">+ 항목</button>
     ${vatProgHasData(key) ? '<button class="btn ghost xs" onclick="vatProgMove()" title="이 기수에 넣은 값을 다른 기수로 옮겨요">다른 기수로 옮기기</button><button class="btn ghost xs danger" onclick="vatProgClear()" title="이 기수에 적은 내 항목 값을 지워요">비우기</button>' : ''}
     <button class="btn ghost xs" onclick="document.getElementById('vatProgXlsx').click()" title="1행 = 항목 이름인 진행표 엑셀을 ${plab}에 넣어요">엑셀 올리기</button><input type="file" id="vatProgXlsx" accept=".xlsx,.xls" style="display:none;" onchange="vatProgImport(this)"></div>`;
@@ -3405,17 +3467,20 @@ function vatProgHtml(docs){
     const len = Math.max(...String(c.label).split('\n').map(s => s.length), ...list.map(x => vatProgFmtNum((per[x.c.id] || {})[c.id]).length));
     w[c.id] = Math.max(56, Math.min(240, len * 12 + 14));
   });
+  const vis = vatProgVisibleKeys(), shown = k => vis.includes(k);
+  const lastLink = VAT_PROG_LINK.map(x => x[0]).filter(shown).pop();
   const linkHead = ['상호','개업일','사업자번호','예정고지<br>대상','예정고지(부과)<br>제외사유','신고의무<br>여부','직전 과세기간<br>공급가액 합계액','예정','관할 세무서','담당자<br>전화번호']
-    .map((l, i) => `<th class="vp-link${i === 0 ? ' vp-sticky' : ''}${i === 9 ? ' vp-div' : ''}" title="회사웹 값(조회만)">${l}</th>`).join('');
-  const head = vatProgCols.map(c => `<th style="${c.type === 'check' ? 'text-align:center;' : ''}"><button class="vp-th" onclick="vatProgEditCol('${c.id}')" title="눌러서 이름·입력 방식·이어받기 수정 또는 삭제${c.carry ? '\n(다음 기수로 이어받는 항목)' : ''}">${taxjEsc(c.label).replace(/\n/g, '<br>')}${c.carry ? '<span class="vp-carry">↻</span>' : ''}</button></th>`).join('');
+    .map((l, i) => shown(VAT_PROG_LINK[i][0]) ? `<th class="vp-link${VAT_PROG_LINK[i][0] === lastLink ? ' vp-div' : ''}" title="회사웹 값(조회만)">${l}</th>` : '').join('');
+  const head = vatProgCols.filter(c => shown(c.id)).map(c => `<th style="${c.type === 'check' ? 'text-align:center;' : ''}"><button class="vp-th" onclick="vatProgEditCol('${c.id}')" title="눌러서 이름·입력 방식·이어받기 수정 또는 삭제${c.carry ? '\n(다음 기수로 이어받는 항목)' : ''}">${taxjEsc(c.label).replace(/\n/g, '<br>')}${c.carry ? '<span class="vp-carry">↻</span>' : ''}</button></th>`).join('');
   const rows = list.map((x, n) => {
     const cid = escapeAttr(x.c.id), v = per[x.c.id] || {}, t = s => s || s === 0 ? taxjEsc(String(s)) : na;
     const lk = v.__link || {}, tb = x.hasTb ? x.tb : lk;   // 회사웹 값이 있으면 회사웹, 없으면 엑셀에서 넣은 값
     if(!x.hasTb){ x.office = lk.office || ''; x.tel = lk.tel || ''; }
-    const link = `<td class="vp-sticky" style="font-weight:800; color:${x.c.entityType === '법인' ? '#0b5a78' : x.c.entityType === '개인' ? '#be185d' : 'inherit'};">${taxjEsc(x.c.name)}</td>
-      <td>${t(x.c.openDate)}</td><td>${t(innerBizNo(x.c.bizNo || ''))}</td><td>${t(tb.noticeYn)}</td><td>${t(tb.excludeReason)}</td><td>${t(tb.filingDuty)}</td>
-      <td style="text-align:right;">${num(tb.prevSupply)}</td><td style="text-align:right;">${tb.noticeTax == null || tb.noticeTax === '' ? na : num(tb.noticeTax)}</td><td>${t(x.office)}</td><td class="vp-div">${t(x.tel)}</td>`;
-    const mine = vatProgCols.map(c => {
+    const cellv = { openDate: t(x.c.openDate), bizNo: t(innerBizNo(x.c.bizNo || '')), noticeYn: t(tb.noticeYn), excludeReason: t(tb.excludeReason), filingDuty: t(tb.filingDuty),
+      prevSupply: num(tb.prevSupply), noticeTax: tb.noticeTax == null || tb.noticeTax === '' ? na : num(tb.noticeTax), office: t(x.office), tel: t(x.tel) };
+    const link = `<td class="${lastLink === 'name' ? 'vp-div' : ''}" style="font-weight:800; color:${x.c.entityType === '법인' ? '#0b5a78' : x.c.entityType === '개인' ? '#be185d' : 'inherit'};">${taxjEsc(x.c.name)}</td>`
+      + VAT_PROG_LINK.slice(1).filter(([k]) => shown(k)).map(([k]) => `<td class="vp-sm${k === lastLink ? ' vp-div' : ''}"${k === 'prevSupply' || k === 'noticeTax' ? ' style="text-align:right;"' : ''}>${cellv[k]}</td>`).join('');
+    const mine = vatProgCols.filter(c => shown(c.id)).map(c => {
       const val = v[c.id];
       if(c.type === 'check') return `<td style="text-align:center;"><input type="checkbox" ${val ? 'checked' : ''} onchange="vatProgSet('${cid}','${c.id}',this.checked)"></td>`;
       const s = vatProgFmtNum(val);
@@ -3425,7 +3490,7 @@ function vatProgHtml(docs){
     return `<tr><td class="tx-seq">${n + 1}</td>${link}${mine}</tr>`;
   }).join('');
   return bar + `<div class="table-scroll vat-prog" style="margin-top:8px;"><table><thead><tr><th class="tx-seq">순번</th>${linkHead}${head}</tr></thead>
-    <tbody>${rows || `<tr><td colspan="${vatProgCols.length + 11}"><div class="empty" style="padding:18px;">${q ? '검색 결과가 없어요.' : '거래처가 없어요.'}</div></td></tr>`}</tbody></table></div>`;
+    <tbody>${rows || `<tr><td colspan="${vis.length + 1}"><div class="empty" style="padding:18px;">${q ? '검색 결과가 없어요.' : '거래처가 없어요.'}</div></td></tr>`}</tbody></table></div>`;
 }
 // [2026.10.14] "스크롤이 끝으로 가면 다시 처음으로 온다"(요청) - 회사웹 실시간 연결이 바뀔 때마다 화면을 다시 그려 표 스크롤이 0으로 돌아갔음.
 // 다시 그릴 때 표 스크롤 위치를 그대로 두고, 진행표 칸에 입력 중이면 입력을 마친 뒤(blur)에 다시 그림
@@ -3439,6 +3504,7 @@ function renderVat(){
   const sig = `${vatView}|${vatYear}|${vatHalf}|${vatKind}`;   // 같은 화면·기수를 다시 그릴 때만 위치 유지(기수·탭을 바꾸면 처음부터)
   const keep = el && el._vatSig === sig ? [...el.querySelectorAll('.table-scroll')].map(x => [x.scrollLeft, x.scrollTop]) : [];
   renderVatInner();
+  if(vatView === 'prog') try{ vatProgApplyFreeze(); }catch(e){ console.warn(e); }   // [2026.10.16] 열 고정
   if(el){ el._vatSig = sig; el.classList.toggle('vat-wide', vatView === 'prog'); }
   if(el && keep.length) [...el.querySelectorAll('.table-scroll')].forEach((x, i) => { if(keep[i]){ x.scrollLeft = keep[i][0]; x.scrollTop = keep[i][1]; } });
 }
@@ -4605,7 +4671,7 @@ const GOOGLE_DATA_KEYS = [
   'attendMine',     // [2026.10.12] 근태경비 탭 내 확인·메모
   'payCustomCols','payCustomVals',   // [2026.10.13] 원천세 신고현황 내가 만든 항목
   'vatCustomCols','vatCustomVals',   // [2026.10.13] 부가세 내가 만든 항목
-  'vatProgCols','vatProg',   // [2026.10.14] 부가세 진행표
+  'vatProgCols','vatProg','vatProgView',   // [2026.10.14] 부가세 진행표
   'closeCols','closeData',   // [2026.10.14] 결산
   'quickMemos','nextMemoId',   // [2026.10.15] 홈 빠른 메모
   'accountVault',   // [2026.10.08] 계정 보관함이 Google 시트에 저장되지 않아 다시 열면 "보관함 만들기"가 다시 뜨던 문제 수정(요청)
@@ -4623,7 +4689,7 @@ function collectGoogleSnapshot(){
     trashBin, nextTrashId,
     links, nextLinkId, linkCats,
     manuals, nextManualId, manualCats,
-    accountVault, submitMine, attendMine, payCustomCols, payCustomVals, vatCustomCols, vatCustomVals, vatProgCols, vatProg, closeCols, closeData, quickMemos, nextMemoId,
+    accountVault, submitMine, attendMine, payCustomCols, payCustomVals, vatCustomCols, vatCustomVals, vatProgCols, vatProg, vatProgView, closeCols, closeData, quickMemos, nextMemoId,
   };
 }
 
@@ -4694,6 +4760,7 @@ async function loadFromGoogleSheet(){
     if(map.vatCustomVals) vatCustomVals = JSON.parse(map.vatCustomVals);
     if(map.vatProgCols) vatProgCols = JSON.parse(map.vatProgCols);
     if(map.vatProg) vatProg = JSON.parse(map.vatProg);
+    if(map.vatProgView) vatProgView = JSON.parse(map.vatProgView);
     if(map.closeCols) closeCols = JSON.parse(map.closeCols);
     if(map.closeData) closeData = JSON.parse(map.closeData);
     if(map.links)         links        = JSON.parse(map.links);
@@ -4949,6 +5016,7 @@ function applySnapshot(o){
   if(o.vatCustomVals) vatCustomVals = o.vatCustomVals;
   if(o.vatProgCols) vatProgCols = o.vatProgCols;
   if(o.vatProg) vatProg = o.vatProg;
+  if(o.vatProgView) vatProgView = o.vatProgView;
   if(o.closeCols) closeCols = o.closeCols;
   if(o.closeData) closeData = o.closeData;
   if(o.links) links = o.links;
@@ -7524,16 +7592,20 @@ function manualHistory(id){
       : '<div class="hint">아직 고친 적이 없어요.</div>' });
 }
 // 분야 관리: 한 줄에 하나씩. 줄 수가 같으면 같은 자리끼리 이름을 바꾼 것으로 보고, 없어진 분야의 매뉴얼은 '미분류'로 옮김
+// [2026.10.16] 줄바꿈 입력 대신 입력칸+추가, 목록에서 이름 바꾸기·순서·삭제 창으로 바꿈(요청). 이름 바꾸면 그 분야 매뉴얼도 같이 바뀜
 async function manualEditCats(){
-  const r = await smForm('분야 관리', [{ label:'분야 (한 줄에 하나 · 위아래 순서대로 메뉴에 나와요)', type:'textarea', value: manualCats.join('\n'), rows:8 }], { okText:'저장', icon:'✎' });
+  const r = await smCatEditor('분야 관리', manualCats, { countOf: c => manuals.filter(m => m.cat === c).length });
   if(!r) return;
-  const next = Array.from(new Set(String(r[0] || '').split('\n').map(x => x.trim()).filter(Boolean)));
-  if(!next.length){ smAlert('분야를 하나 이상 남겨 주세요'); return; }
-  const old = manualCats.slice();
-  if(next.length === old.length) manuals.forEach(m => { const i = old.indexOf(m.cat); if(i >= 0) m.cat = next[i]; });
-  const orphan = manuals.filter(m => !next.includes(m.cat));
+  if(!r.length){ smAlert('분야를 하나 이상 남겨 주세요'); return; }
+  const next = r.map(x => x.name);
+  const ren = Object.create(null); r.forEach(x => { if(x.orig != null && x.orig !== x.name) ren[x.orig] = x.name; });
+  const orphan = manuals.filter(m => !(m.cat in ren) && !next.includes(m.cat));
   if(orphan.length){
     if(!(await smConfirm('없어지는 분야가 있어요', `매뉴얼 ${orphan.length}개는 '미분류'로 옮겨져요.`, { okText:'저장' }))) return;
+  }
+  manuals.forEach(m => { if(m.cat in ren) m.cat = ren[m.cat]; });
+  if(manualCat in ren) manualCat = ren[manualCat];
+  if(orphan.length){
     orphan.forEach(m => { m.cat = '미분류'; });
     if(!next.includes('미분류')) next.push('미분류');
   }
@@ -7600,18 +7672,20 @@ function linkGroups(){
   const extra = [...new Set(links.map(l => l.group || '기타'))].filter(g => !cats.includes(g)).sort((a, b) => (a === '기타') - (b === '기타') || a.localeCompare(b, 'ko'));
   return cats.concat(extra);
 }
-// 분야 관리: 한 줄에 하나. 줄 수가 같으면 같은 자리끼리 이름을 바꾼 것으로 보고, 없어진 분야의 링크는 '기타'로 옮김
+// 분야 관리: 입력칸+추가, 목록에서 이름 바꾸기·순서·삭제. 이름 바꾸면 그 분야 링크도 같이 바뀌고, 지운 분야의 링크는 '기타'로 옮김
 async function linkEditCats(){
   const cur = linkGroups().filter(g => g !== '기타');
-  const r = await smForm('링크 분야 관리', [{ label:'분야 (한 줄에 하나 · 위아래 순서대로 칩에 나와요)', type:'textarea', value: cur.join('\n'), rows:8 }], { okText:'저장', icon:'✎' });
+  const r = await smCatEditor('링크 분야 관리', cur, { countOf: g => links.filter(l => (l.group || '기타') === g).length, placeholder:'예: 세무, 은행, 4대보험' });
   if(!r) return;
-  const next = Array.from(new Set(String(r[0] || '').split('\n').map(x => x.trim()).filter(x => x && x !== '기타')));
-  if(next.length === cur.length) links.forEach(l => { const i = cur.indexOf(l.group || '기타'); if(i >= 0) l.group = next[i]; });
-  const orphan = links.filter(l => l.group && !next.includes(l.group));
+  const next = r.map(x => x.name).filter(x => x !== '기타');
+  const ren = Object.create(null); r.forEach(x => { if(x.orig != null && x.orig !== x.name) ren[x.orig] = x.name === '기타' ? '' : x.name; });
+  const orphan = links.filter(l => l.group && !(l.group in ren) && !next.includes(l.group));
   if(orphan.length){
     if(!(await smConfirm('없어지는 분야가 있어요', `링크 ${orphan.length}개는 '기타'로 옮겨져요.`, { okText:'저장' }))) return;
-    orphan.forEach(l => { l.group = ''; });
   }
+  links.forEach(l => { if(l.group && l.group in ren) l.group = ren[l.group]; });
+  orphan.forEach(l => { l.group = ''; });
+  if(linkGroupSel in ren) linkGroupSel = ren[linkGroupSel];
   linkCats = next;
   if(linkGroupSel && !linkGroups().includes(linkGroupSel)) linkGroupSel = '';
   renderAll();
@@ -8248,6 +8322,98 @@ function smDialog(opts){
     const x = wrap.querySelector('.sm-modal-x'); if(x) x.onclick = () => done(o.closeX ? 'x' : false);
     wrap.addEventListener('mousedown', e => { if(e.target === wrap) done(o.closeX ? 'x' : false); });
     setTimeout(() => (inputs[0] || wrap.querySelector('.sm-modal-ok')).focus(), 30);
+  });
+}
+// [2026.10.16] 분야 관리 창(요청: "엔터로 줄 나눠 적는 방식은 헷갈림 - 입력하고 등록하는 식으로")
+// 입력칸에 이름 적고 '추가' → 목록에 생김. 목록 줄마다 이름 바꾸기(연필)·위/아래 순서·삭제.
+// 결과: [{orig, name}] (orig = 원래 이름, 새로 추가한 것은 null) 또는 취소면 null
+function smCatEditor(title, cats, opts){
+  return new Promise(resolve => {
+    const o = Object.assign({ countOf: null, placeholder:'새 분야 이름' }, opts || {});
+    let items = (cats || []).map(c => ({ orig: c, name: c }));
+    let editing = -1;
+    const esc = v => String(v == null ? '' : v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
+    const wrap = document.createElement('div');
+    wrap.className = 'sm-modal-backdrop';
+    wrap.innerHTML = `
+      <div class="sm-modal wide" role="dialog" aria-modal="true">
+        <button type="button" class="sm-modal-x" title="닫기" aria-label="닫기">×</button>
+        <div class="sm-modal-ic">✎</div>
+        <div class="sm-modal-title">${esc(title)}</div>
+        <div class="sm-cat-add"><input type="text" placeholder="${esc(o.placeholder)}" maxlength="30"><button type="button" class="add">추가</button></div>
+        <div class="sm-cat-list"></div>
+        <div class="sm-modal-btns">
+          <button type="button" class="sm-modal-cancel">취소</button>
+          <button type="button" class="sm-modal-ok">저장</button>
+        </div>
+      </div>`;
+    document.body.appendChild(wrap);
+    requestAnimationFrame(() => wrap.classList.add('show'));
+    const addIn = wrap.querySelector('.sm-cat-add input');
+    const listEl = wrap.querySelector('.sm-cat-list');
+    const dup = (nm, skip) => items.some((it, i) => i !== skip && it.name === nm);
+    const draw = () => {
+      listEl.innerHTML = !items.length ? '<div class="sm-cat-empty">분야가 없어요. 위에서 추가해 주세요.</div>' : items.map((it, i) => `
+        <div class="sm-cat-row" data-i="${i}">
+          ${editing === i ? `<input type="text" value="${esc(it.name)}" maxlength="30">
+            <button type="button" data-act="ok" title="확인" aria-label="확인">✓</button>`
+          : `<span class="nm" title="${esc(it.name)}">${esc(it.name)}</span>
+            ${o.countOf && it.orig != null ? `<span class="cnt">${o.countOf(it.orig)}개</span>` : ''}
+            <button type="button" data-act="edit" title="이름 바꾸기" aria-label="이름 바꾸기">${typeof ICON_EDIT !== 'undefined' ? ICON_EDIT : '✎'}</button>
+            <button type="button" data-act="up" title="위로" aria-label="위로" ${i === 0 ? 'disabled' : ''}>▲</button>
+            <button type="button" data-act="down" title="아래로" aria-label="아래로" ${i === items.length - 1 ? 'disabled' : ''}>▼</button>
+            <button type="button" class="del" data-act="del" title="삭제" aria-label="삭제">${typeof ICON_TRASH !== 'undefined' ? ICON_TRASH : '×'}</button>`}
+        </div>`).join('');
+      const ed = listEl.querySelector('.sm-cat-row input');
+      if(ed){ ed.focus(); ed.select(); }
+    };
+    const add = () => {
+      const nm = addIn.value.trim();
+      if(!nm) { addIn.focus(); return; }
+      if(dup(nm, -1)){ addIn.select(); addIn.title = '이미 있는 분야예요'; return; }
+      items.push({ orig: null, name: nm }); addIn.value = ''; editing = -1; draw();
+      listEl.scrollTop = listEl.scrollHeight; addIn.focus();
+    };
+    const commitEdit = () => {
+      if(editing < 0) return true;
+      const ed = listEl.querySelector('.sm-cat-row input');
+      const nm = ed ? ed.value.trim() : '';
+      if(!nm || dup(nm, editing)){ if(ed){ ed.focus(); ed.select(); } return false; }
+      items[editing].name = nm; editing = -1; draw(); return true;
+    };
+    listEl.addEventListener('click', e => {
+      const b = e.target.closest('button[data-act]'); if(!b) return;
+      const i = Number(b.closest('.sm-cat-row').dataset.i); const act = b.dataset.act;
+      if(act === 'ok'){ commitEdit(); return; }
+      if(!commitEdit()) return;
+      if(act === 'edit'){ editing = i; draw(); }
+      else if(act === 'up' && i > 0){ [items[i - 1], items[i]] = [items[i], items[i - 1]]; draw(); }
+      else if(act === 'down' && i < items.length - 1){ [items[i + 1], items[i]] = [items[i], items[i + 1]]; draw(); }
+      else if(act === 'del'){ items.splice(i, 1); draw(); }
+    });
+    wrap.querySelector('.sm-cat-add .add').onclick = add;
+    const done = ok => {
+      if(ok && !commitEdit()) return;
+      document.removeEventListener('keydown', onKey, true);
+      wrap.classList.remove('show');
+      setTimeout(() => wrap.remove(), 150);
+      resolve(ok ? items.map(it => ({ orig: it.orig, name: it.name })) : null);
+    };
+    const onKey = e => {
+      if(e.key === 'Escape'){ e.preventDefault(); e.stopPropagation(); if(editing >= 0){ editing = -1; draw(); } else done(false); }
+      else if(e.key === 'Enter' && !e.isComposing){
+        e.preventDefault(); e.stopPropagation();
+        if(e.target === addIn) add();
+        else if(editing >= 0) commitEdit();
+      }
+    };
+    document.addEventListener('keydown', onKey, true);
+    wrap.querySelector('.sm-modal-ok').onclick = () => done(true);
+    wrap.querySelector('.sm-modal-cancel').onclick = () => done(false);
+    wrap.querySelector('.sm-modal-x').onclick = () => done(false);
+    wrap.addEventListener('mousedown', e => { if(e.target === wrap) done(false); });
+    draw();
+    setTimeout(() => addIn.focus(), 30);
   });
 }
 function smConfirm(title, message, opts){ return smDialog(Object.assign({ title, message }, opts || {})); }
