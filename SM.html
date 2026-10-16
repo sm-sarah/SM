@@ -3216,7 +3216,7 @@ function vatTHelpRows(h, year, period){
   let st = (h.staff || {})[`${year}-${period}`];
   if(Array.isArray(st)){ const o = {}; st.forEach(k => o[k] = 0); st = o; }
   if(st) rows.push([`직원${asOf}`, Object.keys(st).length ? Object.entries(st).map(([k, n]) => n ? `${k} ${n}명` : k).join('·') : '없음']);
-  if((h.kinds || []).length) rows.push(['신고유형', h.kinds.map(k => k === '기타' && h.kindEtc ? `기타(${h.kindEtc})` : k).join('·')]);
+  if((h.kinds || []).length) rows.push(['신고유형', h.kinds.map(k => k === '기타' && h.kindEtc ? `기타(${h.kindEtc})` : k === '특이사항없음' ? '일반' : k).join('·')]);   // [2026.10.16] 회사웹 '특이사항없음' → '일반'
   if((h.recv || []).length) rows.push(['수령자료', h.recv.join('·')]);   // [2026.10.16] 회사웹 Tip 수령자료 반영
   if(h.memo) rows.push(['특이사항', h.memo]);   // [2026.10.16] 회사웹 Tip '메모' → '특이사항'
   return rows;
