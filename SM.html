@@ -1077,6 +1077,8 @@
   .sm-seg{ display:inline-flex; align-items:stretch; gap:2px; padding:3px; height:37px; border:1px solid var(--border); border-radius:var(--radius-sm); background:#fff; box-sizing:border-box; }
   .sm-seg button{ font-family:inherit; font-size:13px; font-weight:700; border:none; background:transparent; color:var(--muted); padding:0 14px; border-radius:7px; cursor:pointer; height:100%; }
   .sm-seg button.on{ background:var(--primary-soft); color:var(--primary-dark); }
+  .sm-seg.wrap button{ height:29px; }   /* [2026.10.16] 링크 분야 칩: 줄바꿈되는 칩에서 글자가 위로 붙던 문제(요청) */
+  .sm-seg button.drop{ outline:2px dashed var(--primary); outline-offset:-2px; }
 
   #tab-clients .table-scroll th, #tab-clients .table-scroll td{ text-align:center; }
 
@@ -1485,7 +1487,7 @@ let trashBin = [];   // 삭제한 거래처/할 일/체크리스트를 임시 �
 let nextTrashId = 1;
 // 계정 보관함(아래 '계정' 부분 참고) - 다른 데이터와 같이 처음부터 선언해 둠
 let manuals = [], nextManualId = 1, manualCats = ['개인','회사','신고'];   // [2026.10.08] 매뉴얼 메뉴: [{id, cat, title, body, at, history}]
-let links = [], nextLinkId = 1;   // [2026.10.08] 링크 메뉴: 자주 쓰는 사이트 [{id, name, url, group, memo, at}]
+let links = [], nextLinkId = 1, linkCats = [];   // [2026.10.16] linkCats: 내가 추가한 링크 분야(순서대로, 비어 있어도 칩으로 보임) // [2026.10.08] 링크 메뉴: 자주 쓰는 사이트 [{id, name, url, group, memo, at}]
 let payCustomCols = [];   // [2026.10.13] 원천세 신고현황 [{ id, label, type:'date'|'check'|'text' }] - 내가 만든 항목(works에만 저장)
 let vatCustomCols = [];   // [2026.10.13] 부가세 내가 만든 항목 [{ id, label, type }] - works에만 저장
 let vatProgCols = [];   // [2026.10.14] 부가세 진행 항목 [{ id, label, type, carry }] - works에만 저장
@@ -4595,7 +4597,7 @@ const GOOGLE_DATA_KEYS = [
   'events','nextEventId',
   'clientsOther','clientsTerminated',
   'trashBin','nextTrashId',
-  'links','nextLinkId',
+  'links','nextLinkId','linkCats',
   'manuals','nextManualId','manualCats',
   'submitMine',     // [2026.10.12] 제출 탭 내 확인·메모
   'attendMine',     // [2026.10.12] 근태경비 탭 내 확인·메모
@@ -4617,7 +4619,7 @@ function collectGoogleSnapshot(){
     events, nextEventId,
     clientsOther, clientsTerminated,
     trashBin, nextTrashId,
-    links, nextLinkId,
+    links, nextLinkId, linkCats,
     manuals, nextManualId, manualCats,
     accountVault, submitMine, attendMine, payCustomCols, payCustomVals, vatCustomCols, vatCustomVals, vatProgCols, vatProg, closeCols, closeData, quickMemos, nextMemoId,
   };
@@ -4694,6 +4696,7 @@ async function loadFromGoogleSheet(){
     if(map.closeData) closeData = JSON.parse(map.closeData);
     if(map.links)         links        = JSON.parse(map.links);
     if(map.nextLinkId)    nextLinkId   = JSON.parse(map.nextLinkId);
+    if(map.linkCats)      linkCats     = JSON.parse(map.linkCats);
     if(map.manuals)       manuals      = JSON.parse(map.manuals);
     if(map.nextManualId)  nextManualId = JSON.parse(map.nextManualId);
     if(map.manualCats)    manualCats   = JSON.parse(map.manualCats);
@@ -4948,6 +4951,7 @@ function applySnapshot(o){
   if(o.closeData) closeData = o.closeData;
   if(o.links) links = o.links;
   if(o.nextLinkId) nextLinkId = o.nextLinkId;
+  if(o.linkCats) linkCats = o.linkCats;
   if(o.manuals) manuals = o.manuals;
   if(o.nextManualId) nextManualId = o.nextManualId;
   if(o.manualCats) manualCats = o.manualCats;
@@ -7588,7 +7592,36 @@ let linkSearch = '';
 // [2026.10.15] "링크도 분야별로 등록해서 조회, 주소는 안 보이고 링크 아이콘만 - 누르면 열리게"(요청)
 let linkGroupSel = '';   // 보는 분야('' = 전체)
 const ICON_LINK = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>';
-function linkGroups(){ return [...new Set(links.map(l => l.group || '기타'))].sort((a, b) => (a === '기타') - (b === '기타') || a.localeCompare(b, 'ko')); }
+// [2026.10.16] "분야를 직접 추가해서 분야별로 정리, 나중에 다른 분야로 이동"(요청) - 분야 관리에서 만든 순서대로, 그 밖에 링크에만 있는 분야는 뒤에, '기타'는 맨 뒤
+function linkGroups(){
+  const cats = (linkCats || []).filter(c => c && c !== '기타');
+  const extra = [...new Set(links.map(l => l.group || '기타'))].filter(g => !cats.includes(g)).sort((a, b) => (a === '기타') - (b === '기타') || a.localeCompare(b, 'ko'));
+  return cats.concat(extra);
+}
+// 분야 관리: 한 줄에 하나. 줄 수가 같으면 같은 자리끼리 이름을 바꾼 것으로 보고, 없어진 분야의 링크는 '기타'로 옮김
+async function linkEditCats(){
+  const cur = linkGroups().filter(g => g !== '기타');
+  const r = await smForm('링크 분야 관리', [{ label:'분야 (한 줄에 하나 · 위아래 순서대로 칩에 나와요)', type:'textarea', value: cur.join('\n'), rows:8 }], { okText:'저장', icon:'✎' });
+  if(!r) return;
+  const next = Array.from(new Set(String(r[0] || '').split('\n').map(x => x.trim()).filter(x => x && x !== '기타')));
+  if(next.length === cur.length) links.forEach(l => { const i = cur.indexOf(l.group || '기타'); if(i >= 0) l.group = next[i]; });
+  const orphan = links.filter(l => l.group && !next.includes(l.group));
+  if(orphan.length){
+    if(!(await smConfirm('없어지는 분야가 있어요', `링크 ${orphan.length}개는 '기타'로 옮겨져요.`, { okText:'저장' }))) return;
+    orphan.forEach(l => { l.group = ''; });
+  }
+  linkCats = next;
+  if(linkGroupSel && !linkGroups().includes(linkGroupSel)) linkGroupSel = '';
+  renderAll();
+}
+// 링크 줄을 끌어서 위쪽 분야 칩에 놓으면 그 분야로 옮김
+let linkDragId = null;
+function linkMoveTo(id, g){
+  const x = links.find(l => l.id === id);
+  if(!x || !g || (x.group || '기타') === g) return;
+  x.group = g === '기타' ? '' : g; x.at = todayStr();
+  renderAll();
+}
 // [2026.10.08] 링크마다 첨부파일(요청) - 파일은 내 Google 드라이브의 'SM_첨부파일' 폴더에 올리고, 링크에는 {id, name, url}만 저장(시트가 무거워지지 않게).
 // 누르면 드라이브에서 열림. 첨부를 빼면 드라이브 파일은 휴지통으로(30일 안에 되살릴 수 있음)
 const SM_ATTACH_FOLDER = 'SM_첨부파일';
@@ -7657,7 +7690,9 @@ function linkFields(x){
 async function linkPickGroup(g){
   if(g !== '+ 새 분야') return g === '기타' ? '' : g;
   const r = await smForm('새 분야', [{ label:'분야 이름', placeholder:'예: 세무, 은행, 4대보험' }], { okText:'확인' });
-  return r && r[0].trim() ? r[0].trim() : null;
+  const name = r && r[0].trim() ? r[0].trim() : null;
+  if(name && name !== '기타' && !(linkCats || []).includes(name)) linkCats = linkGroups().filter(x => x !== '기타').concat(name);   // [2026.10.16] 새 분야도 분야 목록에 남김
+  return name;
 }
 async function linkAdd(){
   const r = await smForm('링크 추가', linkFields(), { okText:'추가', wide:true });
@@ -7695,7 +7730,8 @@ function renderLinks(){
   const list = links.filter(l => !linkGroupSel || (l.group || '기타') === linkGroupSel)
     .filter(l => !q || [l.name, l.url, l.group, l.memo, ...(l.files || []).map(f => f.name)].some(v => String(v || '').toLowerCase().includes(q)));
   const cnt = g => links.filter(l => (l.group || '기타') === g).length;
-  const groupSeg = links.length ? `<div class="sm-seg" style="flex-wrap:wrap; height:auto; min-height:37px;">${[['', `전체 ${links.length}`]].concat(allG.map(g => [g, `${g} ${cnt(g)}`])).map(([g, l]) => `<button class="${linkGroupSel === g ? 'on' : ''}" onclick="linkGroupSel=${escapeAttr(JSON.stringify(g))}; renderLinks();">${taxjEsc(l)}</button>`).join('')}</div>` : '';
+  const showSeg = links.length || allG.length;
+  const groupSeg = showSeg ? `<div class="sm-seg wrap" style="flex-wrap:wrap; height:auto; min-height:37px;">${[['', `전체 ${links.length}`]].concat(allG.map(g => [g, `${g} ${cnt(g)}`])).map(([g, l]) => `<button class="${linkGroupSel === g ? 'on' : ''}" onclick="linkGroupSel=${escapeAttr(JSON.stringify(g))}; renderLinks();"${g ? ` ondragover="if(linkDragId!==null){event.preventDefault(); this.classList.add('drop');}" ondragleave="this.classList.remove('drop')" ondrop="event.preventDefault(); this.classList.remove('drop'); linkMoveTo(linkDragId, ${escapeAttr(JSON.stringify(g))});"` : ''}>${taxjEsc(l)}</button>`).join('')}</div>` : '';
   const groups = {};
   list.forEach(l => { const g = l.group || '기타'; (groups[g] = groups[g] || []).push(l); });
   const names = Object.keys(groups).sort((a, b) => (a === '기타') - (b === '기타') || a.localeCompare(b, 'ko'));
@@ -7703,18 +7739,19 @@ function renderLinks(){
     <div class="card acc-wrap">
       <div class="toolbar">
         <input type="text" id="linkSearch" placeholder="사이트명·주소·메모 검색" value="${escapeAttr(linkSearch)}" oninput="linkOnSearch(this.value)" style="flex:1; min-width:200px;">
+        <button class="btn" onclick="linkEditCats()">분야 관리</button>
         <button class="btn primary" onclick="linkAdd()">링크 추가</button>
         <input type="file" id="linkFileInput" multiple style="display:none;" onchange="linkUploadFiles(this)">
       </div>
-      ${groupSeg ? `<div class="toolbar">${groupSeg}</div>` : ''}
+      ${groupSeg ? `<div class="toolbar" style="justify-content:center;">${groupSeg}</div>` : ''}<!-- [2026.10.16] 분야 칩 가로 가운데(요청) -->
       ${!links.length ? `<div class="empty">아직 등록한 링크가 없어요. '링크 추가'로 넣어 주세요.</div>`
         : !list.length ? `<div class="empty">검색과 맞는 링크가 없어요.</div>`
         : names.map(g => `
-        ${names.length > 1 || g !== '기타' ? `<div style="font-weight:800; font-size:13px; color:var(--primary-dark); margin:14px 0 4px;">${taxjEsc(g)} <span class="hint" style="margin:0; font-weight:600;">${groups[g].length}</span></div>` : ''}
+        ${!linkGroupSel && (names.length > 1 || g !== '기타') ? `<div style="font-weight:800; font-size:13px; color:var(--primary-dark); margin:14px 0 4px;">${taxjEsc(g)} <span class="hint" style="margin:0; font-weight:600;">${groups[g].length}</span></div>` : ''}
         <div class="table-scroll"><table>
           <thead><tr><th style="width:24%;">사이트명</th><th style="width:56px;">링크</th><th>메모</th><th style="width:22%;">첨부</th><th style="width:70px;">수정일</th><th style="width:70px;"></th></tr></thead>
           <tbody>${groups[g].sort((a, b) => String(a.name).localeCompare(String(b.name), 'ko')).map(l => `
-            <tr>
+            <tr draggable="true" ondragstart="linkDragId=${l.id}; event.dataTransfer.effectAllowed='move';" ondragend="linkDragId=null;" title="끌어서 위쪽 분야 칩에 놓으면 그 분야로 옮겨져요">
               <td style="text-align:left; font-weight:700;">${taxjEsc(l.name)}</td>
               <td style="text-align:center;">${l.url ? `<a class="icon-btn" href="${escapeAttr(linkHref(l.url))}" target="_blank" rel="noopener" title="${escapeAttr(l.url)}" aria-label="링크 열기" style="color:var(--primary-dark); display:inline-flex;">${ICON_LINK}</a>` : ''}</td>
               <td style="text-align:left; white-space:pre-wrap; font-size:13px;">${taxjEsc(l.memo || '')}</td>
