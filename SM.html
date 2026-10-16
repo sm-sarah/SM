@@ -1281,7 +1281,10 @@
   /* [2026.10.16] "표 좌우 여백이 뭐야"(요청) - 표는 카드 폭 전체를 쓰고, 다른 칸은 내용 폭만큼만(width:1%), 남는 폭은 상호명 칸이 가져감 */
   /* [2026.10.16] "상호명 칸에 불필요한 여백 - 메뉴마다 표를 글자 크기만큼 줄여도 됨"(요청) - 표는 내용 폭만큼(왼쪽 정렬), 넓으면 지금처럼 가로 스크롤 */
   .table-scroll > table{ width:auto; }
-  .acc-wrap .table-scroll > table{ width:100%; }   /* 분야별로 표가 여러 개 쌓이는 화면(링크·계정·서식·법령)은 표 폭을 서로 맞춤 */
+  .acc-wrap .table-scroll > table{ width:100%; }
+  /* [2026.10.16] "표가 줄었는데 흰 배경은 그대로라 오른쪽이 비어 보임 - 배경도 표 폭에 맞춰"(요청) - 표가 있는 카드는 내용(표·도구줄) 폭만큼만, 가운데 정렬.
+     표가 화면보다 넓으면 지금처럼 카드 폭 안에서 가로 스크롤 */
+  :is(#tab-clients, #tab-pay, #tab-vat, #tab-close, #tab-corp, #tab-indiv, #tab-attend) > .card:has(.table-scroll){ width:fit-content; max-width:100%; margin-left:auto; margin-right:auto; box-sizing:border-box; }   /* 분야별로 표가 여러 개 쌓이는 화면(링크·계정·서식·법령)은 표 폭을 서로 맞춤 */
   table.cl-table{ width:auto; }
   table.cl-table th, table.cl-table td{ padding:8px 12px; font-size:13px; white-space:nowrap; }
   /* [2026.10.16] 회사웹 상세구분 칩(본점·지점·성실·면세 등) + 메모 있으면 * (마우스를 올리면 내용) */
@@ -3162,7 +3165,7 @@ const VAT_T_FIN = { target:'대상', 'not-target':'미대상' };
 const VAT_T_COLOR = { filing:'#4338ca', notice:'#0f766e', 'notice-excluded':'#8a5a05', 'not-target':'var(--muted)', target:'#4338ca' };
 const VAT_T_STAGE_COLOR = { '검토중':'#b4830e', '기안완료':'#4338ca', '신고완료':'#059669' };
 const VAT_T_DUE = { '1기예정':[4,25], '1기확정':[7,25], '2기예정':[10,25], '2기확정':[1,25] };
-let vatYear = '', vatHalf = '1', vatKind = 'pre', vatQuery = '', vatSeg = 'all';
+let vatYear = '', vatHalf = '1', vatKind = 'pre', vatQuery = '', vatSeg = 'all', vatProgSeg = 'all';
 function vatTEntry(docs, cid, year, period){ return (((docs.s__vatFilingTargets || {})[cid] || {})[year] || {})[period] || null; }
 // Tax.J vatEntryStatus와 같음: 확정 = target/not-target, 예정 = filing/notice/notice-excluded/not-target(개인 기본 예정고지, 법인 기본 미대상)
 function vatTStatus(en, period, entityType){
@@ -3215,7 +3218,7 @@ function vatTHelpRows(h, year, period){
   if(st) rows.push([`직원${asOf}`, Object.keys(st).length ? Object.entries(st).map(([k, n]) => n ? `${k} ${n}명` : k).join('·') : '없음']);
   if((h.kinds || []).length) rows.push(['신고유형', h.kinds.map(k => k === '기타' && h.kindEtc ? `기타(${h.kindEtc})` : k).join('·')]);
   if((h.recv || []).length) rows.push(['수령자료', h.recv.join('·')]);   // [2026.10.16] 회사웹 Tip 수령자료 반영
-  if(h.memo) rows.push(['메모', h.memo]);
+  if(h.memo) rows.push(['특이사항', h.memo]);   // [2026.10.16] 회사웹 Tip '메모' → '특이사항'
   return rows;
 }
 function vatTShowHelp(cid){
@@ -3580,7 +3583,16 @@ function vatProgHtml(docs){
     <button class="btn ghost xs" onclick="document.getElementById('vatProgXlsx').click()" title="1행 = 항목 이름인 진행표 엑셀을 ${plab}에 넣어요">엑셀 올리기</button><input type="file" id="vatProgXlsx" accept=".xlsx,.xls" style="display:none;" onchange="vatProgImport(this)"></div>`;
   if(!docs) return bar + '<div class="empty">Tax.J에 연결하면 회사웹 거래처·예정고지 칸이 채워지고, 옆에 내 진행 칸을 적을 수 있어요.</div>';
   const q = vatQuery.trim().toLowerCase(), na = PAY_NA, num = v => v == null || v === '' ? na : typeof v === 'number' ? v.toLocaleString('ko-KR') : taxjEsc(String(v));
-  const list = vatProgList(docs).filter(x => !q || String(x.c.name || '').toLowerCase().includes(q));
+  // [2026.10.16] "부가세 진행에서도 전체·신고대상·고지대상 등을 골라 보게 - 회사웹처럼"(요청) - 총괄과 같은 구분(Tax.J vatEntryStatus):
+  // 예정 = 예정신고·예정고지·고지제외(·미대상), 확정 = 대상(·미대상). 칩 하나 고르면 그 구분 거래처만
+  const ppd = vatTPeriod(), ppre = ppd.endsWith('예정'), plabels = ppre ? VAT_T_PRE : VAT_T_FIN;
+  const qAll = vatProgList(docs).filter(x => !q || String(x.c.name || '').toLowerCase().includes(q));
+  qAll.forEach(x => { x.st = vatTStatus(vatTEntry(docs, x.c.id, vatYear, ppd), ppd, x.c.entityType); });
+  const pkeys = ppre ? ['filing','notice','notice-excluded','not-target'] : ['target','not-target'], pn = k => qAll.filter(x => x.st === k).length;
+  const psegs = [['all','전체',qAll.length]].concat(pkeys.filter(k => k !== 'not-target' || pn(k)).map(k => [k, plabels[k], pn(k)]));
+  if(!psegs.some(([k]) => k === vatProgSeg)) vatProgSeg = 'all';
+  const list = vatProgSeg === 'all' ? qAll : qAll.filter(x => x.st === vatProgSeg);
+  const segRow = `<div class="toolbar" style="justify-content:center;"><div class="cl-subtabs">${psegs.map(([k, l, c]) => `<button class="cl-subtab ${vatProgSeg === k ? 'on' : ''}" onclick="vatProgSeg='${k}'; renderVat();">${l} ${c}</button>`).join('')}</div></div>`;
   // 내 항목 칸 폭: 이름·값 길이에 맞춰(긴 글은 최대 240px, 마우스를 올리면 전체)
   const w = {};
   vatProgCols.forEach(c => {
@@ -3610,7 +3622,7 @@ function vatProgHtml(docs){
     }).join('');
     return `<tr><td class="tx-seq">${n + 1}</td>${link}${mine}</tr>`;
   }).join('');
-  return bar + `<div class="table-scroll vat-prog" style="margin-top:8px;"><table><thead><tr><th class="tx-seq">순번</th>${linkHead}${head}</tr></thead>
+  return bar + segRow + `<div class="table-scroll vat-prog" style="margin-top:8px;"><table><thead><tr><th class="tx-seq">순번</th>${linkHead}${head}</tr></thead>
     <tbody>${rows || `<tr><td colspan="${vis.length + 1}"><div class="empty" style="padding:18px;">${q ? '검색 결과가 없어요.' : '거래처가 없어요.'}</div></td></tr>`}</tbody></table></div>`;
 }
 // [2026.10.14] "스크롤이 끝으로 가면 다시 처음으로 온다"(요청) - 회사웹 실시간 연결이 바뀔 때마다 화면을 다시 그려 표 스크롤이 0으로 돌아갔음.
