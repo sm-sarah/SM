@@ -1279,9 +1279,11 @@
   .sm-help-btn:hover{ color:var(--primary-dark); border-color:var(--primary); }
   /* [2026.10.16] 거래처 표 - 회사웹 거래처 표와 같은 짜임 + "칸 안 좌우 여백이 너무 넓지 않게"(요청): 표를 내용 폭만큼만(가운데), 칸 여백 8px 9px */
   /* [2026.10.16] "표 좌우 여백이 뭐야"(요청) - 표는 카드 폭 전체를 쓰고, 다른 칸은 내용 폭만큼만(width:1%), 남는 폭은 상호명 칸이 가져감 */
-  table.cl-table{ width:100%; }
-  table.cl-table th, table.cl-table td{ padding:8px 12px; font-size:13px; white-space:nowrap; width:1%; }
-  table.cl-table th.cl-name-th, table.cl-table td.cl-name-cell{ width:auto; }
+  /* [2026.10.16] "상호명 칸에 불필요한 여백 - 메뉴마다 표를 글자 크기만큼 줄여도 됨"(요청) - 표는 내용 폭만큼(왼쪽 정렬), 넓으면 지금처럼 가로 스크롤 */
+  .table-scroll > table{ width:auto; }
+  .acc-wrap .table-scroll > table{ width:100%; }   /* 분야별로 표가 여러 개 쌓이는 화면(링크·계정·서식·법령)은 표 폭을 서로 맞춤 */
+  table.cl-table{ width:auto; }
+  table.cl-table th, table.cl-table td{ padding:8px 12px; font-size:13px; white-space:nowrap; }
   /* [2026.10.16] 회사웹 상세구분 칩(본점·지점·성실·면세 등) + 메모 있으면 * (마우스를 올리면 내용) */
   .cl-subtag{ position:relative; display:inline-flex; align-items:center; margin-left:5px; padding:1px 7px; border-radius:8px; font-size:9.5px; font-weight:800; vertical-align:middle; }
   .cl-subtag sup{ position:absolute; top:-5px; right:-4px; font-size:10px; font-weight:900; line-height:1; cursor:help; }
@@ -1539,11 +1541,16 @@ document.addEventListener('pointerdown', (ev) => {
   if(!googleAccessToken || !googleTokenClient || tokenRefreshing) return;
   // [2026.10.16] 첨부 '+ 파일'을 누를 때 여기서 Google 창이 먼저 뜨면 파일 선택 창이 막혀 업로드가 안 되던 문제(요청) → 그 버튼은 건너뜀
   if(ev && ev.target && ev.target.closest && ev.target.closest('.att-add')) return;
-  if(Date.now() < googleTokenExp() - TOKEN_REFRESH_BEFORE_MS) return;
+  // [2026.10.16] "메뉴를 누를 때마다 로그인 창이 떴다 사라짐"(요청) - 만료 시각을 모르면(저장된 토큰 정보 없음) 클릭마다 갱신하던 문제,
+  // 갱신이 실패하면 다음 클릭에 또 시도하던 문제 → 만료 시각을 모르면 건너뛰고, 실패하면 15분 동안 다시 시도하지 않음
+  const exp = googleTokenExp();
+  if(!exp || Date.now() < exp - TOKEN_REFRESH_BEFORE_MS || Date.now() < (window.smTokenRetryAfter || 0)) return;
   tokenRefreshing = true;
+  window.smTokenRetryAfter = Date.now() + 15 * 60 * 1000;
   googleTokenClient.callback = resp => {
     tokenRefreshing = false;
     if(resp.error || !resp.access_token) return;   // 실패하면 기존 흐름(만료 시 다음 클릭에 재연결)으로
+    window.smTokenRetryAfter = 0;
     googleAccessToken = resp.access_token;
     gapi.client.setToken({ access_token: googleAccessToken });
     saveGoogleToken(resp);
