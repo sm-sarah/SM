@@ -4664,6 +4664,8 @@ function gisInit(){
       client_id: GOOGLE_CLIENT_ID,
       scope: GOOGLE_SCOPES,
       callback: '',
+      // [2026.10.16] Google 창이 막히거나 닫혀도 아무 안내가 없던 문제(요청: "업로드가 안 되고 사유도 안 나옴") - 오류를 받아서 알려줌
+      error_callback: err => { const f = window.smGisErrorHandler; window.smGisErrorHandler = null; if(f) f(err); else console.warn('Google 로그인 창 오류', err); },
     });
     gisReady = true;
     maybeEnableGoogleSignIn();
@@ -8289,8 +8291,21 @@ function smTokenHasDrive(){
   try{ const v = JSON.parse(localStorage.getItem(GOOGLE_TOKEN_KEY) || 'null'); if(v && v.scope) return /\/auth\/drive(\.file)?(\s|$)/.test(v.scope); }catch(e){}
   return true;   // 예전에 저장된 토큰(권한 기록 없음)은 일단 시도
 }
+function smToast(msg, ms){
+  let t = document.getElementById('smToast');
+  if(!t){ t = document.createElement('div'); t.id = 'smToast'; t.style.cssText = 'position:fixed; left:50%; bottom:28px; transform:translateX(-50%); background:#2a1d26; color:#fff; font-size:13px; font-weight:600; padding:10px 16px; border-radius:12px; z-index:9999; box-shadow:0 6px 18px rgba(0,0,0,.18); max-width:90vw; text-align:center; transition:opacity .2s;'; document.body.appendChild(t); }
+  t.textContent = msg; t.style.opacity = '1'; clearTimeout(t._h); t._h = setTimeout(() => { t.style.opacity = '0'; }, ms || 3500);
+}
 function smRequestDriveScope(){
+  const needConsent = !smTokenHasDrive();
+  smToast(needConsent ? 'Google 드라이브 권한 확인 창을 열었어요. 창이 안 보이면 브라우저의 팝업 차단을 풀어 주세요.' : 'Google 로그인이 만료돼서 다시 확인하고 있어요. 창이 뜨면 계정을 골라 주세요.', 6000);
+  window.smGisErrorHandler = err => {
+    const type = (err && err.type) || '';
+    smAlert('Google 확인을 마치지 못했어요', type === 'popup_failed_to_open' ? '브라우저가 Google 창(팝업)을 막았어요. 주소창 오른쪽의 팝업 차단 아이콘에서 이 사이트를 허용한 뒤 "+ 파일"을 다시 눌러 주세요.'
+      : type === 'popup_closed' ? 'Google 창이 닫혔어요. "+ 파일"을 다시 눌러 계정을 골라 주세요.' : `오류: ${type || (err && err.message) || '알 수 없음'}`, { tone:'danger' });
+  };
   googleTokenClient.callback = resp => {
+    window.smGisErrorHandler = null;
     if(resp.error || !resp.access_token){ smAlert('권한을 받지 못했어요', '다시 "+ 파일"을 눌러 주세요.'); return; }
     googleAccessToken = resp.access_token;
     gapi.client.setToken({ access_token: googleAccessToken });
@@ -8301,7 +8316,7 @@ function smRequestDriveScope(){
   };
   let hint = '';
   try{ hint = localStorage.getItem(AUTH_STORAGE_KEY) || ''; }catch(e){}
-  googleTokenClient.requestAccessToken(Object.assign({ prompt:'consent', scope: GOOGLE_SCOPES }, hint ? { hint } : {}));
+  googleTokenClient.requestAccessToken(Object.assign({ prompt: needConsent ? 'consent' : '', scope: GOOGLE_SCOPES }, hint ? { hint } : {}));
 }
 // [2026.10.16] 업로드 전 확인: Google 연결·로그인 만료·드라이브 권한. 문제가 있으면 그 자리에서 안내하고 false
 function smUploadReady(){
@@ -8326,11 +8341,11 @@ async function linkUploadFiles(input){
   if(!x || !files.length) return;
   const big = files.find(f => f.size > 50 * 1024 * 1024);
   if(big){ smAlert('파일이 너무 커요', `${big.name}: 50MB 이하만 올릴 수 있어요.`); return; }
-  x._uploading = files.length; renderLinks();
+  x._uploading = files.length; renderLinks(); smToast(`${files.length}개 파일을 드라이브에 올리고 있어요…`);
   try{
     for(const f of files){ (x.files = x.files || []).push(await smDriveUpload(f)); }
-    x.at = todayStr();
-  }catch(e){ console.error(e); smAlert('첨부하지 못했어요', String(e && e.message || e), { tone:'danger' }); }
+    x.at = todayStr(); smToast('첨부했어요.');
+  }catch(e){ console.error(e); smAlert('첨부하지 못했어요', /Failed to fetch/i.test(String(e && e.message)) ? '드라이브에 연결하지 못했어요(인터넷 연결 또는 브라우저 확장 프로그램이 막았을 수 있어요). ' + String(e.message) : String(e && e.message || e), { tone:'danger' }); }
   finally{ delete x._uploading; renderAll(); }
 }
 async function linkRemoveFile(id, fid){
