@@ -1339,8 +1339,9 @@
   .vtip-v b{ font-weight:800; }
   .vtip-chip{ display:inline-block; font-size:11px; font-weight:700; color:var(--primary-dark); background:var(--primary-soft); border-radius:6px; padding:0 7px; margin:1px 0; white-space:nowrap; }
   .vtip-dim{ color:var(--muted); font-size:11.5px; }
-  .vtip-memo{ margin-top:9px; background:#fbf6f9; border:1px solid var(--border); border-radius:10px; padding:8px 11px; color:var(--text); white-space:pre-wrap; line-height:1.55; }
-  .vtip-memo .vtip-k{ margin-bottom:3px; }
+  /* [2026.10.16] 회사웹과 맞춤 - 특이사항 제목은 밖으로, 내용만 음영(요청) */
+  .vtip-memo-k{ margin-top:10px; margin-bottom:4px; }
+  .vtip-memo{ background:#fbf6f9; border:1px solid var(--border); border-radius:10px; padding:8px 11px; color:var(--text); white-space:pre-wrap; line-height:1.55; }
 </style>
 </head>
 <body>
@@ -1918,7 +1919,9 @@ function updatePageHead(){
   const el = document.getElementById('pageHead'); if(!el) return;
   const title = (TABS.find(t => t.id === activeTab) || {}).label || (TAB_TITLES[activeTab] || [''])[0];
   const sub = pageSubtitle();
-  el.innerHTML = `<div class="underline-bar"></div><h1>${title}</h1>${sub ? `<div class="page-sub">${taxjEsc(sub)}</div>` : ''}`;
+  const html = `<div class="underline-bar"></div><h1>${title}</h1>${sub ? `<div class="page-sub">${taxjEsc(sub)}</div>` : ''}`;
+  if(el._html === html) return;   // [2026.10.16] 깜빡임(요청) - 같은 제목이면 다시 그리지 않음
+  el._html = html; el.innerHTML = html;
 }
 
 let prevTab = null;
@@ -3283,7 +3286,7 @@ function vatTHelpHtml(h, year, period){
   if((h.recv || []).length) out.push(sec('수령자료', [h.recv.map(chip).join(' ')]));
   const memo = String(h.memo || '').trim();
   return `<div class="vtip"><div class="vtip-h"><span>Tip</span>${year && RG[1] ? `<span class="vtip-period">${e(year)}년 ${e(String(period).replace(/(\d기)/, '$1 '))} · ${md(from)}~${md(RG[1])}</span>` : ''}</div>
-    ${out.join('') || '<div class="hint" style="margin:8px 0 0;">적힌 내용이 없어요.</div>'}${memo ? `<div class="vtip-memo"><div class="vtip-k">특이사항</div><div>${e(memo)}</div></div>` : ''}</div>`;
+    ${out.join('') || '<div class="hint" style="margin:8px 0 0;">적힌 내용이 없어요.</div>'}${memo ? `<div class="vtip-k vtip-memo-k">특이사항</div><div class="vtip-memo">${e(memo)}</div>` : ''}</div>`;
 }
 function vatTShowHelp(cid){
   const docs = taxjFull && taxjFull.docs; if(!docs) return;
@@ -6014,21 +6017,30 @@ function taxjWhen(v){ if(!v) return '-'; const d = new Date(typeof v === 'number
 // 직원 = profiles, 지금 접속 = Realtime Database presence(회사웹 실시간 근무현황과 같은 곳, 90초 안 신호면 접속 중),
 // 기기·알림 = s__pushTokens(알림을 허용해 토큰이 등록된 기기), 출퇴근 알림 = s__notificationPrefs[이메일].clockReminder
 async function taxjUsageFromCompany(){
-  if(!(taxjFull && taxjFull.docs)) return null;
-  const app = await taxjCompanyApp(), user = app.auth().currentUser;
-  if(!user || !String(user.email || '').toLowerCase().endsWith(TAXJ_COMPANY_DOMAIN)) return null;
-  await taxjLoadScript('https://www.gstatic.com/firebasejs/10.13.1/firebase-database-compat.js');
-  const pres = (await app.database('https://taxj-a3e01-default-rtdb.asia-southeast1.firebasedatabase.app').ref('presence').once('value')).val() || {};
+  if(!(taxjFull && taxjFull.docs && (taxjFull.docs.profiles || []).length)) return null;
+  // [2026.10.16] "여전히 개인계정 요청을 받지 않는다고 나옴"(요청) - 회사 계정 로그인이 없으면 null을 돌려 서버로 넘어가 오류가 났음.
+  // 이제 저장해 둔 회사 자료만 있어도 직원·기기·알림은 보여주고, '지금 접속'만 회사 계정이 연결돼 있을 때 읽음(못 읽으면 rep.noLive)
+  let pres = null;
+  try{
+    const app = await taxjCompanyApp(), user = app.auth().currentUser;
+    if(user && String(user.email || '').toLowerCase().endsWith(TAXJ_COMPANY_DOMAIN)){
+      await taxjLoadScript('https://www.gstatic.com/firebasejs/10.13.1/firebase-database-compat.js');
+      pres = (await app.database('https://taxj-a3e01-default-rtdb.asia-southeast1.firebasedatabase.app').ref('presence').once('value')).val() || {};
+    }
+  }catch(e){ console.warn('지금 접속(presence) 읽기 실패', e); pres = null; }
+  const noLive = !pres; pres = pres || {};
   const docs = taxjFull.docs, now = Date.now(), key = em => String(em || '').toLowerCase().replace(/[^a-z0-9]/g, '_');
   const toks = Array.isArray(docs.s__pushTokens) ? docs.s__pushTokens : ((docs.s__pushTokens || {}).list || []);
   const prefs = docs.s__notificationPrefs || {};
   const people = (docs.profiles || []).filter(p => p && p.email).map(p => {
     const em = String(p.email).toLowerCase(), k = key(em);
-    const presence = [pres[k], pres[k + '__alt']].filter(Boolean).map(v => ({ online: now - (v.at || 0) < 90000, device: v.device || (v.mob ? '휴대폰' : 'PC'), screen: v.label || '', at: v.at || 0 }));
+    const presence = [pres[k], pres[k + '__alt']].filter(Boolean).map(v => ({ online: now - (v.at || 0) < 90000, device: v.device || (v.mob ? '휴대폰' : 'PC'), screen: v.label || '', at: v.at || 0, lastAt: v.lastAt || 0 }));
     const devices = toks.filter(t => t && String(t.email || '').toLowerCase() === em).map(t => ({ dev: t.deviceName || (t.mob ? '휴대폰' : 'PC'), mob: t.mob, notif: 'granted', at: t.updatedAt }));
-    return { name: p.name || em, position: p.position || p.title || '', status: p.status || '', presence, devices, clockReminder: !!(prefs[em] && prefs[em].clockReminder), clock: [] };
+    // [2026.10.16] "등록기기·마지막 접속·알림 허용·출퇴근 알림·권한까지 다 보이게"(요청) - 알림 분류별 켬/끔(prefs, 값이 없으면 켬)과 관리자 여부(s__adminEmails)도 같이
+    return { name: p.name || em, position: p.position || p.title || '', status: p.status || '', presence, devices, clockReminder: !!(prefs[em] && prefs[em].clockReminder), clock: [],
+      prefs: prefs[em] || {}, admin: (Array.isArray(docs.s__adminEmails) ? docs.s__adminEmails : []).map(x => String(x).toLowerCase()).includes(em) };
   });
-  return { at: now, people };
+  return { at: now, people, noLive };
 }
 async function loadTaxjUsage(){
   const btn = document.getElementById('taxjUsageBtn'); if(btn) btn.disabled = true;
@@ -6056,7 +6068,7 @@ async function loadTaxjUsage(){
       const err = String(data.error || res.status);
       const serverSide = /회사 계정만/.test(err);
       taxjUsageSet(`<div class="hint">불러오지 못했어요 (${taxjEsc(err)}). ${serverSide
-        ? `${taxjEsc(user.email)}로 로그인은 되어 있는데, Tax.J 서버가 아직 개인계정 요청을 받지 않아요. 서버에 사용 현황 기능이 반영돼야 해요.`
+        ? `회사 자료가 아직 없어서 서버에 물어봤는데, 서버는 회사 계정 요청만 받아요. Tax.J 메뉴에서 '실시간 연결'(회사 계정)을 한 번 해 두면 여기서 바로 보여요.`
         : '서버에 사용 현황 기능이 배포됐는지 확인해 주세요.'}</div>${taxjReloginBtn()}`);
       return;
     }
@@ -7981,20 +7993,34 @@ function renderReview(){
     </div>`;
 }
 
+// [2026.10.16] "등록기기 / 마지막 접속 / 알림 허용 / 출퇴근 알림 / 권한이 다 나오게"(요청) - 칸을 나눠서 보여줌. 최근 출퇴근 알림(7일)은 서버 보고서에 기록이 있을 때만
+const TAXJ_NOTIF_CATS = [['notice','공지'], ['approvalNew','결재 요청'], ['approvalDecision','결재 결과'], ['teamSchedule','팀일정']];
 function taxjUsageTableHtml(rep){
   const people = ((rep && rep.people) || []).filter(p=> p.status !== '퇴사');
   const notifTxt = { granted:'허용', denied:'차단', default:'안 정함', unsupported:'미지원' };
+  const hasClock = people.some(p=> (p.clock||[]).length), hasPrefs = people.some(p=> p.prefs), hasAdmin = people.some(p=> p.admin !== undefined);
+  const mute = t=> `<span class="hint" style="margin:0;">${t}</span>`;
   const rows = people.map(p=>{
     const online = (p.presence||[]).filter(x=> x.online);
     const last = Math.max(0, ...(p.presence||[]).map(x=> Math.max(x.at||0, x.lastAt||0)));
-    const nowTxt = online.length ? `<b style="color:var(--ok, #16a34a);">접속 중</b><div class="hint" style="margin:0;">${online.map(x=> taxjEsc((x.device||'기기') + (x.screen ? ' · ' + x.screen : ''))).join('<br>')}</div>` : `<span class="hint" style="margin:0;">마지막 ${taxjWhen(last)}</span>`;
-    const devs = (p.devices||[]).map(d=> `${taxjEsc(d.dev || (d.mob ? '휴대폰' : '기기'))} <span class="hint" style="margin:0;">알림 ${taxjEsc(notifTxt[d.notif] || '-')} · ${taxjWhen(d.at)}</span>`).join('<br>') || '<span class="hint" style="margin:0;">기록 없음</span>';
+    const nowTxt = online.length ? `<b style="color:var(--ok, #16a34a);">접속 중</b><div class="hint" style="margin:0;">${online.map(x=> taxjEsc((x.device||'기기') + (x.screen ? ' · ' + x.screen : ''))).join('<br>')}</div>` : mute(rep && rep.noLive ? '-' : '접속 안 함');
+    const lastTxt = online.length ? '지금' : last ? taxjWhen(last) : mute('-');
+    const devs = (p.devices||[]).map(d=> `${taxjEsc(d.dev || (d.mob ? '휴대폰' : '기기'))} ${mute('등록 ' + taxjWhen(d.at))}`).join('<br>') || mute('없음');
+    const devNotif = (p.devices||[]).length ? (p.devices||[]).map(d=> taxjEsc(notifTxt[d.notif] || '-')).join('<br>') : mute('-');
+    const pf = p.prefs || {}, offs = TAXJ_NOTIF_CATS.filter(([k])=> pf[k] === false);
+    const cats = !hasPrefs ? '' : offs.length === TAXJ_NOTIF_CATS.length ? mute('모두 끔') : offs.length ? `${TAXJ_NOTIF_CATS.filter(([k])=> pf[k] !== false).map(([,l])=> l).join('·')}<div class="hint" style="margin:0;">끔: ${offs.map(([,l])=> l).join('·')}</div>` : '모두 켬';
     const clk = (p.clock||[]).slice(0,7).map(c=> `${c.date.slice(5).replace('-','/')} ${c.checkIn ? (c.checkIn === 'done' ? '출근✓' : c.checkIn === 'leave' ? '휴가' : '출근알림') : ''}${c.checkIn && c.checkOut ? ' · ' : ''}${c.checkOut ? (c.checkOut === 'done' ? '퇴근✓' : c.checkOut === 'leave' ? '휴가' : '퇴근알림') : ''}`).join('<br>') || '-';
-    return `<tr><td style="white-space:nowrap;"><b>${taxjEsc(p.name)}</b>${p.position ? `<div class="hint" style="margin:0;">${taxjEsc(p.position)}</div>` : ''}</td><td>${nowTxt}</td><td>${devs}</td><td style="white-space:nowrap;">${p.clockReminder ? '켬' : '끔'}</td><td style="white-space:nowrap; font-size:12px;">${clk}</td></tr>`;
+    return `<tr><td style="white-space:nowrap;"><b>${taxjEsc(p.name)}</b>${p.position ? `<div class="hint" style="margin:0;">${taxjEsc(p.position)}</div>` : ''}</td>`
+      + (hasAdmin ? `<td style="white-space:nowrap;">${p.admin ? '<b>관리자</b>' : '일반'}</td>` : '')
+      + `<td>${nowTxt}</td><td style="white-space:nowrap;">${lastTxt}</td><td style="white-space:nowrap;">${devs}</td><td style="white-space:nowrap;">${devNotif}</td>`
+      + (hasPrefs ? `<td>${cats}</td>` : '')
+      + `<td style="white-space:nowrap;">${p.clockReminder ? '켬' : mute('끔')}</td>`
+      + (hasClock ? `<td style="white-space:nowrap; font-size:12px;">${clk}</td>` : '') + `</tr>`;
   }).join('');
-  return `<div class="hint" style="margin-bottom:6px;">${taxjWhen(rep && rep.at)} 기준</div>
+  const heads = ['직원'].concat(hasAdmin ? ['권한'] : [], ['지금','마지막 접속','등록 기기','기기 알림 권한'], hasPrefs ? ['받는 알림'] : [], ['출퇴근 알림'], hasClock ? ['최근 출퇴근 알림(7일)'] : []);
+  return `<div class="hint" style="margin-bottom:6px;">${taxjWhen(rep && rep.at)} 기준${rep && rep.noLive ? ' · 지금 접속·마지막 접속은 회사웹 실시간 연결(회사 계정) 중일 때만 보여요' : ''}</div>
     <div style="overflow-x:auto;"><table style="width:100%; border-collapse:collapse; font-size:12.5px;">
-      <thead><tr>${['직원','지금','기기 · 알림','출퇴근 알림','최근 출퇴근 알림(7일)'].map(h=>`<th style="text-align:left; padding:6px 8px; border-bottom:1px solid var(--line, #eee); white-space:nowrap;">${h}</th>`).join('')}</tr></thead>
+      <thead><tr>${heads.map(h=>`<th style="text-align:left; padding:6px 8px; border-bottom:1px solid var(--line, #eee); white-space:nowrap;">${h}</th>`).join('')}</tr></thead>
       <tbody>${rows.replace(/<td/g, '<td style="padding:6px 8px; border-bottom:1px solid var(--line, #f1f1f1); vertical-align:top;"').replace(/<td style="padding:6px 8px; border-bottom:1px solid var\(--line, #f1f1f1\); vertical-align:top;" style="/g, '<td style="padding:6px 8px; border-bottom:1px solid var(--line, #f1f1f1); vertical-align:top; ')}</tbody>
     </table></div>`;
 }
@@ -9101,7 +9127,10 @@ async function pollGoogleSheetForUpdates(){
   if(isEditingNow()) return;
   if(hasUnsavedChanges()){ scheduleGoogleSave(); return; }   // 저장 안 된 변경이 있으면 덮어쓰지 않고 먼저 저장 시도
   try {
+    // [2026.10.16] "개인웹 깜빡임이 심하다"(요청) - 20초마다 시트를 읽고 바뀐 게 없어도 모든 화면을 다시 그려 깜빡였음 → 내용이 바뀐 때만 다시 그림
+    const before = JSON.stringify(collectGoogleSnapshot());
     await loadFromGoogleSheet();
+    if(JSON.stringify(collectGoogleSnapshot()) === before) return;
     renderAllNoSave();
   } catch(e){
     console.warn('자동 새로고침 실패', e);
@@ -9354,7 +9383,8 @@ function smEnhanceUi(root){
   });
 }
 try{
-  new MutationObserver(() => { clearTimeout(window._smEnhT); window._smEnhT = setTimeout(() => smEnhanceUi(), 0); }).observe(document.body, { childList:true, subtree:true });
+  // [2026.10.16] 깜빡임(요청) - 예전엔 화면을 그린 '다음'(setTimeout)에 검색칸·설명을 아이콘으로 바꿔서, 다시 그릴 때마다 원래 모양이 잠깐 보였다 바뀜 → 그리기 전(변화 감지 직후)에 바로 바꿈
+  new MutationObserver(() => { try{ smEnhanceUi(); }catch(e){} }).observe(document.body, { childList:true, subtree:true });
   smEnhanceUi();
 }catch(e){ console.warn(e); }
 // [2026.10.16] "가로 스크롤을 잡고 옮기다 표 밖으로 나가면 스크롤이 멈춘다"(요청) - 끄는 동안 회사웹 실시간 반영·시트 동기화로
