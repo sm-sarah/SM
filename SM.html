@@ -3199,13 +3199,15 @@ function vatTShowMemo(cid){
 // Tip = Tax.J vatHelpObj·vatHelpTipRows(차량·직원(기수마다)·신고유형·메모)
 function vatTHelp(docs, cid){ const v = ((docs.s__vatFilingTargets || {})[cid] || {}).__help; return !v ? {} : typeof v === 'string' ? { memo: v } : v; }
 function vatTHelpRows(h, year, period){
-  const rows = [], vs = (h.vehicles || []).filter(v => v && (v.type || v.no));
-  if(h.vehicleYn === '없음') rows.push(['차량', '없음']);
-  else if(h.vehicleYn === '있음' || vs.length) rows.push(['차량', vs.length ? vs.map(v => `${v.type || ''} ${v.no || ''}${v.deduct ? ` (${v.deduct})` : ''}`.trim()).join(', ') : '있음']);
+  const rows = [], vs = (h.vehicles || []).filter(v => v && (v.type || v.no || v.own));
+  // [2026.10.16] 회사웹 Tip 변경 반영 - 차량 유·무 표기, 소유형태(자가·렌트·리스(운용)·리스(금융)·기타 직접 입력)
+  if(h.vehicleYn === '없음') rows.push(['차량', '무']);
+  else if(h.vehicleYn === '있음' || vs.length) rows.push(['차량', vs.length ? vs.map(v => { const own = v.own === '기타' ? (v.ownEtc || '기타') : (v.own || ''); const tail = [own, v.deduct].filter(Boolean).join('·'); return `${v.type || ''} ${v.no || ''}${tail ? ` (${tail})` : ''}`.trim(); }).join(', ') : '유']);
   let st = (h.staff || {})[`${year}-${period}`];
   if(Array.isArray(st)){ const o = {}; st.forEach(k => o[k] = 0); st = o; }
   if(st) rows.push(['직원', Object.keys(st).length ? Object.entries(st).map(([k, n]) => n ? `${k} ${n}명` : k).join('·') : '없음']);
   if((h.kinds || []).length) rows.push(['신고유형', h.kinds.map(k => k === '기타' && h.kindEtc ? `기타(${h.kindEtc})` : k).join('·')]);
+  if((h.recv || []).length) rows.push(['수령자료', h.recv.join('·')]);   // [2026.10.16] 회사웹 Tip 수령자료 반영
   if(h.memo) rows.push(['메모', h.memo]);
   return rows;
 }
@@ -3319,7 +3321,7 @@ function vatTableHtml(docs){
       return `<td>${v ? `<span style="font-weight:800; color:#059669;" title="${escapeAttr(v)} 발송">${Number(v.slice(5,7))}/${Number(v.slice(8,10))}</span>` : na}</td>`;
     }).join('');
     const memo = String((vatTFiling(docs, x.c.id, year, period) || {}).memo || '').trim();
-    const help = vatTHelp(docs, x.c.id), hasHelp = !!(help.vehicleYn || (help.vehicles || []).length || (help.kinds || []).length || help.memo || Object.keys(help.staff || {}).length);
+    const help = vatTHelp(docs, x.c.id), hasHelp = !!(help.vehicleYn || (help.vehicles || []).length || (help.kinds || []).length || (help.recv || []).length || help.memo || Object.keys(help.staff || {}).length);
     const files = (((((docs.s__vatFilingTargets || {})[x.c.id] || {}).__docs || {})[`${year}-${period}`]) || []).length;
     const cid = escapeAttr(x.c.id);
     const reason = x.tb.excludeReason && x.tb.excludeReason !== '없음' ? taxjEsc(x.tb.excludeReason) : na;
