@@ -1768,6 +1768,7 @@ const NAV_SUBMENUS = {
     {js:"setTaxjFullView('work')",   label:'결재·근무기준'},
     {js:"setTaxjFullView('info')",   label:'공지·조직·거래처'},
     {js:"setTaxjFullView('remote')", label:'회사웹 화면'},
+    {js:"setTaxjFullView('usage')",  label:'사용 현황'},   // [2026.10.16] 설정에 있던 Tax.J 사용 현황(직원별 접속·기기·알림 허용)을 Tax.J 하위메뉴로(요청)
   ],
   // [2026.10.13] 내부 메뉴(요청 - 회사정보·팀정보·세무일정)
   inner: [
@@ -3200,12 +3201,18 @@ function vatTShowMemo(cid){
 function vatTHelp(docs, cid){ const v = ((docs.s__vatFilingTargets || {})[cid] || {}).__help; return !v ? {} : typeof v === 'string' ? { memo: v } : v; }
 function vatTHelpRows(h, year, period){
   const rows = [], vs = (h.vehicles || []).filter(v => v && (v.type || v.no || v.own));
+  // [2026.10.16] 회사웹 Tip 변경 반영 - 과세기간(예정 = 그 분기, 확정 = 그 기 전체), 직원·차량은 귀속기간 말일 기준
+  const RG = { '1기예정':['01-01','03-31'], '1기확정':['04-01','06-30'], '2기예정':['07-01','09-30'], '2기확정':['10-01','12-31'] }[period] || ['',''];
+  const isPre = /예정/.test(period || ''), md = d => d ? `${Number(d.slice(0, 2))}.${Number(d.slice(3, 5))}` : '';
+  const from = isPre ? RG[0] : (/^1기/.test(period || '') ? '01-01' : '07-01');
+  if(year && RG[1]) rows.push(['기간', `${year}년 ${String(period).replace(/(\d기)/, '$1 ')} · ${md(from)}~${md(RG[1])}`]);
+  const asOf = RG[1] ? ` (${md(RG[1])} 기준)` : '';
   // [2026.10.16] 회사웹 Tip 변경 반영 - 차량 유·무 표기, 소유형태(자가·렌트·리스(운용)·리스(금융)·기타 직접 입력)
-  if(h.vehicleYn === '없음') rows.push(['차량', '무']);
-  else if(h.vehicleYn === '있음' || vs.length) rows.push(['차량', vs.length ? vs.map(v => { const own = v.own === '기타' ? (v.ownEtc || '기타') : (v.own || ''); const tail = [own, v.deduct].filter(Boolean).join('·'); return `${v.type || ''} ${v.no || ''}${tail ? ` (${tail})` : ''}`.trim(); }).join(', ') : '유']);
+  if(h.vehicleYn === '없음') rows.push([`차량${asOf}`, '무']);
+  else if(h.vehicleYn === '있음' || vs.length) rows.push([`차량${asOf}`, vs.length ? vs.map(v => { const own = v.own === '기타' ? (v.ownEtc || '기타') : (v.own || ''); const tail = [own, v.deduct].filter(Boolean).join('·'); return `${v.type || ''} ${v.no || ''}${tail ? ` (${tail})` : ''}`.trim(); }).join(', ') : '유']);
   let st = (h.staff || {})[`${year}-${period}`];
   if(Array.isArray(st)){ const o = {}; st.forEach(k => o[k] = 0); st = o; }
-  if(st) rows.push(['직원', Object.keys(st).length ? Object.entries(st).map(([k, n]) => n ? `${k} ${n}명` : k).join('·') : '없음']);
+  if(st) rows.push([`직원${asOf}`, Object.keys(st).length ? Object.entries(st).map(([k, n]) => n ? `${k} ${n}명` : k).join('·') : '없음']);
   if((h.kinds || []).length) rows.push(['신고유형', h.kinds.map(k => k === '기타' && h.kindEtc ? `기타(${h.kindEtc})` : k).join('·')]);
   if((h.recv || []).length) rows.push(['수령자료', h.recv.join('·')]);   // [2026.10.16] 회사웹 Tip 수령자료 반영
   if(h.memo) rows.push(['메모', h.memo]);
@@ -7531,6 +7538,18 @@ function renderTaxjFull(){
     </div>`;
   // [2026.10.08] "개인웹에서 회사웹 화면 그대로(원격처럼)"(요청) - Tax.J 사이트를 이 화면 안에 그대로 띄움. 같은 주소(sm-sarah.github.io)라서
   // 이 브라우저에서 Tax.J에 로그인돼 있으면 그대로 이어지고, Tax.J의 모든 기능(수정 포함)을 회사 권한 그대로 씀
+  // [2026.10.16] Tax.J › 사용 현황(요청: "회사웹 허용 권한·접속 기록 보는 것, 메뉴 따로") - 예전 설정 화면의 'Tax.J 사용 현황'을 그대로 옮김.
+  // 개인 Google 계정(${TAXJ_USAGE_OWNER})으로 로그인해 서버(sendPush)에 직원별 접속·기기·알림 허용 상태만 요청(업무 데이터는 받지 않음)
+  if(taxjFullView === 'usage'){
+    el.innerHTML = `<div class="card">
+      <div class="toolbar"><div class="spacer"></div>
+        <button type="button" class="btn primary xs" id="taxjUsageBtn" onclick="loadTaxjUsage()">${taxjUsageHtml ? '새로고침' : '불러오기'}</button>
+        <span class="hint">로그인: 개인계정 (${TAXJ_USAGE_OWNER}) · 한 번 로그인하면 이 기기에 기억돼서 다음부터는 창이 뜨지 않아요. 직원별 접속 기록·기기·알림 허용 상태만 보여요(업무 데이터는 받지 않아요).</span>
+      </div>
+      <div id="taxjUsageBox" style="margin-top:10px;">${taxjUsageHtml || '<div class="empty">\'불러오기\'를 누르면 직원별 접속 기록과 허용 상태가 나와요.</div>'}</div>
+    </div>`;
+    return;
+  }
   if(taxjFullView === 'remote'){
     if(!el.querySelector('#taxjRemoteFrame')){
       el.innerHTML = head.replace(/<div style="text-align:right;">[\s\S]*?<\/div>\s*<\/div>\s*<\/div>/, `<div style="text-align:right;">
@@ -7832,20 +7851,7 @@ function renderSettings(){
         <div class="hint" id="smDeployMsg" style="margin-top:6px;">${smDeployMsgText}</div>
       </div>
 
-      <!-- [2026.10.04] "개인계정으로만 Tax.J 사용 현황 보기"(요청) - 개인 Google 계정으로 로그인해 서버(sendPush)에 사용 현황만 요청.
-           업무 데이터는 받지 않음(개인계정은 Tax.J 데이터 저장소에 직접 접근 못 함) -->
-      <div class="settings-block" id="settings-taxj-usage">
-        <div class="row">
-          <div>
-            <h3>Tax.J 사용 현황</h3>
-            <div class="hint"><b>로그인: 개인계정 (${TAXJ_USAGE_OWNER})</b> · 한 번 로그인하면 이 기기에 기억돼서 다음부터는 창이 뜨지 않아요. 직원별 접속·기기·알림 상태만 보여요.</div>
-          </div>
-          <div class="ctrl">
-            <button type="button" class="btn primary xs" id="taxjUsageBtn" onclick="loadTaxjUsage()">불러오기</button>
-          </div>
-        </div>
-        <div id="taxjUsageBox" style="margin-top:10px;">${taxjUsageHtml}</div>
-      </div>
+      <!-- [2026.10.04] "개인계정으로만 Tax.J 사용 현황 보기"(요청) - [2026.10.16] Tax.J › 사용 현황 메뉴로 옮김(요청) -->
 
       <!-- [2026.10.08] 'Tax.J 검토표 계산식'은 따로 만든 '검토표' 메뉴로 옮김(요청) -->
 
