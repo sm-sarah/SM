@@ -1275,6 +1275,11 @@
   .vat-prog thead th.vp-frz{ z-index:3; background:#faf0f5; }
   .vat-prog .vp-frz-last{ box-shadow:1px 0 0 var(--border); }
   .vat-prog thead th.vp-frz-last{ box-shadow:1px 0 0 var(--border), 0 1px 0 var(--border); }
+  /* [2026.10.19] 부가세 진행 자동 저장 표시 */
+  .vp-save{ font-size:12px; font-weight:700; color:var(--muted); white-space:nowrap; }
+  .vp-save.pending, .vp-save.saving{ color:var(--amber); }
+  .vp-save.saved{ color:var(--mint); }
+  .vp-save.fail, .vp-save.reload{ color:var(--rose); }
   .vp-view{ display:inline-flex; align-items:center; gap:6px; font-size:12.5px; color:var(--muted); font-weight:700; }
   .vp-view select{ font-size:12.5px; padding:4px 8px; }
   /* [2026.10.16] "내부 화면이 회사웹 틀만 가져오고 스타일이 빠졌다 - 회사 제목·열 구분·행제목"(요청)
@@ -3886,7 +3891,7 @@ function vatProgApplyFreeze(){
 }
 function vatProgHtml(docs){
   const key = vatProgKey(), plab = vatProgKeyLabel(key), per = vatProg[key] || {}, pk = vatProgPrevKey();
-  const bar = `<div class="toolbar"><div class="spacer"></div>
+  const bar = `<div class="toolbar">${vpSaveBadgeHtml()}<div class="spacer"></div>
     ${!vatProgHasData(key) && pk ? `<button class="btn primary xs" onclick="vatProgFromPrev()" title="이어받기 항목(↻)만 가져와요">${vatProgKeyLabel(pk)}에서 이어받기</button>` : ''}
     <span class="vp-view">열 고정 <select onchange="vatProgSetFreeze(this.value)"><option value="" ${!vatProgViewObj().freeze ? 'selected' : ''}>순번만</option>${vatProgAllCols().filter(c => vatProgVisibleKeys().includes(c.key)).map(c => `<option value="${escapeAttr(c.key)}" ${vatProgViewObj().freeze === c.key ? 'selected' : ''}>${taxjEsc(c.label)}까지</option>`).join('')}</select></span>
     <button class="btn ghost xs" onclick="vatProgArrange()" title="항목 순서와 묶음(매출·매입 등 두 줄 머리글)을 정해요">항목 배치</button>
@@ -5024,7 +5029,21 @@ function renderClients(){
    Google Drive / Sheets 연동
    ========================================================= */
 
+// [2026.10.19] "부가세 진행에서 수기 입력이 저장되는지 헷갈린다 - 자동 저장 표시"(요청)
+// 진행 표 도구줄 왼쪽에 저장 중… → 저장됨 시:분:초 (Google 연결 안 됨이면 '이 기기에만 보관', 실패면 빨간 글씨)
+let vpSaveState = { st:'', at:null };
+function vpSaveBadgeText(){
+  const { st, at } = vpSaveState, hms = at ? `${pad2(at.getHours())}:${pad2(at.getMinutes())}:${pad2(at.getSeconds())}` : '';
+  return st === 'pending' || st === 'saving' ? '저장 중…' : st === 'saved' ? `저장됨 ${hms}` : st === 'fail' ? '저장 실패 · 다음 변경 때 다시 시도' : st === 'reload' ? '다른 곳의 최신 내용을 불러왔어요 · 방금 입력을 확인해 주세요' : st === 'local' ? `이 기기에만 보관 ${hms} (Google 연결 안 됨)` : '';
+}
+function vpSaveBadgeHtml(){ return `<span id="vpSaveBadge" class="vp-save ${vpSaveState.st}" title="입력하면 자동으로 저장돼요">${vpSaveBadgeText()}</span>`; }
+function vpSaveSet(st){
+  vpSaveState = { st, at: new Date() };
+  const el = document.getElementById('vpSaveBadge');
+  if(el){ el.className = 'vp-save ' + st; el.textContent = vpSaveBadgeText(); }
+}
 function setSyncStatus(text){
+  if(/저장 중/.test(text)) vpSaveSet('saving'); else if(/저장됨/.test(text)) vpSaveSet('saved'); else if(/저장 실패/.test(text)) vpSaveSet('fail'); else if(vpSaveState.st && /불러왔어요/.test(text)) vpSaveSet('reload');
   googleSyncStatus = text;
   const el = document.getElementById('syncStatusLine');
   if(el) el.textContent = text;
@@ -5442,7 +5461,7 @@ async function saveToGoogleSheet(){
   }
   const snap = collectGoogleSnapshot();
   const snapStr = JSON.stringify(snap);
-  if(snapStr === lastSyncedContent){ savingNow = false; return; }   // 바뀐 게 없으면 저장 안 함
+  if(snapStr === lastSyncedContent){ savingNow = false; if(vpSaveState.st === 'pending' || vpSaveState.st === 'saving') vpSaveSet('saved'); return; }   // 바뀐 게 없으면 저장 안 함
   const CHUNK = 45000;
   const rows = [];
   GOOGLE_DATA_KEYS.forEach(k => {
@@ -5572,7 +5591,8 @@ function resolvePendingAfterLoad(){
 
 function scheduleGoogleSave(){
   recordPendingChanges();
-  if(!googleAccessToken || !googleSpreadsheetId || !sheetLoadedOnce) return;
+  if(!googleAccessToken || !googleSpreadsheetId || !sheetLoadedOnce){ vpSaveSet('local'); return; }
+  vpSaveSet('pending');
   clearTimeout(saveTimer);
   saveTimer = setTimeout(saveToGoogleSheet, 900);
 }
