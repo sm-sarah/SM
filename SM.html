@@ -1301,6 +1301,7 @@
   .vp-mb-danger:hover, .vp-mb-danger:hover svg{ background:var(--rose-soft); color:var(--rose); }
   .vp-mb-primary{ background:var(--primary); color:#fff; border:1px solid var(--primary); }
   /* [2026.10.19] "항목·값 버튼은 아이콘만"(요청) - 같은 높이(28px) 정사각 아이콘 버튼, 이름은 마우스를 올리면 */
+  .vat-prog .vp-na{ display:inline-block; width:13px; line-height:13px; color:#c9b6c0; font-weight:800; cursor:pointer; user-select:none; }
   .vp-mg-ic .vp-mb{ width:28px; padding:0; justify-content:center; }
   /* [2026.10.19] "저장 표시는 비우기(휴지통) 아래 오른쪽에, 스크롤해도 고정"(요청) - 높이 0 줄이라 아래 칸 배치는 그대로 */
   .vp-save-row{ position:sticky; top:90px; z-index:5; height:0; display:flex; justify-content:flex-end; margin-top:-4px; pointer-events:none; }
@@ -3558,7 +3559,7 @@ function vatProgDigits(s){ return String(s || '').replace(/[^0-9]/g, ''); }
 function vatProgCellVal(v, type){
   if(v == null || v === '') return null;
   if(v instanceof Date){ const d = new Date(v.getTime() + 12 * 3600000); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; }
-  if(type === 'check') return v === true || /^(true|y|o|ㅇ|v|✓)$/i.test(String(v).trim());
+  if(type === 'check') return /^(미해당|해당\s*없음|n\/?a|-|–)$/i.test(String(v).trim()) ? 'na' : v === true || /^(true|y|o|ㅇ|v|✓)$/i.test(String(v).trim());   // [2026.10.19] 엑셀의 미해당·해당없음·- = 미해당
   if(type === 'num') return typeof v === 'number' ? v : vatProgToNum(v);
   if(typeof v === 'boolean') return v ? 'TRUE' : 'FALSE';
   return String(v).trim();
@@ -3649,7 +3650,7 @@ function vatProgPrevVals(pk, cid){ const v = (vatProg[pk] || {})[cid] || {}; ret
 function vatProgShowPrev(cid){
   const pk = vatProgPrevKey(); if(!pk) return;
   const docs = taxjFull && taxjFull.docs, c = (docs && taxjClientIndex(docs).byId[cid]) || {};
-  const rows = vatProgPrevVals(pk, cid).map(([col, val]) => `<div class="vp-prev-row"><span class="vp-prev-k">${taxjEsc(String(col.label).replace(/\s+/g, ' '))}${col.carry ? ' <span class="vp-carry">↻</span>' : ''}</span><span class="vp-prev-v">${col.type === 'check' ? '✓' : taxjEsc(vatProgFmtNum(val)).replace(/\n/g, '<br>')}</span></div>`).join('');
+  const rows = vatProgPrevVals(pk, cid).map(([col, val]) => `<div class="vp-prev-row"><span class="vp-prev-k">${taxjEsc(String(col.label).replace(/\s+/g, ' '))}${col.carry ? ' <span class="vp-carry">↻</span>' : ''}</span><span class="vp-prev-v">${col.type === 'check' ? (val === 'na' ? '미해당' : '✓') : taxjEsc(vatProgFmtNum(val)).replace(/\n/g, '<br>')}</span></div>`).join('');
   smDialog({ title: `${c.name || ''} · ${vatProgKeyLabel(pk)}`, html: `<div class="vp-prev">${rows || '<div class="empty" style="padding:12px;">전기에 적은 값이 없어요.</div>'}</div>`, icon:'↺', okText:'닫기', cancelText:null, wide:true });
 }
 async function vatProgFromPrev(){
@@ -3689,6 +3690,7 @@ function vatProgSet(cid, colId, val, rerender){
   if(!Object.keys(per).length) delete vatProg[key];
   scheduleGoogleSave(); if(rerender) renderVat();
 }
+function vatProgToggleNa(cid, colId){ const cur = ((vatProg[vatProgKey()] || {})[cid] || {})[colId]; vatProgSet(cid, colId, cur === 'na' ? null : 'na', true); }
 function vatProgNumInput(el, cid, colId){ const v = vatProgToNum(el.value); el.value = vatProgFmtNum(v); vatProgSet(cid, colId, v); }
 // [2026.10.19] "항목별 묶음은 드롭다운으로 매출·매입·기타(입력)"(요청) - 이미 쓰는 다른 묶음 이름도 선택지에 같이 보임
 const VAT_PROG_GRP_ETC = '기타(직접 입력)';
@@ -3704,16 +3706,24 @@ async function vatProgPickGroup(sel){
   return r ? (r[0] || '').trim() : null;
 }
 async function vatProgAddCol(){
-  const r = await smForm('진행 항목 추가', [{ label:'항목 이름', placeholder:'예: 자료 요청' }, { label:'입력 방식 (드롭다운은 저장하면 선택지 입력 창이 떠요)', options: VAT_PROG_TYPES.map(x => x[1]), value:'글자(줄글)' }, { label:'다음 기수로 이어받기', options:['아니오','예'], value:'아니오' }, { label:'묶음 (위 머리글)', options: vatProgGroupOpts(''), value:'없음' }], { okText:'추가' });
+  // [2026.10.19] "항목 추가하면 맨 오른쪽 끝에 붙어 불편 - 원하는 곳에 추가"(요청) - '넣을 위치' 드롭다운: 자동(묶음 끝·없으면 맨 뒤) / 맨 앞 / 각 항목 뒤
+  const live = vatProgLiveCols(), POS_AUTO = '자동 (고른 묶음 끝, 없으면 맨 뒤)', POS_FIRST = '맨 앞';
+  const posOpts = [POS_AUTO, POS_FIRST].concat(live.map((c, i) => `${i + 1}. ${c.group ? c.group + ' · ' : ''}${String(c.label).replace(/\s+/g, ' ')} 뒤`));
+  const r = await smForm('진행 항목 추가', [{ label:'항목 이름', placeholder:'예: 자료 요청' }, { label:'입력 방식 (드롭다운은 저장하면 선택지 입력 창이 떠요)', options: VAT_PROG_TYPES.map(x => x[1]), value:'글자(줄글)' }, { label:'다음 기수로 이어받기', options:['아니오','예'], value:'아니오' }, { label:'묶음 (위 머리글)', options: vatProgGroupOpts(''), value:'없음' }, { label:'넣을 위치', options: posOpts, value: POS_AUTO }], { okText:'추가' });
   if(!r || !r[0].trim()) return;
   const col = { id: vatProgUid('c'), label: r[0].trim(), type: (VAT_PROG_TYPES.find(x => x[1] === r[1]) || VAT_PROG_TYPES[0])[0], carry: r[2] === '예' };
   { const g = await vatProgPickGroup(r[3]); if(g) col.group = g; }   // [2026.10.16] 묶음(두 줄 머리글) · [2026.10.19] 드롭다운
   if(col.type === 'select' && !(await vatProgEditOpts(col))) return;
   // [2026.10.19] "항목 추가했는데 새로 생성이 안 됨"(요청) - 새 항목이 표 맨 오른쪽 끝에 붙고 스크롤은 그 자리라 안 보였음.
   // 묶음을 고르면 그 묶음 마지막 칸 바로 뒤에 넣고(없으면 맨 뒤), 추가한 뒤 표를 새 칸이 보이는 곳으로 옮김
-  let at = -1;
-  if(col.group) vatProgCols.forEach((c, i) => { if(c.group === col.group && vatProgColLive(c)) at = i; });
-  if(at >= 0) vatProgCols.splice(at + 1, 0, col); else vatProgCols.push(col);
+  const pi = posOpts.indexOf(r[4]);
+  if(pi === 1) vatProgCols.unshift(col);
+  else if(pi >= 2) vatProgCols.splice(vatProgCols.indexOf(live[pi - 2]) + 1, 0, col);
+  else {
+    let at = -1;
+    if(col.group) vatProgCols.forEach((c, i) => { if(c.group === col.group && vatProgColLive(c)) at = i; });
+    if(at >= 0) vatProgCols.splice(at + 1, 0, col); else vatProgCols.push(col);
+  }
   renderVat(); scheduleGoogleSave();
   try{
     const th = [...document.querySelectorAll('#tab-vat .vat-prog th')].find(x => (x.innerHTML || '').includes(`vatProgEditCol('${col.id}')`));
@@ -4070,7 +4080,10 @@ function vatProgHtml(docs){
       + VAT_PROG_LINK.slice(1).filter(([k]) => shown(k)).map(([k]) => `<td class="vp-sm${k === lastLink ? ' vp-div' : ''}"${k === 'prevSupply' || k === 'noticeTax' ? ' style="text-align:right;"' : ''}>${cellv[k]}</td>`).join('');
     const mine = vatProgCols.filter(c => shown(c.id)).map(c => {
       const val = v[c.id];
-      if(c.type === 'check') return `<td style="text-align:center;"><input type="checkbox" ${val ? 'checked' : ''} onchange="vatProgSet('${cid}','${c.id}',this.checked)"></td>`;
+      // [2026.10.19] "체크 항목 미해당 표기 - 우클릭으로"(요청) - 우클릭(휴대폰은 길게 누르기) = 미해당(–) 켜기/끄기, 값은 'na'. – 를 누르면 빈칸으로
+      if(c.type === 'check') return `<td style="text-align:center;" oncontextmenu="event.preventDefault(); vatProgToggleNa('${cid}','${c.id}')" title="우클릭: 미해당(–) 표시/해제">${val === 'na'
+        ? `<span class="vp-na" onclick="vatProgToggleNa('${cid}','${c.id}')" title="미해당 · 누르거나 우클릭하면 해제">–</span>`
+        : `<input type="checkbox" ${val ? 'checked' : ''} onchange="vatProgSet('${cid}','${c.id}',this.checked)">`}</td>`;
       const s = vatProgFmtNum(val);
       if(c.type === 'num') return `<td><input class="vp-in" style="width:${w[c.id]}px; text-align:right;" value="${escapeAttr(s)}" onchange="vatProgNumInput(this,'${cid}','${c.id}')"></td>`;
       // [2026.10.19] "날짜도 아이콘으로 처음에 나오게, 화면·입력 공간 잡을 필요 없음"(요청) - 빈 칸은 달력 아이콘 버튼만, 누르면 작은 창에서 입력, 입력하면 날짜(월/일)만 보임
