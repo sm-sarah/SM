@@ -679,6 +679,8 @@
   .notice-ym .cal-ym-caret{ color:#f5b544; }
   .notice-months .cal-pm.on{ background:#f5b544; border-color:#f5b544; }
   .cal-pm:disabled{ opacity:.35; cursor:default; background:#fff; }
+  .cal-pm.cal-pm-empty:not(.on){ opacity:.35; }
+  .cal-pm.cal-pm-empty:not(.on):hover{ opacity:.7; }
   .notice-mtag{ display:inline-block; font-size:11px; font-weight:800; color:#8a5a00; background:#fff3d6; border-radius:999px; padding:1px 7px; margin-right:6px; }
 
   /* Google 미연결 안내 */
@@ -2665,6 +2667,7 @@ function renderWorklist(){
   const monthNum = k => { const n = parseInt(k, 10); return isNaN(n) ? 99 : n; };
   const months = Array.from(new Set([...Object.keys(worklistChecklist), ...Object.keys(worklistSchedule)]))
     .sort((a, b) => monthNum(a) - monthNum(b));
+  if(worklistSelMonth && /^(1[0-2]|[1-9])월$/.test(worklistSelMonth) && !months.includes(worklistSelMonth)){ months.push(worklistSelMonth); months.sort((a, b) => monthNum(a) - monthNum(b)); }   // 항목 없는 달을 고른 경우
   if(!worklistSelMonth || !months.includes(worklistSelMonth)){
     const cur = `${new Date().getMonth() + 1}월`;
     worklistSelMonth = months.includes(cur) ? cur : (months[months.length - 1] || null);
@@ -2698,7 +2701,8 @@ function renderWorklist(){
               ${Array.from({length:12}, (_, i) => {
                 const key = `${i+1}월`;
                 const has = months.includes(key);
-                return `<button class="cal-pm ${key === m ? 'on' : ''}" ${has ? `onclick="selectWorklistMonth('${key}')"` : 'disabled'}>${i+1}월</button>`;
+                // [2026.10.19] "체크리스트 다른 달이 선택 안 됨"(요청) - 항목이 없는 달도 눌러서 열고 바로 추가할 수 있게(항목 없는 달은 예전처럼 흐리게만)
+                return `<button class="cal-pm ${key === m ? 'on' : ''}${has ? '' : ' cal-pm-empty'}" onclick="selectWorklistMonth('${key}')">${i+1}월</button>`;
               }).join('')}
             </div>
           </div>` : ''}
