@@ -3386,11 +3386,14 @@ function vatTShowHelp(cid){
   const c = taxjClientIndex(docs).byId[cid] || {};
   smDialog({ title: c.name || '', html: vatTHelpHtml(vatTHelp(docs, cid), vatYear, vatTPeriod()), icon:'i', okText:'닫기', cancelText:null, wide:true });
 }
-function vatTShowDocs(cid){
+// [2026.10.19] 회사웹 변경 반영 - 통합자료(__integ)·신고서류(__filed)도 같은 방식으로 보기
+const VAT_T_DOCS = { __docs:'신고도움', __integ:'통합자료', __filed:'신고서류' };
+function vatTShowDocs(cid, kind){
   const docs = taxjFull && taxjFull.docs; if(!docs) return;
+  kind = kind || '__docs';
   const c = taxjClientIndex(docs).byId[cid] || {};
-  const list = ((((docs.s__vatFilingTargets || {})[cid] || {}).__docs || {})[`${vatYear}-${vatTPeriod()}`]) || [];
-  smDialog({ title: `${c.name || ''} · 신고도움`, icon:'i', cancelText:null, html: list.length ? list.map(f => `<div style="padding:5px 0; text-align:left;"><a href="${escapeAttr(f.url || '')}" target="_blank" rel="noopener">📎 ${taxjEsc(f.name || '파일')}</a></div>`).join('') : '올린 파일이 없어요' });
+  const list = ((((docs.s__vatFilingTargets || {})[cid] || {})[kind] || {})[`${vatYear}-${vatTPeriod()}`]) || [];
+  smDialog({ title: `${c.name || ''} · ${VAT_T_DOCS[kind] || '신고도움'}`, icon:'i', cancelText:null, html: list.length ? list.map(f => `<div style="padding:5px 0; text-align:left;"><a href="${escapeAttr(f.url || '')}" target="_blank" rel="noopener">📎 ${taxjEsc(f.name || '파일')}</a></div>`).join('') : '올린 파일이 없어요' });
 }
 // 내가 만든 항목(원천세 신고현황의 '+ 항목 추가'와 같은 방식, 입력 방식 PAY_COL_TYPES 같이 씀)
 async function addVatCustomCol(){
@@ -3457,6 +3460,24 @@ function vatVerifyCellHtml(e){
     + Object.entries((e.manualCheck || {})).map(([k, r]) => `\n수기검증(${{ sales:'매출', purchase:'매입', prelim:'예정' }[k] || k}): ${r}`).join('');
   return `<span title="${escapeAttr(tip)}" style="font-size:12px; font-weight:800;">${[['매출', v.sales], ['매입', v.purchase], ['예정', v.prelim]].filter(([, st]) => st).map(([l, st]) => `<span style="color:${C[st][0]};">${l}${C[st][1]}</span>`).join(' ')}</span>`;
 }
+// [2026.10.19] 회사웹 변경 반영 - "신고현황 옆에 예정신고 납부세액 + 납부기한"(회사웹). 직접 적은 값(entry.payTax)이 없으면 검증 신고서의 차가감 납부할 세액(연한 글씨)
+function vatTPayAuto(docs, cid, year, period){
+  const figs = ((docs.s__vatReviewFigures || {})[cid] || {})[year] || {}, e = figs[period];
+  if(!e) return null;
+  const has = v => v != null && v !== '', N = v => Number(v) || 0, anyIn = o => !!o && (typeof o !== 'object' ? has(o) : Object.values(o).some(has));
+  const r = e.reportSales || {}, b = e.reportPurchase || {};
+  const sal = { amt: N(r.taxInvoice) + N(r.buyerIssued) + N(r.cardCash) + N(r.etcCase) + N(r.zero) + N(r.exportCase) + N(r.missed), tax: N(r.taxInvoiceTax) + N(r.buyerIssuedTax) + N(r.cardCashTax) + N(r.etcCaseTax) + N(r.missedTax) + N(r.badDebtTax) };
+  const pur = { amt: N(b.taxInvoice) + N(b.taxInvoiceFixed) + N(b.prelimMissing) + N(b.etc) - N(b.disallowed) - N(b.deemed), tax: N(b.taxInvoiceTax) + N(b.taxInvoiceFixedTax) + N(b.prelimMissingTax) + N(b.etcTax) - N(b.disallowedTax) };
+  if(!(has(r.taxInvoice) || sal.amt || pur.amt)) return null;
+  const fin = /확정/.test(period);
+  let combined = false;
+  if(fin){
+    const pk = period.replace('확정', '예정'), pe = figs[pk], c = taxjClientIndex(docs).byId[cid] || {};
+    const preFiling = vatTStatus(vatTEntry(docs, cid, year, pk), pk, c.entityType) === 'filing';
+    combined = !preFiling && !(pe && (pe.legacy || ['dataSales','dataPurchase','reportSales','reportPurchase'].some(g => anyIn(pe[g]))));
+  }
+  return sal.tax - pur.tax - N(e.reportCredit) - (fin ? N(e.reportPrelimRefund) : 0) - (fin && combined ? N(e.reportPrelim) : 0) + N(e.reportPenalty);
+}
 function vatTableHtml(docs){
   const year = vatYear, period = vatTPeriod(), pre = period.endsWith('예정');
   const idx = taxjClientIndex(docs), seen = new Set(), list = [];
@@ -3492,8 +3513,20 @@ function vatTableHtml(docs){
     }).join('');
     const memo = String((vatTFiling(docs, x.c.id, year, period) || {}).memo || '').trim();
     const help = vatTHelp(docs, x.c.id), hasHelp = !!(help.vehicleYn || (help.vehicles || []).length || (help.kinds || []).length || (help.recv || []).length || help.memo || Object.keys(help.staff || {}).length);
-    const files = (((((docs.s__vatFilingTargets || {})[x.c.id] || {}).__docs || {})[`${year}-${period}`]) || []).length;
     const cid = escapeAttr(x.c.id);
+    // [2026.10.19] 회사웹 변경 반영 - 신고도움·통합자료·신고서류(파일) / 신고현황 / 납부세액·납부기한 (모두 조회만)
+    const docCell = k => { const n = (((((docs.s__vatFilingTargets || {})[x.c.id] || {})[k] || {})[`${year}-${period}`]) || []).length;
+      return `<td>${n ? `<button class="sm-tool-ic vt-ic" onclick="vatTShowDocs('${cid}','${k}')" title="${VAT_T_DOCS[k]} 파일 ${n}개" aria-label="${VAT_T_DOCS[k]} 파일">${ICON_CLIP}${n > 1 ? `<span class="vt-ic-n">${n}</span>` : ''}</button>` : na}</td>`; };
+    const hs = x.en.helpSt || {}, hst = hs.st || '미진행';
+    const helpCell = pre && x.st !== 'filing' ? `<td title="예정신고 대상이 아니에요">${na}</td>`
+      : `<td style="white-space:nowrap; font-size:12px; font-weight:800; color:${hst === '신고완료' ? 'var(--mint)' : hst === '신고서마감' ? 'var(--primary-dark)' : hst === '검토중' ? 'var(--amber)' : 'var(--muted)'};" title="신고현황(회사웹에서 바꿔요)">${hst}${hs.date ? ` ${Number(hs.date.slice(5,7))}/${Number(hs.date.slice(8,10))}` : ''}</td>`;
+    const payOn = pre ? x.st === 'filing' : x.st !== 'not-target';
+    const payV = x.en.payTax == null || x.en.payTax === '' ? null : Number(x.en.payTax);
+    let payAuto = null; if(payV == null && payOn){ try{ payAuto = vatTPayAuto(docs, x.c.id, year, period); }catch(e){} }
+    const payShow = payV != null ? payV : payAuto;
+    const payCells = !payOn ? `<td title="${pre ? '예정신고 대상이 아니에요' : '신고 대상이 아니에요'}">${na}</td>`.repeat(2)
+      : `<td style="text-align:right; white-space:nowrap;${payV == null && payAuto != null ? ' opacity:.6;' : ''}" title="${payV == null ? (payAuto != null ? '회사웹 검증 신고서 계산값(자동)' : '') : (payV < 0 ? '환급' : '납부')}">${payShow == null ? na : `<span style="font-weight:800;${payShow < 0 ? ' color:var(--rose);' : ''}">${payShow.toLocaleString('ko-KR')}</span>`}</td>`
+      + `<td style="white-space:nowrap;">${x.en.payDue ? taxjEsc(x.en.payDue) : na}</td>`;
     const reason = x.tb.excludeReason && x.tb.excludeReason !== '없음' ? taxjEsc(x.tb.excludeReason) : na;
     return `<tr>
       <td class="tx-seq">${i + 1}</td>
@@ -3504,19 +3537,19 @@ function vatTableHtml(docs){
       <td style="text-align:right;">${num(x.tb.prevSupply)}</td><td style="text-align:right;">${num(x.tb.noticeTax)}</td>
       <td>${x.tb.office ? taxjEsc(x.tb.office) : na}</td><td style="white-space:nowrap;">${x.tb.dueDate ? taxjEsc(x.tb.dueDate) : na}</td>
       ${sendCells}
-      <td>${memo ? `<button class="sm-tool-ic vt-ic" onclick="vatTShowMemo('${cid}')" title="${escapeAttr(memo)}" aria-label="메모">${ICON_MEMO_DOC}</button>` : na}</td>
+      ${docCell('__docs')}${docCell('__integ')}${docCell('__filed')}${helpCell}${payCells}
       <td>${hasHelp ? `<button class="sm-tool-ic vt-ic" onclick="vatTShowHelp('${cid}')" title="${escapeAttr(vatTHelpRows(help, year, period).map(([k, v]) => k + ': ' + v).join('\n'))}" aria-label="Tip">${ICON_BULB}</button>` : na}</td>
-      <td>${files ? `<button class="sm-tool-ic vt-ic" onclick="vatTShowDocs('${cid}')" title="신고도움 파일 ${files}개" aria-label="신고도움 파일">${ICON_CLIP}${files > 1 ? `<span class="vt-ic-n">${files}</span>` : ''}</button>` : na}</td>
+      <td>${memo ? `<button class="sm-tool-ic vt-ic" onclick="vatTShowMemo('${cid}')" title="${escapeAttr(memo)}" aria-label="메모">${ICON_MEMO_DOC}</button>` : na}</td>
       <td style="white-space:nowrap;">${vatVerifyCellHtml((((docs.s__vatReviewFigures || {})[x.c.id] || {})[year] || {})[period])}</td>
       ${vatCustomCols.map(col => vatCustomCellHtml(x.c.id, col)).join('')}</tr>`;
   }).join('');
   const plab = `${year}년 ${VAT_T_LABEL[period]}`;
-  const cols = 18 + vatCustomCols.length;
+  const cols = 23 + vatCustomCols.length;
   // [2026.10.14] "예정고지 상세 제목 삭제"(요청 - 회사웹과 같게)
   return `${pre && !list.some(x => x.hasTb) ? '<div class="hint" style="margin:0 0 8px;">회사웹에 불러온 택스봇 예정고지가 없어요(회사웹 부가세 화면에서 가져오면 여기도 채워져요).</div>' : ''}
     <div class="toolbar"><div class="cl-subtabs">${segs.map(([k, l, c]) => `<button class="cl-subtab ${vatSeg === k ? 'on' : ''}" onclick="vatSeg='${k}'; renderVat();">${l} ${c}</button>`).join('')}</div>
       <div class="spacer"></div><button class="sm-tool-ic" onclick="addVatCustomCol()" title="항목 추가" aria-label="항목 추가">${ICON_PLUS}</button></div>
-    <div class="table-scroll" style="margin-top:12px;"><table><thead><tr><th class="tx-seq">순번</th><th>상호명</th><th>사업자번호</th><th>업종코드</th><th>업태</th><th>구분</th><th>제외사유</th><th>직전 과세기간<br>공급가액</th><th>예정고지세액</th><th>관할서</th><th>납부기한</th><th>안내문</th><th>납부서</th><th>메모</th><th>Tip</th><th>신고도움</th><th title="회사웹 부가세 검증과 같은 계산(매출·매입 항목별, 예정)">검증</th>
+    <div class="table-scroll" style="margin-top:12px;"><table><thead><tr><th class="tx-seq">순번</th><th>상호명</th><th>사업자번호</th><th>업종코드</th><th>업태</th><th>구분</th><th>제외사유</th><th>직전 과세기간<br>공급가액</th><th>예정고지세액</th><th>관할서</th><th>납부기한</th><th>안내문</th><th>납부서</th><th>신고<br>도움</th><th>통합<br>자료</th><th>신고<br>서류</th><th>신고<br>현황</th><th>${pre ? '예정신고' : '확정신고'}<br>납부세액</th><th>${pre ? '예정신고' : '확정신고'}<br>납부기한</th><th>Tip</th><th>메모</th><th title="회사웹 부가세 검증과 같은 계산(매출·매입 항목별, 예정)">검증</th>
       ${vatCustomCols.map(col => `<th><button class="btn ghost xs" onclick="editVatCustomCol('${col.id}')" title="눌러서 이름·입력 방식 수정 또는 삭제" style="font-weight:800;">${taxjEsc(col.label)} ✎</button></th>`).join('')}</tr></thead>
       <tbody>${rows || `<tr><td colspan="${cols}"><div class="empty" style="padding:18px;">${q ? '검색 결과가 없어요.' : '거래처가 없어요.'}</div></td></tr>`}</tbody></table></div>`;
 }
@@ -3672,8 +3705,17 @@ async function vatProgMove(){
   if(!r) return;
   const m = r[0].match(/^(\d{4})년 ([12])기 (예정|확정)$/); if(!m) return;
   const to = `${m[1]}-${m[2]}기${m[3]}`;
-  if(vatProgHasData(to) && !(await smConfirm(`${r[0]}에 이미 적어 둔 내용이 있어요`, '옮기면 그 내용은 이 내용으로 바뀌어요.', { tone:'danger', icon:'!', okText:'바꾸기' }))) return;
-  vatProg[to] = vatProg[key]; delete vatProg[key];
+  // [2026.10.19] "다른 기수로 이관 - 항목+내용 / 항목만 골라서"(요청)
+  const MV = '항목+내용 옮기기 (이 기수는 비움)', CP = '항목+내용 복사 (이 기수도 그대로)', COLS = '항목만 (값은 빈 칸으로, 이 기수는 그대로)';
+  const md = await smForm('무엇을 옮길까요?', [{ label:`${vatProgKeyLabel(key)} → ${r[0]}`, options:[MV, CP, COLS], value: MV }], { okText:'확인', icon:'→' });
+  if(!md) return;
+  const mode = md[0];
+  if(vatProgHasData(to) && !(await smConfirm(`${r[0]}에 이미 적어 둔 내용이 있어요`, mode === COLS ? '항목만 옮기면 그 기수에 적어 둔 값은 비워져요.' : '옮기면 그 내용은 이 내용으로 바뀌어요.', { tone:'danger', icon:'!', okText:'바꾸기' }))) return;
+  // 이 기수에 보이는 항목은 옮길 기수에서도 보이게(그 기수부터 뺀 항목이면 빼기를 풀어 줌)
+  vatProgLiveCols(key).forEach(c => { if(c.endKey && vatProgKeyOrder(to) >= vatProgKeyOrder(c.endKey)) delete c.endKey; });
+  if(mode === COLS) delete vatProg[to];
+  else if(mode === CP) vatProg[to] = JSON.parse(JSON.stringify(vatProg[key]));
+  else { vatProg[to] = vatProg[key]; delete vatProg[key]; }
   vatYear = m[1]; vatHalf = m[2]; vatKind = m[3] === '예정' ? 'pre' : 'final';
   renderVat(); scheduleGoogleSave();
 }
@@ -3704,6 +3746,13 @@ async function vatProgPickGroup(sel){
   if(sel !== VAT_PROG_GRP_ETC) return sel;
   const r = await smForm('묶음 이름', [{ label:'묶음 이름 (위 머리글)', placeholder:'예: 기타' }], { okText:'확인', icon:'✎' });
   return r ? (r[0] || '').trim() : null;
+}
+// [2026.10.19] "고정자산 등록 체크를 진행의 고정 항목으로"(요청) - 내 항목 중 '등록' 칸을 고정 항목(fa)으로 표시(없으면 맨 앞 = 고정자산 바로 뒤에 만듦). 고정 항목은 지울 수 없음
+function vatProgEnsureFaCol(){
+  if(!vatProgCols.length || vatProgCols.some(c => c.fa)) return;
+  const old = vatProgCols.find(c => vatProgNorm(c.label) === '등록' && c.type === 'check');
+  if(old) old.fa = 1; else vatProgCols.unshift({ id: vatProgUid('c'), label:'등록', type:'check', carry:false, fa:1 });
+  scheduleGoogleSave();
 }
 async function vatProgAddCol(){
   // [2026.10.19] "항목 추가하면 맨 오른쪽 끝에 붙어 불편 - 원하는 곳에 추가"(요청) - '넣을 위치' 드롭다운: 자동(묶음 끝·없으면 맨 뒤) / 맨 앞 / 각 항목 뒤
@@ -3742,6 +3791,7 @@ async function vatProgEditCol(id){
   const col = vatProgCols.find(c => c.id === id); if(!col) return;
   const r = await smForm('진행 항목 수정', [{ label:'항목 이름', type:'textarea', rows:2, value: col.label }, { label:'입력 방식 (드롭다운은 저장하면 선택지 입력 창이 떠요)', options: VAT_PROG_TYPES.map(x => x[1]), value: (VAT_PROG_TYPES.find(x => x[0] === col.type) || VAT_PROG_TYPES[0])[1] }, { label:'다음 기수로 이어받기', options:['아니오','예'], value: col.carry ? '예' : '아니오' }, { label:'묶음 (위 머리글)', options: vatProgGroupOpts(col.group || ''), value: col.group || '없음' }], { okText:'저장', cancelText:'삭제', icon:'✎' });
   if(r === undefined) return;   // [2026.10.15] 닫기(X) - 아무것도 안 바꿈
+  if(r === null && col.fa) return smAlert('고정 항목이에요', '고정자산 등록 칸은 매 기수 늘 있는 항목이라 지울 수 없어요. 안 보이게 하려면 "칸 숨기기"를 써 주세요.');
   if(r === null){
     const key = vatProgKey(), cur = vatProgKeyOrder(key);
     const hasPast = Object.keys(vatProg).some(k => vatProgKeyOrder(k) < cur && Object.values(vatProg[k] || {}).some(v => v && v[id] != null));
@@ -4000,6 +4050,7 @@ function vatProgApplyFreeze(){
   marks.forEach(([c, l, last]) => { c.classList.add('vp-frz'); c.style.left = l + 'px'; if(last) c.classList.add('vp-frz-last'); });
 }
 function vatProgHtml(docs){
+  vatProgEnsureFaCol();
   const key = vatProgKey(), plab = vatProgKeyLabel(key), per = vatProg[key] || {}, pk = vatProgPrevKey();
   // [2026.10.19] "메뉴가 줄글 나열 같다 - 눈에 잘 보이게, 기능을 잘 쓰게"(요청) - 보기·항목·값 묶음 버튼으로. 순서 편집 중에는 메뉴 대신 저장·취소 줄
   const vpIc = d => `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
@@ -4068,10 +4119,12 @@ function vatProgHtml(docs){
       // [2026.10.19] "고정자산 유무를 진행에서 조회"(요청) - 회사웹 부가세 검증 신고서의 매입 세금계산서(고정자산)·그 중 전자 외 금액/세액이 있으면 유, 신고서를 입력했는데 없으면 무, 신고서 입력이 없으면 -
       fixedAsset: (() => {
         const en = ((((docs.s__vatReviewFigures || {})[x.c.id] || {})[vatYear]) || {})[vatTPeriod()], rp = en && en.reportPurchase;
+        x.fa = '';
         if(!rp) return na;
         const amt = Number(rp.taxInvoiceFixed) || 0, tax = Number(rp.taxInvoiceFixedTax) || 0;
         const has = [rp.taxInvoiceFixed, rp.taxInvoiceFixedTax, rp.taxInvoiceFixedEtc, rp.taxInvoiceFixedEtcTax].some(n => (Number(n) || 0) !== 0);
         const any = ['reportSales', 'reportPurchase'].some(g => Object.values(en[g] || {}).some(n => n != null && n !== ''));
+        x.fa = has ? 'y' : 'n';
         if(has) return `<b style="color:var(--primary-dark);" title="${escapeAttr('회사웹 부가세 검증 신고서 · 고정자산 세금계산서 공급가액 ' + amt.toLocaleString() + ' / 세액 ' + tax.toLocaleString())}">유</b>`;
         return any ? `<span title="회사웹 부가세 검증 신고서 기준 고정자산 없음">무</span>` : na;
       })(),
@@ -4080,6 +4133,8 @@ function vatProgHtml(docs){
       + VAT_PROG_LINK.slice(1).filter(([k]) => shown(k)).map(([k]) => `<td class="vp-sm${k === lastLink ? ' vp-div' : ''}"${k === 'prevSupply' || k === 'noticeTax' ? ' style="text-align:right;"' : ''}>${cellv[k]}</td>`).join('');
     const mine = vatProgCols.filter(c => shown(c.id)).map(c => {
       const val = v[c.id];
+      // [2026.10.19] "고정자산이 있으면 표시 + 등록 체크"(요청) - 고정 '등록' 칸(c.fa): 회사웹 고정자산 '유'일 때만 체크, 아니면 -(이미 적은 값은 그대로 보임)
+      if(c.fa && x.fa !== 'y' && val == null) return `<td style="text-align:center;" title="회사웹 고정자산 유일 때 체크해요">${na}</td>`;
       // [2026.10.19] "체크 항목 미해당 표기 - 우클릭으로"(요청) - 우클릭(휴대폰은 길게 누르기) = 미해당(–) 켜기/끄기, 값은 'na'. – 를 누르면 빈칸으로
       if(c.type === 'check') return `<td style="text-align:center;" oncontextmenu="event.preventDefault(); vatProgToggleNa('${cid}','${c.id}')" title="우클릭: 미해당(–) 표시/해제">${val === 'na'
         ? `<span class="vp-na" onclick="vatProgToggleNa('${cid}','${c.id}')" title="미해당 · 누르거나 우클릭하면 해제">–</span>`
