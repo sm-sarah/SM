@@ -1280,6 +1280,32 @@
   .vp-save.pending, .vp-save.saving{ color:var(--amber); }
   .vp-save.saved{ color:var(--mint); }
   .vp-save.fail, .vp-save.reload{ color:var(--rose); }
+  /* [2026.10.19] 부가세 진행 메뉴 - 보기·항목·값 묶음 버튼 */
+  .vp-menu{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:10px; }
+  .vp-mg{ display:inline-flex; align-items:center; gap:2px; background:var(--card); border:1px solid var(--border); border-radius:12px; padding:3px 4px 3px 10px; box-shadow:0 1px 2px rgba(0,0,0,.03); }
+  .vp-mg-l{ font-size:11px; font-weight:800; color:var(--muted-soft); margin-right:4px; letter-spacing:.02em; }
+  .vp-mb{ display:inline-flex; align-items:center; gap:5px; height:28px; padding:0 10px; font:inherit; font-size:12.5px; font-weight:700; color:var(--text); background:transparent; border:none; border-radius:8px; cursor:pointer; white-space:nowrap; }
+  .vp-mb svg{ color:var(--muted); flex:0 0 auto; }
+  .vp-mb:hover{ background:var(--primary-soft); color:var(--primary-dark); }
+  .vp-mb:hover svg{ color:var(--primary-dark); }
+  .vp-mb b{ font-size:11px; color:var(--primary-dark); }
+  .vp-mb-danger, .vp-mb-danger svg{ color:var(--rose); }
+  .vp-mb-danger:hover, .vp-mb-danger:hover svg{ background:var(--rose-soft); color:var(--rose); }
+  .vp-mb-primary{ background:var(--primary); color:#fff; border:1px solid var(--primary); }
+  .vp-mb-primary:hover{ background:var(--primary-dark); color:#fff; }
+  .vp-mg .vp-view.vp-mb-sel{ height:28px; padding:0 4px; }
+  .vp-mg .vp-view.vp-mb-sel select{ max-width:150px; height:26px; padding-top:0; padding-bottom:0; font-size:12.5px; }
+  .vp-menu-ordering{ background:var(--primary-soft); border:1px solid var(--primary); border-radius:12px; padding:6px 8px 6px 12px; }
+  .vp-menu-ordering .vp-mb:not(.vp-mb-primary){ background:var(--card); border:1px solid var(--border); }
+  .vp-ord-msg{ display:inline-flex; align-items:center; gap:6px; font-size:12.5px; font-weight:700; color:var(--primary-dark); }
+  /* 순서 편집 중: 머리글을 끌 수 있고, 본문은 잠시 입력 안 됨 */
+  .vat-prog.vp-ordering tbody{ pointer-events:none; opacity:.55; }
+  .vat-prog.vp-ordering th[data-vpids]{ cursor:grab; background:var(--primary-soft); }
+  .vat-prog.vp-ordering th[data-vpids] .vp-th{ pointer-events:none; }
+  .vat-prog.vp-ordering th[data-vpids] .vp-th::before{ content:'⠿ '; color:var(--primary); }
+  .vat-prog th.vp-dragging{ opacity:.4; }
+  .vat-prog th.vp-drop-l{ box-shadow:inset 3px 0 0 var(--primary); }
+  .vat-prog th.vp-drop-r{ box-shadow:inset -3px 0 0 var(--primary); }
   .vp-view{ display:inline-flex; align-items:center; gap:6px; font-size:12.5px; color:var(--muted); font-weight:700; }
   .vp-view select{ font-size:12.5px; padding:4px 8px; }
   /* [2026.10.16] "내부 화면이 회사웹 틀만 가져오고 스타일이 빠졌다 - 회사 제목·열 구분·행제목"(요청)
@@ -3732,6 +3758,30 @@ async function vatProgHideCols(){
 }
 // [2026.10.16] "매출 밑에 여러 항목, 매입 밑에 여러 항목 두 줄로 + 항목 배치 순서"(요청) - 항목마다 묶음(col.group)을 두고, 붙어 있는 같은 묶음은 위 머리글 한 칸으로 합침.
 // 배치 창: ▲▼로 순서, 오른쪽 칸에 묶음 이름. '(매출)·(매입)으로 묶기'는 이름 끝 (매출)/(매입)을 떼어 묶음으로 옮김
+// [2026.10.19] "끌어서 이동을 원래 화면에서도 - 수정 버튼 누르면 켜지고, 저장 누르면 고정"(요청)
+// 순서 편집: 머리글(항목 한 칸, 또는 묶음 머리글 = 그 묶음 전체)을 끌어 놓으면 바로 그 자리로(아직 저장 안 함). 저장 = 그대로 저장, 취소 = 처음 순서로
+let vatProgOrdering = false, vatProgOrderSnap = null, vpDragIds = null;
+function vpDragAttr(ids){ return vatProgOrdering ? ` draggable="true" data-vpids="${ids.join(',')}" title="끌어서 옮기기"` : ''; }
+function vatProgOrderStart(){ vatProgOrdering = true; vatProgOrderSnap = vatProgCols.slice(); renderVat(); }
+function vatProgOrderEnd(save){
+  if(!save && vatProgOrderSnap) vatProgCols = vatProgOrderSnap;
+  vatProgOrdering = false; vatProgOrderSnap = null; renderVat();
+  if(save) scheduleGoogleSave();
+}
+function vpOrderMove(ids, targetIds, after){
+  if(!ids || !targetIds || targetIds.some(id => ids.includes(id))) return;
+  const moving = vatProgCols.filter(c => ids.includes(c.id)), rest = vatProgCols.filter(c => !ids.includes(c.id));
+  let at = rest.findIndex(c => c.id === (after ? targetIds[targetIds.length - 1] : targetIds[0]));
+  if(at < 0) return; if(after) at++;
+  rest.splice(at, 0, ...moving); vatProgCols = rest; renderVat();
+}
+document.addEventListener('dragstart', e => { const th = vatProgOrdering && e.target.closest && e.target.closest('.vp-ordering th[data-vpids]'); if(!th) return; vpDragIds = th.dataset.vpids.split(','); th.classList.add('vp-dragging'); e.dataTransfer.effectAllowed = 'move'; try{ e.dataTransfer.setData('text/plain', th.dataset.vpids); }catch(_){} });
+document.addEventListener('dragover', e => {
+  if(!vpDragIds) return; const th = e.target.closest && e.target.closest('.vp-ordering th[data-vpids]'); document.querySelectorAll('.vp-drop-l, .vp-drop-r').forEach(x => x.classList.remove('vp-drop-l', 'vp-drop-r')); if(!th) return;
+  e.preventDefault(); const r = th.getBoundingClientRect(); th.classList.add(e.clientX < r.left + r.width / 2 ? 'vp-drop-l' : 'vp-drop-r');
+});
+document.addEventListener('drop', e => { if(!vpDragIds) return; const th = e.target.closest && e.target.closest('.vp-ordering th[data-vpids]'); if(!th) return; e.preventDefault(); const ids = vpDragIds; vpDragIds = null; vpOrderMove(ids, th.dataset.vpids.split(','), th.classList.contains('vp-drop-r')); });
+document.addEventListener('dragend', () => { if(!vpDragIds && !document.querySelector('.vp-dragging')) return; vpDragIds = null; document.querySelectorAll('.vp-dragging, .vp-drop-l, .vp-drop-r').forEach(x => x.classList.remove('vp-dragging', 'vp-drop-l', 'vp-drop-r')); });
 async function vatProgArrange(){
   const live = vatProgLiveCols(); if(!live.length) return smAlert('배치할 항목이 없어요');
   const tmp = live.map(c => ({ c, label: c.label, group: c.group || '' }));
@@ -3741,7 +3791,7 @@ async function vatProgArrange(){
     const gOpts = vatProgGroupOpts('', tmp.map(y => y.group)).filter(g => g !== VAT_PROG_GRP_ETC);
     box.innerHTML = tmp.map((x, i) => `<div class="vp-arr-row${hid.includes(x.c.id) ? ' off' : ''}" data-row="${i}">
       <span class="vp-arr-grip" data-grip="${i}" title="끌어서 위치 옮기기" aria-label="끌어서 위치 옮기기">⠿</span><input type="checkbox" class="vp-arr-pick" data-pk="${i}" ${x.pick ? 'checked' : ''} title="골라서 한 번에 묶기">
-      <button type="button" class="vp-arr-mv" data-mv="${i},-1" ${i ? '' : 'disabled'} title="위로">▲</button><button type="button" class="vp-arr-mv" data-mv="${i},1" ${i < tmp.length - 1 ? '' : 'disabled'} title="아래로">▼</button>
+      
       <span class="vp-arr-name" title="${escapeAttr(x.label)}">${taxjEsc(String(x.label).replace(/\s+/g, ' '))}${hid.includes(x.c.id) ? ' <small>(숨김)</small>' : ''}</span>
       ${x.etc ? `<input class="vp-arr-grp" data-g="${i}" value="${escapeAttr(x.group)}" placeholder="묶음 이름">`
         : `<select class="vp-arr-grp" data-gs="${i}">${gOpts.map(g => `<option value="${escapeAttr(g === '없음' ? '' : g)}" ${(x.group || '') === (g === '없음' ? '' : g) ? 'selected' : ''}>${taxjEsc(g)}</option>`).join('')}<option value="__etc">${VAT_PROG_GRP_ETC}</option></select>`}</div>`).join('');
@@ -3752,7 +3802,7 @@ async function vatProgArrange(){
   };
   // [2026.10.19] "항목 몇 개 골라 한 번에 묶음에 넣기"(요청) - 줄 체크 → 위에서 묶음 고르고 '묶기'. 고른 항목은 첫 항목 자리로 모여 붙음(머리글이 한 칸으로 합쳐지게)
   const html = `<div class="vp-arr-top"><span class="vp-arr-bulk"><select id="vpArrBulkSel" class="vp-arr-grp"></select><input id="vpArrBulkEtc" class="vp-arr-grp" placeholder="묶음 이름" style="display:none;"><button type="button" class="btn xs" id="vpArrBulkBtn" disabled>골라서 묶기</button></span><button type="button" class="btn ghost xs" id="vpArrAuto" title="이름 끝의 (매출)·(매입)을 떼어 묶음으로 옮겨요">(매출)·(매입)으로 묶기</button></div><div id="vpArrList" class="vp-arr"></div>`;
-  const p = smDialog({ title:'항목 배치', message:'▲▼로 순서를 바꾸고, 묶음에 같은 이름(예: 매출)을 적으면 붙어 있는 항목끼리 위 머리글 한 칸으로 묶여요.', html, icon:'✎', okText:'적용', wide:true });
+  const p = smDialog({ title:'항목 배치', message:'⠿를 끌어서 순서를 바꾸고, 묶음에 같은 이름(예: 매출)을 적으면 붙어 있는 항목끼리 위 머리글 한 칸으로 묶여요.', html, icon:'✎', okText:'적용', wide:true });
   draw();
   const box = document.getElementById('vpArrList');
   if(box){
@@ -3891,14 +3941,22 @@ function vatProgApplyFreeze(){
 }
 function vatProgHtml(docs){
   const key = vatProgKey(), plab = vatProgKeyLabel(key), per = vatProg[key] || {}, pk = vatProgPrevKey();
-  const bar = `<div class="toolbar">${vpSaveBadgeHtml()}<div class="spacer"></div>
-    ${!vatProgHasData(key) && pk ? `<button class="btn primary xs" onclick="vatProgFromPrev()" title="이어받기 항목(↻)만 가져와요">${vatProgKeyLabel(pk)}에서 이어받기</button>` : ''}
-    <span class="vp-view">열 고정 <select onchange="vatProgSetFreeze(this.value)"><option value="" ${!vatProgViewObj().freeze ? 'selected' : ''}>순번만</option>${vatProgAllCols().filter(c => vatProgVisibleKeys().includes(c.key)).map(c => `<option value="${escapeAttr(c.key)}" ${vatProgViewObj().freeze === c.key ? 'selected' : ''}>${taxjEsc(c.label)}까지</option>`).join('')}</select></span>
-    <button class="btn ghost xs" onclick="vatProgArrange()" title="항목 순서와 묶음(매출·매입 등 두 줄 머리글)을 정해요">항목 배치</button>
-    <button class="btn ghost xs" onclick="vatProgHideCols()" title="안 쓰는 칸을 숨겨요">칸 숨기기${vatProgViewObj().hidden.length ? ` (${vatProgViewObj().hidden.length})` : ''}</button>
-    <button class="sm-tool-ic" onclick="vatProgAddCol()" title="항목 추가" aria-label="항목 추가">${ICON_PLUS}</button>
-    ${vatProgHasData(key) ? '<button class="btn ghost xs" onclick="vatProgMove()" title="이 기수에 넣은 값을 다른 기수로 옮겨요">다른 기수로 옮기기</button><button class="btn ghost xs danger" onclick="vatProgClear()" title="이 기수에 적은 내 항목 값을 지워요">비우기</button>' : ''}
-    <button class="btn ghost xs" onclick="document.getElementById('vatProgXlsx').click()" title="1행 = 항목 이름인 진행표 엑셀을 ${plab}에 넣어요">엑셀 올리기</button><input type="file" id="vatProgXlsx" accept=".xlsx,.xls" style="display:none;" onchange="vatProgImport(this)"></div>`;
+  // [2026.10.19] "메뉴가 줄글 나열 같다 - 눈에 잘 보이게, 기능을 잘 쓰게"(요청) - 보기·항목·값 묶음 버튼으로. 순서 편집 중에는 메뉴 대신 저장·취소 줄
+  const vpIc = d => `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
+  const bar = vatProgOrdering ? `<div class="vp-menu vp-menu-ordering">${vpSaveBadgeHtml()}<span class="vp-ord-msg">${vpIc('<path d="M5 9l-3 3 3 3M19 9l3 3-3 3M2 12h20"/>')} 머리글(항목·묶음)을 끌어서 칸 순서를 바꿔요</span><div class="spacer"></div>
+      <button class="vp-mb" onclick="vatProgOrderEnd(false)">취소</button><button class="vp-mb vp-mb-primary" onclick="vatProgOrderEnd(true)">저장</button></div>`
+    : `<div class="vp-menu">${vpSaveBadgeHtml()}<div class="spacer"></div>
+    ${!vatProgHasData(key) && pk ? `<button class="vp-mb vp-mb-primary" onclick="vatProgFromPrev()" title="이어받기 항목(↻)만 가져와요">${vatProgKeyLabel(pk)}에서 이어받기</button>` : ''}
+    <div class="vp-mg"><span class="vp-mg-l">보기</span>
+      <span class="vp-view vp-mb-sel">열 고정 <select onchange="vatProgSetFreeze(this.value)"><option value="" ${!vatProgViewObj().freeze ? 'selected' : ''}>순번만</option>${vatProgAllCols().filter(c => vatProgVisibleKeys().includes(c.key)).map(c => `<option value="${escapeAttr(c.key)}" ${vatProgViewObj().freeze === c.key ? 'selected' : ''}>${taxjEsc(c.label)}까지</option>`).join('')}</select></span>
+      <button class="vp-mb" onclick="vatProgHideCols()" title="안 쓰는 칸을 숨겨요">${vpIc('<path d="M3 3l18 18M10.6 10.6a2 2 0 0 0 2.8 2.8M9.9 5.1A10.4 10.4 0 0 1 12 5c6.5 0 10 7 10 7a17.6 17.6 0 0 1-3.2 4.2M6.6 6.6C3.9 8.4 2 12 2 12s3.5 7 10 7a9.7 9.7 0 0 0 5.4-1.6"/>')}칸 숨기기${vatProgViewObj().hidden.length ? ` <b>${vatProgViewObj().hidden.length}</b>` : ''}</button></div>
+    <div class="vp-mg"><span class="vp-mg-l">항목</span>
+      <button class="vp-mb" onclick="vatProgAddCol()" title="항목 추가">${vpIc('<path d="M12 5v14M5 12h14"/>')}추가</button>
+      <button class="vp-mb" onclick="vatProgOrderStart()" title="표 머리글을 끌어서 칸 순서를 바꿔요">${vpIc('<path d="M5 9l-3 3 3 3M19 9l3 3-3 3M2 12h20"/>')}순서 편집</button>
+      <button class="vp-mb" onclick="vatProgArrange()" title="항목 순서와 묶음(매출·매입 등 두 줄 머리글)을 정해요">${vpIc('<rect x="3" y="4" width="18" height="5" rx="1.5"/><rect x="3" y="12" width="8" height="8" rx="1.5"/><rect x="13" y="12" width="8" height="8" rx="1.5"/>')}배치·묶음</button></div>
+    <div class="vp-mg"><span class="vp-mg-l">값</span>
+      <button class="vp-mb" onclick="document.getElementById('vatProgXlsx').click()" title="1행 = 항목 이름인 진행표 엑셀을 ${plab}에 넣어요">${vpIc('<path d="M12 15V3M7 8l5-5 5 5M4 15v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/>')}엑셀 올리기</button><input type="file" id="vatProgXlsx" accept=".xlsx,.xls" style="display:none;" onchange="vatProgImport(this)">
+      ${vatProgHasData(key) ? `<button class="vp-mb" onclick="vatProgMove()" title="이 기수에 넣은 값을 다른 기수로 옮겨요">${vpIc('<path d="M5 12h14M13 6l6 6-6 6"/>')}다른 기수로</button><button class="vp-mb vp-mb-danger" onclick="vatProgClear()" title="이 기수에 적은 내 항목 값을 지워요">${vpIc('<path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/>')}비우기</button>` : ''}</div></div>`;
   if(!docs) return bar + '<div class="empty">Tax.J에 연결하면 회사웹 거래처·예정고지 칸이 채워지고, 옆에 내 진행 칸을 적을 수 있어요.</div>';
   const q = vatQuery.trim().toLowerCase(), na = PAY_NA, num = v => v == null || v === '' ? na : typeof v === 'number' ? v.toLocaleString('ko-KR') : taxjEsc(String(v));
   // [2026.10.16] "부가세 진행에서도 전체·신고대상·고지대상 등을 골라 보게 - 회사웹처럼"(요청) - 총괄과 같은 구분(Tax.J vatEntryStatus):
@@ -3926,7 +3984,7 @@ function vatProgHtml(docs){
   const prevOn = !!pk && Object.keys(vatProg[pk] || {}).some(id => vatProgPrevVals(pk, id).length);
   const prevHead = prevOn ? `<th style="text-align:center;" title="${escapeAttr(vatProgKeyLabel(pk))} 입력 보기">전기</th>` : '';
   const myCols = vatProgCols.filter(c => shown(c.id)), grouped = myCols.some(c => c.group);
-  const thOf = (c, rs) => `<th${rs ? ' rowspan="2"' : ''} style="${c.type === 'check' ? 'text-align:center;' : ''}"><button class="vp-th" onclick="vatProgEditCol('${c.id}')" title="눌러서 이름·입력 방식·이어받기·묶음 수정 또는 삭제${c.carry ? '\n(다음 기수로 이어받는 항목)' : ''}">${taxjEsc(c.label).replace(/\n/g, '<br>')}${c.carry ? '<span class="vp-carry">↻</span>' : ''}</button></th>`;
+  const thOf = (c, rs) => `<th${rs ? ' rowspan="2"' : ''}${vpDragAttr([c.id])} style="${c.type === 'check' ? 'text-align:center;' : ''}"><button class="vp-th" onclick="vatProgEditCol('${c.id}')" title="눌러서 이름·입력 방식·이어받기·묶음 수정 또는 삭제${c.carry ? '\n(다음 기수로 이어받는 항목)' : ''}">${taxjEsc(c.label).replace(/\n/g, '<br>')}${c.carry ? '<span class="vp-carry">↻</span>' : ''}</button></th>`;
   // [2026.10.16] 묶음이 있으면 두 줄 머리글: 위 = 묶음 이름(붙어 있는 같은 묶음 합침) / 묶음 없는 칸은 두 줄 합침
   let head1 = '', head2 = '';
   if(grouped){
@@ -3934,12 +3992,12 @@ function vatProgHtml(docs){
       const g = myCols[i].group;
       if(!g){ head1 += thOf(myCols[i], true); i++; continue; }
       let j = i; while(j < myCols.length && myCols[j].group === g) j++;
-      head1 += `<th colspan="${j - i}" class="vp-grp"><button class="vp-th" onclick="vatProgArrange()" title="눌러서 항목 배치·묶음 바꾸기">${taxjEsc(g)}</button></th>`;
+      head1 += `<th colspan="${j - i}" class="vp-grp"${vpDragAttr(myCols.slice(i, j).map(c => c.id))}><button class="vp-th" onclick="vatProgArrange()" title="눌러서 항목 배치·묶음 바꾸기">${taxjEsc(g)}</button></th>`;
       head2 += myCols.slice(i, j).map(c => thOf(c, false)).join('');
       i = j;
     }
   }
-  const head = prevHead + vatProgCols.filter(c => shown(c.id)).map(c => `<th style="${c.type === 'check' ? 'text-align:center;' : ''}"><button class="vp-th" onclick="vatProgEditCol('${c.id}')" title="눌러서 이름·입력 방식·이어받기 수정 또는 삭제${c.carry ? '\n(다음 기수로 이어받는 항목)' : ''}">${taxjEsc(c.label).replace(/\n/g, '<br>')}${c.carry ? '<span class="vp-carry">↻</span>' : ''}</button></th>`).join('');
+  const head = prevHead + vatProgCols.filter(c => shown(c.id)).map(c => `<th${vpDragAttr([c.id])} style="${c.type === 'check' ? 'text-align:center;' : ''}"><button class="vp-th" onclick="vatProgEditCol('${c.id}')" title="눌러서 이름·입력 방식·이어받기 수정 또는 삭제${c.carry ? '\n(다음 기수로 이어받는 항목)' : ''}">${taxjEsc(c.label).replace(/\n/g, '<br>')}${c.carry ? '<span class="vp-carry">↻</span>' : ''}</button></th>`).join('');
   const rows = list.map((x, n) => {
     const cid = escapeAttr(x.c.id), v = per[x.c.id] || {}, t = s => s || s === 0 ? taxjEsc(String(s)) : na;
     const lk = v.__link || {}, tb = x.hasTb ? x.tb : lk;   // 회사웹 값이 있으면 회사웹, 없으면 엑셀에서 넣은 값
@@ -3963,7 +4021,7 @@ function vatProgHtml(docs){
     const prevCell = prevOn ? `<td style="text-align:center;">${vatProgPrevVals(pk, x.c.id).length ? `<button class="sm-tool-ic vp-prev-btn" onclick="vatProgShowPrev('${cid}')" title="${escapeAttr(vatProgKeyLabel(pk))} 입력 보기" aria-label="전기 보기">${ICON_HISTORY}</button>` : ''}</td>` : '';
     return `<tr><td class="tx-seq">${n + 1}</td>${link}${prevCell}${mine}</tr>`;
   }).join('');
-  return bar + segRow + `<div class="table-scroll vat-prog" style="margin-top:8px;"><table data-prev="${prevOn ? 1 : 0}"><thead>${grouped
+  return bar + segRow + `<div class="table-scroll vat-prog${vatProgOrdering ? ' vp-ordering' : ''}" style="margin-top:8px;"><table data-prev="${prevOn ? 1 : 0}"><thead>${grouped
       ? `<tr><th class="tx-seq" rowspan="2">순번</th>${linkHead.replace(/<th /g, '<th rowspan="2" ')}${prevHead.replace('<th ', '<th rowspan="2" ')}${head1}</tr><tr>${head2}</tr>`
       : `<tr><th class="tx-seq">순번</th>${linkHead}${head}</tr>`}</thead>
     <tbody>${rows || `<tr><td colspan="${vis.length + 1 + (prevOn ? 1 : 0)}"><div class="empty" style="padding:18px;">${q ? '검색 결과가 없어요.' : '거래처가 없어요.'}</div></td></tr>`}</tbody></table></div>`;
