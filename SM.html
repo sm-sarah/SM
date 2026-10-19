@@ -1070,6 +1070,8 @@
   .cl-dt:hover{ border-color:var(--border); background:#fff; }
   .cl-dt:empty::before{ content:'＋'; color:var(--muted-soft); font-size:11px; }
   .cl-dt.txt{ color:var(--muted); }
+  /* [2026.10.19] 부가세 진행 날짜·기간 칸 - 빈 칸은 ＋ 대신 작은 달력 아이콘 */
+  .cl-dt.vp-dt:empty::before{ content:''; display:inline-block; width:14px; height:14px; vertical-align:middle; background:no-repeat center/14px url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238f8ca8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='4' width='18' height='17' rx='2'/%3E%3Cpath d='M3 9h18M8 2v4M16 2v4'/%3E%3C/svg%3E"); }
   .cl-pop{ position:fixed; z-index:3000; background:#fff; border:1px solid var(--border); border-radius:12px; box-shadow:var(--shadow-md); padding:10px; display:flex; flex-direction:column; gap:8px; width:228px; }
   .cl-pop input{ font:inherit; font-size:13px; border:1px solid var(--border); border-radius:8px; padding:6px 8px; width:100%; box-sizing:border-box; }
   .cl-pop-row{ display:flex; gap:4px; flex-wrap:wrap; }
@@ -2539,6 +2541,33 @@ async function deleteChecklistItem(month, idx){
   worklistChecklist[month].splice(idx, 1);
   renderAll();
 }
+// [2026.10.19] "체크리스트에서도 다음달 이월기능"(요청) - 이 달에 완료하지 않은 항목을 다음 달 체크리스트로 옮김.
+// 옮긴 항목은 다음 달 목록 끝에 붙고(중요 표시·이력 유지, 이력에 '다음 달로 이월' 기록), 이 달 목록에서는 빠짐.
+// 마스터 시트에서 온 항목은 다시 불러와도 원래 달에 되살아나지 않도록 숨김 처리하고, 다음 달에서는 직접 추가한 항목처럼 유지.
+// 다음 달에 같은 내용이 이미 있으면 중복으로 넣지 않고 이 달에서만 뺌. 체크리스트는 연도 없이 '1월~12월'로만 저장돼서 12월은 이월하지 않음.
+async function carryChecklistToNextMonth(month){
+  const n = parseInt(month, 10);
+  if(isNaN(n) || n >= 12) return;
+  const next = `${n + 1}월`;
+  const src = worklistChecklist[month] || [];
+  const left = src.filter(x => !x.done);
+  if(!left.length) return;
+  if(!(await smConfirm(`남은 ${left.length}건을 ${next}로 이월할까요?`, `${month}에 완료하지 않은 항목이 ${next} 체크리스트로 옮겨지고, ${month} 목록에서는 빠져요.`, { icon:'→', okText:'이월' }))) return;
+  const dst = (worklistChecklist[next] = worklistChecklist[next] || []);
+  const have = new Set(dst.map(x => (x.text || '').trim()));
+  left.forEach(item => {
+    if(item.source !== 'user') hideMasterKey('hiddenMasterChecklist', month + '|' + (item.origText || item.text));
+    if(have.has((item.text || '').trim())) return;
+    const moved = Object.assign({}, item, { source:'user', movedFrom: item.movedFrom || month });
+    delete moved.origText;
+    pushHist(moved, '다음 달로 이월', [{ label:'월', from:month, to:next }]);
+    dst.push(moved);
+    have.add((item.text || '').trim());
+  });
+  worklistChecklist[month] = src.filter(x => x.done);
+  worklistSelMonth = next;
+  renderAll();
+}
 // 요청 배경(2026.10.08): 체크리스트도 줄바꿈된 목록을 붙여넣으면 한 줄씩 건별로 등록되게 함.
 async function addChecklistItem(month){
   const r = await smForm(`${month} 체크리스트 추가`, [{ label:'항목 (여러 줄이면 한 줄씩 따로 등록)', type:'textarea', placeholder:'예: 부가세 안내문 발송\n목록을 붙여넣어도 돼요', rows:4 }], { okText:'추가', wide:true });
@@ -2633,6 +2662,7 @@ function renderWorklist(){
           </div>`).join('') || '<div class="empty" style="padding:10px 0;">이 달의 체크리스트가 없어요.</div>'}
       </div>
       ${checklistSearch.trim() ? '' : `<button class="notice-add" onclick="addChecklistItem('${m}')">+ 항목 추가</button>`}
+      ${(!checklistSearch.trim() && m !== '12월' && items.some(x => !x.done)) ? `<button class="notice-add" onclick="carryChecklistToNextMonth('${m}')" title="완료하지 않은 항목을 다음 달 체크리스트로 옮겨요">→ 남은 ${items.filter(x => !x.done).length}건 다음 달로 이월</button>` : ''}
       ${sched.length ? `
         <div class="notice-sched">
           <div class="notice-sched-label">주요 세무일정</div>
@@ -3708,6 +3738,71 @@ async function vatProgArrange(){
   vatProgCols = tmp.map(x => x.c).concat(vatProgCols.filter(c => !vatProgColLive(c)));   // 이 기수부터 뺀 항목은 뒤에 그대로
   renderVat(); scheduleGoogleSave();
 }
+// [2026.10.19] 진행 날짜·기간 칸: 빈 칸은 달력 아이콘, 누르면 작은 창(결산·신고현황 날짜 창과 같은 모양)
+// 귀속연도(보고 있는 과세기간의 연도)와 같으면 연도는 빼고 월/일만
+function vatProgFmtOne(d){ const [y, m, dd] = d.split('-'); return `${y === String(vatYear) ? '' : y.slice(2) + '.'}${Number(m)}/${Number(dd)}`; }
+function vatProgFmtDateVal(v, range){
+  if(v == null || v === '') return '';
+  const iso = /^\d{4}-\d{2}-\d{2}$/;
+  if(!range) return iso.test(v) ? vatProgFmtOne(v) : taxjEsc(String(v));
+  const m = String(v).match(/^(\d{4}-\d{2}-\d{2})?~(\d{4}-\d{2}-\d{2})?$/);
+  return m ? `${m[1] ? vatProgFmtOne(m[1]) : ''}~${m[2] ? vatProgFmtOne(m[2]) : ''}` : taxjEsc(String(v));
+}
+// [2026.10.19] 보고 있는 과세기간의 기간 바로 넣기 버튼 - 예정 = 그 분기, 확정 = 뒤 분기 + 반기 전체
+function vatProgPeriodRanges(){
+  const y = vatYear, h = Number(vatHalf) === 2 ? 2 : 1, s1 = h === 1 ? '01-01' : '07-01', e1 = h === 1 ? '03-31' : '09-30', s2 = h === 1 ? '04-01' : '10-01', e2 = h === 1 ? '06-30' : '12-31';
+  const r = (a, b) => [`${y}-${a}~${y}-${b}`, `${Number(a.slice(0,2))}/${Number(a.slice(3))}~${Number(b.slice(0,2))}/${Number(b.slice(3))}`];
+  return vatKind === 'pre' ? [r(s1, e1)] : [r(s2, e2), r(s1, e2)];
+}
+function vatProgDateBtn(cid, colId, v, range){
+  const txt = v && !(range ? /^(\d{4}-\d{2}-\d{2})?~(\d{4}-\d{2}-\d{2})?$/ : /^\d{4}-\d{2}-\d{2}$/).test(String(v));
+  return `<button type="button" class="cl-dt vp-dt${txt ? ' txt' : ''}" data-cid="${cid}" data-col="${colId}" title="${escapeAttr(v || (range ? '기간 입력' : '날짜 입력'))}" onclick="vatProgDatePop(this,${range ? 1 : 0})">${vatProgFmtDateVal(v, range)}</button>`;
+}
+function vatProgDatePop(btn, range){
+  closeDatePopClose();
+  const { cid, col } = btn.dataset, cur = ((vatProg[vatProgKey()] || {})[cid] || {})[col] || '';
+  const iso = x => /^\d{4}-\d{2}-\d{2}$/.test(x || '') ? x : '';
+  const pop = document.createElement('div');
+  pop.id = 'closeDatePop'; pop.className = 'cl-pop';
+  if(range){
+    const [a0, b0] = String(cur).split('~');
+    pop.style.width = '300px';
+    // [2026.10.19] "한 번에 입력, 연도는 귀속연도(과세기간)로"(요청) - '07.01~09.30'처럼 한 줄로 입력하면 연도는 보고 있는 과세기간 연도로 채움
+    const md = x => iso(x) ? `${x.slice(5,7)}.${x.slice(8)}` : '';
+    pop.innerHTML = `<input type="text" class="cl-pop-text cl-r-t" placeholder="예: 07.01~09.30 입력 후 Enter (${vatYear}년)" value="${iso(a0) || iso(b0) ? `${md(a0)}~${md(b0)}` : escapeAttr(String(cur))}">
+      <div class="cl-pop-row">${vatProgPeriodRanges().map(([v, l]) => `<button type="button" data-v="${v}">${l}</button>`).join('')}</div>
+      <div class="cl-pop-range"><input type="date" class="cl-r-a" value="${iso(a0)}" title="시작일"><span>~</span><input type="date" class="cl-r-b" value="${iso(b0)}" title="끝 날짜"></div>
+      <div class="cl-pop-row" style="justify-content:space-between;"><button type="button" data-v="__clear" class="del">지우기</button><button type="button" data-v="__ok" style="font-weight:800; color:var(--primary-dark); border-color:var(--primary);">저장</button></div>`;
+  } else {
+    pop.innerHTML = `<input type="text" class="cl-pop-text" placeholder="월.일 입력 후 Enter (예: 07.25) - ${vatYear}년" value="${iso(cur) ? `${cur.slice(5,7)}.${cur.slice(8)}` : escapeAttr(String(cur))}">
+      <input type="date" class="cl-pop-date" value="${iso(cur)}">
+      <div class="cl-pop-row"><button type="button" data-v="__today">오늘</button><button type="button" data-v="__clear" class="del">지우기</button></div>`;
+  }
+  document.body.appendChild(pop);
+  const r = btn.getBoundingClientRect(), pw = pop.offsetWidth, ph = pop.offsetHeight;
+  pop.style.left = Math.max(8, Math.min(window.innerWidth - pw - 8, r.left)) + 'px';
+  pop.style.top = (r.bottom + ph + 8 > window.innerHeight ? r.top - ph - 4 : r.bottom + 4) + 'px';
+  const set = v => { vatProgSet(cid, col, v); btn.innerHTML = vatProgFmtDateVal(v, range); btn.title = v || (range ? '기간 입력' : '날짜 입력'); btn.classList.toggle('txt', !!v && !(range ? closeIsRange(v) : /^\d{4}-\d{2}-\d{2}$/.test(v))); closeDatePopClose(); };
+  if(range){
+    const ia = pop.querySelector('.cl-r-a'), ib = pop.querySelector('.cl-r-b'), it = pop.querySelector('.cl-r-t');
+    let typed = false;
+    const fromText = () => { const t = it.value.trim(); return t ? closeParseRange(t.includes('~') || /[∼〜]/.test(t) ? t : t + '~', String(vatYear)) : ''; };
+    const save = () => { if(typed) return set(fromText()); if(ia.value || ib.value) set(`${ia.value}~${ib.value}`); else closeDatePopClose(); };
+    it.addEventListener('input', () => { typed = true; });
+    [ia, ib].forEach(i => i.addEventListener('change', () => { typed = false; }));
+    pop.querySelectorAll('[data-v]').forEach(b => b.onclick = () => b.dataset.v === '__ok' ? save() : set(b.dataset.v === '__clear' ? '' : b.dataset.v));
+    [it, ia, ib].forEach(i => i.addEventListener('keydown', e => { if(e.key === 'Enter' && !e.isComposing){ e.preventDefault(); save(); } if(e.key === 'Escape') closeDatePopClose(); }));
+    it.focus(); it.select();
+  } else {
+    const di = pop.querySelector('.cl-pop-date'), ti = pop.querySelector('.cl-pop-text');
+    di.addEventListener('change', () => { if(di.value) set(di.value); });
+    di.addEventListener('keydown', e => { if(e.key === 'Escape') closeDatePopClose(); });
+    ti.addEventListener('keydown', e => { if(e.key === 'Enter' && !e.isComposing){ e.preventDefault(); const t = ti.value.trim(); set(t ? closeParseDate(t, String(vatYear)) : ''); } if(e.key === 'Escape') closeDatePopClose(); });
+    pop.querySelectorAll('[data-v]').forEach(b => b.onclick = () => set(b.dataset.v === '__today' ? todayStr() : ''));
+    ti.focus(); ti.select();
+  }
+  setTimeout(() => document.addEventListener('mousedown', closeDatePopOutside, true), 0);
+}
 // [2026.10.16] 기간 입력 - 시작일·종료일 두 칸 → 'YYYY-MM-DD~YYYY-MM-DD'로 저장
 function vatProgRangeInput(el, cid, colId){
   const td = el.closest('td'), [a, b] = [...td.querySelectorAll('input[type=date]')].map(x => x.value);
@@ -3797,8 +3892,9 @@ function vatProgHtml(docs){
       if(c.type === 'check') return `<td style="text-align:center;"><input type="checkbox" ${val ? 'checked' : ''} onchange="vatProgSet('${cid}','${c.id}',this.checked)"></td>`;
       const s = vatProgFmtNum(val);
       if(c.type === 'num') return `<td><input class="vp-in" style="width:${w[c.id]}px; text-align:right;" value="${escapeAttr(s)}" onchange="vatProgNumInput(this,'${cid}','${c.id}')"></td>`;
-      if(c.type === 'date') return `<td><input type="date" class="vp-in" style="width:128px;" value="${escapeAttr(/^\d{4}-\d{2}-\d{2}$/.test(s) ? s : '')}" title="${escapeAttr(s)}" onchange="vatProgSet('${cid}','${c.id}',this.value)"></td>`;
-      if(c.type === 'range'){ const [ra, rb] = String(val || '').split('~'); const dv = x => /^\d{4}-\d{2}-\d{2}$/.test(x || '') ? x : ''; return `<td><span class="vp-range"><input type="date" class="vp-in" value="${dv(ra)}" onchange="vatProgRangeInput(this,'${cid}','${c.id}')"><span>~</span><input type="date" class="vp-in" value="${dv(rb)}" onchange="vatProgRangeInput(this,'${cid}','${c.id}')"></span></td>`; }
+      // [2026.10.19] "날짜도 아이콘으로 처음에 나오게, 화면·입력 공간 잡을 필요 없음"(요청) - 빈 칸은 달력 아이콘 버튼만, 누르면 작은 창에서 입력, 입력하면 날짜(월/일)만 보임
+      if(c.type === 'date') return `<td style="text-align:center;">${vatProgDateBtn(cid, c.id, val, false)}</td>`;
+      if(c.type === 'range') return `<td style="text-align:center;">${vatProgDateBtn(cid, c.id, val, true)}</td>`;
       if(c.type === 'select'){ const opts = c.opts || []; return `<td><select class="vp-in" style="min-width:84px;" onchange="vatProgSet('${cid}','${c.id}',this.value)"><option value=""></option>${(s && !opts.includes(s) ? [s] : []).concat(opts).map(o => `<option ${o === s ? 'selected' : ''}>${taxjEsc(o)}</option>`).join('')}</select></td>`; }
       return `<td><input class="vp-in" style="width:${w[c.id]}px;" value="${escapeAttr(s)}" title="${escapeAttr(s)}" onchange="this.title=this.value; vatProgSet('${cid}','${c.id}',this.value.trim())"></td>`;
     }).join('');
