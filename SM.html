@@ -3749,7 +3749,7 @@ async function vatProgEditCol(id){
   renderVat(); scheduleGoogleSave();
 }
 // [2026.10.16] "스크롤 생길 때 틀고정·열고정·숨기기"(요청) - 머리글은 이미 위에 고정. 열 고정은 고른 칸까지 왼쪽에 고정, 숨기기는 고른 칸을 안 보이게
-const VAT_PROG_LINK = [['name','상호'],['openDate','개업일'],['bizNo','사업자번호'],['noticeYn','예정고지 대상'],['excludeReason','예정고지(부과) 제외사유'],['filingDuty','신고의무 여부'],['prevSupply','직전 과세기간 공급가액 합계액'],['noticeTax','예정'],['office','관할 세무서'],['tel','담당자 전화번호'],['tip','Tip']];   // [2026.10.16] 회사웹 Tip도 진행에서 바로(요청)
+const VAT_PROG_LINK = [['name','상호'],['openDate','개업일'],['bizNo','사업자번호'],['noticeYn','예정고지 대상'],['excludeReason','예정고지(부과) 제외사유'],['filingDuty','신고의무 여부'],['prevSupply','직전 과세기간 공급가액 합계액'],['noticeTax','예정'],['office','관할 세무서'],['tel','담당자 전화번호'],['tip','Tip'],['fixedAsset','고정자산']];   // [2026.10.16] 회사웹 Tip도 진행에서 바로(요청) · [2026.10.19] 고정자산 유무도 회사웹 부가세 검증 신고서(세금계산서 고정자산)에서 바로(요청)
 function vatProgViewObj(){ if(!vatProgView || typeof vatProgView !== 'object') vatProgView = { freeze:'name', hidden:[] }; if(!Array.isArray(vatProgView.hidden)) vatProgView.hidden = [];
   // [2026.10.16] "직원·차량은 회사웹 Tip과 연동되니 진행에선 빼도 됨"(요청) - 내 항목 중 '직원…'·'차량…' 칸을 처음 한 번 숨김(지우지 않음 - '칸 숨기기'에서 다시 켤 수 있음)
   if(!vatProgView.tipHid && vatProgCols.length){ vatProgView.tipHid = 1; vatProgCols.filter(c => /^\s*(직원|차량)/.test(String(c.label))).forEach(c => { if(!vatProgView.hidden.includes(c.id)) vatProgView.hidden.push(c.id); }); }
@@ -4015,7 +4015,7 @@ function vatProgHtml(docs){
   });
   const vis = vatProgVisibleKeys(), shown = k => vis.includes(k);
   const lastLink = VAT_PROG_LINK.map(x => x[0]).filter(shown).pop();
-  const linkHead = ['상호','개업일','사업자번호','예정고지<br>대상','예정고지(부과)<br>제외사유','신고의무<br>여부','직전 과세기간<br>공급가액 합계액','예정','관할 세무서','담당자<br>전화번호','Tip']
+  const linkHead = ['상호','개업일','사업자번호','예정고지<br>대상','예정고지(부과)<br>제외사유','신고의무<br>여부','직전 과세기간<br>공급가액 합계액','예정','관할 세무서','담당자<br>전화번호','Tip','고정자산']
     .map((l, i) => shown(VAT_PROG_LINK[i][0]) ? `<th class="vp-link${VAT_PROG_LINK[i][0] === lastLink ? ' vp-div' : ''}" title="회사웹 값(조회만)">${l}</th>` : '').join('');
   // [2026.10.16] 전기 보기 칸 - 전 기수에 이 거래처 값이 있을 때만 아이콘
   const prevOn = !!pk && Object.keys(vatProg[pk] || {}).some(id => vatProgPrevVals(pk, id).length);
@@ -4041,6 +4041,16 @@ function vatProgHtml(docs){
     if(!x.hasTb){ x.office = lk.office || ''; x.tel = lk.tel || ''; }
     const cellv = { openDate: t(x.c.openDate), bizNo: t(innerBizNo(x.c.bizNo || '')), noticeYn: t(tb.noticeYn), excludeReason: t(tb.excludeReason), filingDuty: t(tb.filingDuty),
       prevSupply: num(tb.prevSupply), noticeTax: tb.noticeTax == null || tb.noticeTax === '' ? na : num(tb.noticeTax), office: t(x.office), tel: t(x.tel),
+      // [2026.10.19] "고정자산 유무를 진행에서 조회"(요청) - 회사웹 부가세 검증 신고서의 매입 세금계산서(고정자산)·그 중 전자 외 금액/세액이 있으면 유, 신고서를 입력했는데 없으면 무, 신고서 입력이 없으면 -
+      fixedAsset: (() => {
+        const en = ((((docs.s__vatReviewFigures || {})[x.c.id] || {})[vatYear]) || {})[vatTPeriod()], rp = en && en.reportPurchase;
+        if(!rp) return na;
+        const amt = Number(rp.taxInvoiceFixed) || 0, tax = Number(rp.taxInvoiceFixedTax) || 0;
+        const has = [rp.taxInvoiceFixed, rp.taxInvoiceFixedTax, rp.taxInvoiceFixedEtc, rp.taxInvoiceFixedEtcTax].some(n => (Number(n) || 0) !== 0);
+        const any = ['reportSales', 'reportPurchase'].some(g => Object.values(en[g] || {}).some(n => n != null && n !== ''));
+        if(has) return `<b style="color:var(--primary-dark);" title="${escapeAttr('회사웹 부가세 검증 신고서 · 고정자산 세금계산서 공급가액 ' + amt.toLocaleString() + ' / 세액 ' + tax.toLocaleString())}">유</b>`;
+        return any ? `<span title="회사웹 부가세 검증 신고서 기준 고정자산 없음">무</span>` : na;
+      })(),
       tip: (() => { const h = vatTHelp(docs, x.c.id); return (h.vehicleYn || (h.vehicles || []).length || (h.kinds || []).length || (h.recv || []).length || h.memo || Object.keys(h.staff || {}).length) ? `<button class="sm-tool-ic vp-prev-btn vp-tip-btn" onclick="vatTShowHelp('${cid}')" title="회사웹 Tip 보기" aria-label="Tip">${ICON_BULB}</button>` : na; })() };
     const link = `<td class="${lastLink === 'name' ? 'vp-div' : ''}" style="font-weight:800; color:${x.c.entityType === '법인' ? '#0b5a78' : x.c.entityType === '개인' ? '#be185d' : 'inherit'};">${taxjEsc(x.c.name)}</td>`
       + VAT_PROG_LINK.slice(1).filter(([k]) => shown(k)).map(([k]) => `<td class="vp-sm${k === lastLink ? ' vp-div' : ''}"${k === 'prevSupply' || k === 'noticeTax' ? ' style="text-align:right;"' : ''}>${cellv[k]}</td>`).join('');
