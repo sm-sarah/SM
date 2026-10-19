@@ -1074,6 +1074,10 @@
   .cl-dt.vp-dt:empty::before{ content:''; display:inline-block; width:14px; height:14px; vertical-align:middle; background:no-repeat center/14px url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238f8ca8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='4' width='18' height='17' rx='2'/%3E%3Cpath d='M3 9h18M8 2v4M16 2v4'/%3E%3C/svg%3E"); }
   .cl-pop{ position:fixed; z-index:3000; background:#fff; border:1px solid var(--border); border-radius:12px; box-shadow:var(--shadow-md); padding:10px; display:flex; flex-direction:column; gap:8px; width:228px; }
   .cl-pop input{ font:inherit; font-size:13px; border:1px solid var(--border); border-radius:8px; padding:6px 8px; width:100%; box-sizing:border-box; }
+  .cl-pop textarea.cl-pop-memo{ font:inherit; font-size:13px; line-height:1.5; border:1px solid var(--border); border-radius:8px; padding:6px 8px; width:100%; box-sizing:border-box; resize:vertical; min-height:72px; }
+  .cl-dt.vp-memo{ color:var(--muted-soft); }
+  .cl-dt.vp-memo.has{ color:var(--primary-dark); }
+  .cl-dt.vp-memo svg{ vertical-align:middle; }
   .cl-pop-row{ display:flex; gap:4px; flex-wrap:wrap; }
   .cl-pop-row button{ font:inherit; font-size:12px; border:1px solid var(--border); background:var(--bg); color:var(--text); border-radius:7px; padding:4px 8px; cursor:pointer; }
   .cl-pop-row button:hover{ border-color:var(--primary); color:var(--primary-dark); }
@@ -3515,7 +3519,7 @@ function vatTableHtml(docs){
    - 줄(거래처)과 앞쪽 회사웹 칸은 총괄과 같은 거래처 목록에서 그대로 읽음(조회만): 상호·개업일(openDate)·사업자번호,
      택스봇 예정고지(그 기의 예정 기수 값 - 확정 기수도 같은 기의 예정 값): 예정고지 대상(noticeYn)·제외사유(excludeReason)·신고의무(filingDuty)·
      직전 공급가액(prevSupply)·예정세액(noticeTax)·관할세무서/전화(office "OO세무서 (전화)")
-   - 나머지 내 항목 vatProgCols = [{ id, label, type:'text'|'check'|'num', carry }] - 모든 기수 공통(carry = 다음 기수로 이어받기)
+   - 나머지 내 항목 vatProgCols = [{ id, label, type:'text'|'memo'|'check'|'num', carry }] - 모든 기수 공통(carry = 다음 기수로 이어받기)
      값 vatProg['연도-기수(예: 2026-1기확정)'][회사웹 거래처 id] = { 항목id: 값 } - works에만 저장
    - 엑셀 올리기: 1행 = 항목 이름. 회사웹 칸(상호~담당자 전화번호·순번)은 건너뛰고 나머지를 내 항목으로, 줄은 사업자번호(없으면 상호)로 거래처에 맞춤
    - 이전 기수에서 이어받기: 이어받기 항목만 복사 */
@@ -3523,7 +3527,7 @@ let vatView = 'overview';
 const VAT_VIEWS = [['overview','총괄'], ['prog','진행']];
 function setVatView(v){ vatView = v; if(activeTab !== 'vat') switchTab('vat'); else renderVat(); }
 function vatViewTabsHtml(){ return `<div class="cl-subtabs pay-maintabs">${VAT_VIEWS.map(([k, l]) => `<button class="cl-subtab ${vatView === k ? 'on' : ''}" onclick="setVatView('${k}')">${l}</button>`).join('')}</div>`; }
-const VAT_PROG_TYPES = [['text','글자'], ['check','체크'], ['num','숫자'], ['date','날짜'], ['range','기간'], ['select','드롭다운']];   // [2026.10.16] 날짜·기간·드롭다운 추가(요청). 드롭다운 선택지는 col.opts, 기간은 'YYYY-MM-DD~YYYY-MM-DD'
+const VAT_PROG_TYPES = [['text','글자(줄글)'], ['memo','글자(팝업)'], ['check','체크'], ['num','숫자'], ['date','날짜'], ['range','기간'], ['select','드롭다운']];   // [2026.10.16] 날짜·기간·드롭다운 추가(요청). 드롭다운 선택지는 col.opts, 기간은 'YYYY-MM-DD~YYYY-MM-DD'
 // 회사웹에서 연결하는 칸 - 엑셀 머리글이 이 이름(공백 무시)이면 내 항목으로 만들지 않음
 const VAT_PROG_LINK_RE = /^(순번|상호|개업일|사업자번호|예정고지대상|예정고지\(부과\)제외사유|제외사유|신고의무여부|직전과세기간공급가액합계액|예정|관할세무서|담당자전화번호)$/;
 // 처음 엑셀에서 항목을 만들 때 '다음 기수로 이어받기'를 켜 둘 항목(거래처 특이사항). 항목 수정에서 바꿀 수 있음
@@ -3695,7 +3699,7 @@ async function vatProgPickGroup(sel){
   return r ? (r[0] || '').trim() : null;
 }
 async function vatProgAddCol(){
-  const r = await smForm('진행 항목 추가', [{ label:'항목 이름', placeholder:'예: 자료 요청' }, { label:'입력 방식 (드롭다운은 저장하면 선택지 입력 창이 떠요)', options: VAT_PROG_TYPES.map(x => x[1]), value:'글자' }, { label:'다음 기수로 이어받기', options:['아니오','예'], value:'아니오' }, { label:'묶음 (위 머리글)', options: vatProgGroupOpts(''), value:'없음' }], { okText:'추가' });
+  const r = await smForm('진행 항목 추가', [{ label:'항목 이름', placeholder:'예: 자료 요청' }, { label:'입력 방식 (드롭다운은 저장하면 선택지 입력 창이 떠요)', options: VAT_PROG_TYPES.map(x => x[1]), value:'글자(줄글)' }, { label:'다음 기수로 이어받기', options:['아니오','예'], value:'아니오' }, { label:'묶음 (위 머리글)', options: vatProgGroupOpts(''), value:'없음' }], { okText:'추가' });
   if(!r || !r[0].trim()) return;
   const col = { id: vatProgUid('c'), label: r[0].trim(), type: (VAT_PROG_TYPES.find(x => x[1] === r[1]) || VAT_PROG_TYPES[0])[0], carry: r[2] === '예' };
   { const g = await vatProgPickGroup(r[3]); if(g) col.group = g; }   // [2026.10.16] 묶음(두 줄 머리글) · [2026.10.19] 드롭다운
@@ -3876,6 +3880,29 @@ function vatProgPeriodRanges(){
   const r = (a, b) => [`${y}-${a}~${y}-${b}`, `${Number(a.slice(0,2))}/${Number(a.slice(3))}~${Number(b.slice(0,2))}/${Number(b.slice(3))}`];
   return vatKind === 'pre' ? [r(s1, e1)] : [r(s2, e2), r(s1, e2)];
 }
+// [2026.10.19] "글자로 입력하면 가로 여백이 계속 늘어난다 - 아이콘으로 표시하고 마우스를 올리면 메모가 보이게"(요청) - 입력 방식 '글자(팝업)'
+function vatProgMemoBtn(cid, colId, v){
+  const has = v != null && String(v).trim() !== '';
+  return `<button type="button" class="cl-dt vp-dt vp-memo${has ? ' has' : ''}" data-cid="${cid}" data-col="${colId}" title="${escapeAttr(has ? String(v) : '메모 입력')}" aria-label="메모" onclick="vatProgMemoPop(this)">${ICON_MEMO_DOC}</button>`;
+}
+function vatProgMemoPop(btn){
+  closeDatePopClose();
+  const { cid, col } = btn.dataset, cur = String(((vatProg[vatProgKey()] || {})[cid] || {})[col] || '');
+  const pop = document.createElement('div');
+  pop.id = 'closeDatePop'; pop.className = 'cl-pop'; pop.style.width = '280px';
+  pop.innerHTML = `<textarea class="cl-pop-memo" rows="4" placeholder="내용 입력 후 Enter 저장 (Shift+Enter 줄바꿈)">${taxjEsc(cur)}</textarea>
+    <div class="cl-pop-row" style="justify-content:space-between;"><button type="button" data-v="__clear" class="del">지우기</button><button type="button" data-v="__ok" style="font-weight:800; color:var(--primary-dark); border-color:var(--primary);">저장</button></div>`;
+  document.body.appendChild(pop);
+  const r = btn.getBoundingClientRect(), pw = pop.offsetWidth, ph = pop.offsetHeight;
+  pop.style.left = Math.max(8, Math.min(window.innerWidth - pw - 8, r.left)) + 'px';
+  pop.style.top = (r.bottom + ph + 8 > window.innerHeight ? r.top - ph - 4 : r.bottom + 4) + 'px';
+  const ta = pop.querySelector('textarea');
+  const set = v => { v = String(v).trim(); vatProgSet(cid, col, v); btn.classList.toggle('has', !!v); btn.title = v || '메모 입력'; closeDatePopClose(); };
+  pop.querySelectorAll('[data-v]').forEach(b => b.onclick = () => set(b.dataset.v === '__clear' ? '' : ta.value));
+  ta.addEventListener('keydown', e => { if(e.key === 'Enter' && !e.shiftKey && !e.isComposing){ e.preventDefault(); set(ta.value); } if(e.key === 'Escape') closeDatePopClose(); });
+  ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length);
+  setTimeout(() => document.addEventListener('mousedown', closeDatePopOutside, true), 0);
+}
 function vatProgDateBtn(cid, colId, v, range){
   const txt = v && !(range ? /^(\d{4}-\d{2}-\d{2})?~(\d{4}-\d{2}-\d{2})?$/ : /^\d{4}-\d{2}-\d{2}$/).test(String(v));
   return `<button type="button" class="cl-dt vp-dt${txt ? ' txt' : ''}" data-cid="${cid}" data-col="${colId}" title="${escapeAttr(v || (range ? '기간 입력' : '날짜 입력'))}" onclick="vatProgDatePop(this,${range ? 1 : 0})">${vatProgFmtDateVal(v, range)}</button>`;
@@ -3982,7 +4009,7 @@ function vatProgHtml(docs){
   // 내 항목 칸 폭: 이름·값 길이에 맞춰(긴 글은 최대 240px, 마우스를 올리면 전체)
   const w = {};
   vatProgCols.forEach(c => {
-    if(c.type === 'check') return;
+    if(c.type === 'check' || c.type === 'memo') return;
     const len = Math.max(...String(c.label).split('\n').map(s => s.length), ...list.map(x => vatProgFmtNum((per[x.c.id] || {})[c.id]).length));
     w[c.id] = Math.max(56, Math.min(240, len * 12 + 14));
   });
@@ -4023,6 +4050,7 @@ function vatProgHtml(docs){
       const s = vatProgFmtNum(val);
       if(c.type === 'num') return `<td><input class="vp-in" style="width:${w[c.id]}px; text-align:right;" value="${escapeAttr(s)}" onchange="vatProgNumInput(this,'${cid}','${c.id}')"></td>`;
       // [2026.10.19] "날짜도 아이콘으로 처음에 나오게, 화면·입력 공간 잡을 필요 없음"(요청) - 빈 칸은 달력 아이콘 버튼만, 누르면 작은 창에서 입력, 입력하면 날짜(월/일)만 보임
+      if(c.type === 'memo') return `<td style="text-align:center;">${vatProgMemoBtn(cid, c.id, val)}</td>`;   // [2026.10.19] 글자(팝업)(요청) - 아이콘만 보이고 마우스를 올리면 메모, 누르면 작은 창에서 입력
       if(c.type === 'date') return `<td style="text-align:center;">${vatProgDateBtn(cid, c.id, val, false)}</td>`;
       if(c.type === 'range') return `<td style="text-align:center;">${vatProgDateBtn(cid, c.id, val, true)}</td>`;
       if(c.type === 'select'){ const opts = c.opts || []; return `<td><select class="vp-in" style="min-width:84px;" onchange="vatProgSet('${cid}','${c.id}',this.value)"><option value=""></option>${(s && !opts.includes(s) ? [s] : []).concat(opts).map(o => `<option ${o === s ? 'selected' : ''}>${taxjEsc(o)}</option>`).join('')}</select></td>`; }
