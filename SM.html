@@ -1116,6 +1116,9 @@
   .vat-prog .vp-range{ display:inline-flex; align-items:center; gap:2px; white-space:nowrap; color:var(--muted-soft); }
   .vat-prog .vp-range .vp-in{ width:122px; }
   .vp-arr-top{ display:flex; justify-content:flex-end; margin-bottom:8px; }
+  .vp-arr-top:has(.vp-arr-bulk){ justify-content:space-between; gap:8px; flex-wrap:wrap; }   /* [2026.10.19] 왼쪽 일괄 묶기, 오른쪽 (매출)·(매입)으로 묶기 */
+  .vp-arr-bulk{ display:inline-flex; align-items:center; gap:6px; }
+  .vp-arr-pick{ margin:0; flex:0 0 auto; }
   .vp-arr{ display:flex; flex-direction:column; border:1px solid var(--border); border-radius:12px; overflow:hidden; max-height:52vh; overflow-y:auto; text-align:left; }
   .vp-arr-row{ display:flex; align-items:center; gap:6px; padding:6px 10px; border-top:1px solid var(--border); font-size:13px; }
   .vp-arr-row:first-child{ border-top:none; }
@@ -1123,6 +1126,12 @@
   .vp-arr-mv{ border:none; background:transparent; color:var(--muted); cursor:pointer; font-size:11px; padding:2px 4px; }
   .vp-arr-mv:disabled{ opacity:.3; cursor:default; }
   .vp-arr-name{ flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--text); }
+  /* [2026.10.19] 항목 배치 - 줄에 마우스를 올리면 ⠿ 손잡이, 끌어서 옮기기 */
+  .vp-arr-grip{ cursor:grab; color:var(--muted-soft); font-size:14px; line-height:1; padding:2px; opacity:0; user-select:none; }
+  .vp-arr-row:hover .vp-arr-grip{ opacity:1; }
+  .vp-arr-row.dragging{ opacity:.45; }
+  .vp-arr-row.drop-before{ box-shadow:inset 0 2px 0 var(--primary); }
+  .vp-arr-row.drop-after{ box-shadow:inset 0 -2px 0 var(--primary); }
   .vp-arr-grp{ width:96px; font:inherit; font-size:12.5px; border:1px solid var(--border); border-radius:8px; padding:4px 8px; }
   .vp-prev{ display:flex; flex-direction:column; text-align:left; border:1px solid var(--border); border-radius:12px; overflow:hidden; }
   .vp-prev-row{ display:grid; grid-template-columns:minmax(110px, 38%) 1fr; gap:10px; padding:8px 12px; font-size:13px; border-top:1px solid var(--border); }
@@ -3631,11 +3640,24 @@ function vatProgSet(cid, colId, val, rerender){
   scheduleGoogleSave(); if(rerender) renderVat();
 }
 function vatProgNumInput(el, cid, colId){ const v = vatProgToNum(el.value); el.value = vatProgFmtNum(v); vatProgSet(cid, colId, v); }
+// [2026.10.19] "항목별 묶음은 드롭다운으로 매출·매입·기타(입력)"(요청) - 이미 쓰는 다른 묶음 이름도 선택지에 같이 보임
+const VAT_PROG_GRP_ETC = '기타(직접 입력)';
+function vatProgGroupOpts(cur, extra){
+  const others = [...new Set(vatProgCols.map(c => c.group).concat(extra || [], cur ? [cur] : []).filter(g => g && g !== '매출' && g !== '매입'))];
+  return ['없음', '매출', '매입', ...others, VAT_PROG_GRP_ETC];
+}
+// 고른 값 → 묶음 이름('' = 묶지 않음). 기타면 이름을 묻고, 취소하면 null(바꾸지 않음)
+async function vatProgPickGroup(sel){
+  if(!sel || sel === '없음') return '';
+  if(sel !== VAT_PROG_GRP_ETC) return sel;
+  const r = await smForm('묶음 이름', [{ label:'묶음 이름 (위 머리글)', placeholder:'예: 기타' }], { okText:'확인', icon:'✎' });
+  return r ? (r[0] || '').trim() : null;
+}
 async function vatProgAddCol(){
-  const r = await smForm('진행 항목 추가', [{ label:'항목 이름', placeholder:'예: 자료 요청' }, { label:'입력 방식', options: VAT_PROG_TYPES.map(x => x[1]), value:'글자' }, { label:'다음 기수로 이어받기', options:['아니오','예'], value:'아니오' }, { label:'묶음 (위 머리글, 예: 매출·매입 - 비우면 묶지 않음)', placeholder:'예: 매출', value:'' }], { okText:'추가' });
+  const r = await smForm('진행 항목 추가', [{ label:'항목 이름', placeholder:'예: 자료 요청' }, { label:'입력 방식', options: VAT_PROG_TYPES.map(x => x[1]), value:'글자' }, { label:'다음 기수로 이어받기', options:['아니오','예'], value:'아니오' }, { label:'묶음 (위 머리글)', options: vatProgGroupOpts(''), value:'없음' }], { okText:'추가' });
   if(!r || !r[0].trim()) return;
   const col = { id: vatProgUid('c'), label: r[0].trim(), type: (VAT_PROG_TYPES.find(x => x[1] === r[1]) || VAT_PROG_TYPES[0])[0], carry: r[2] === '예' };
-  if((r[3] || '').trim()) col.group = r[3].trim();   // [2026.10.16] 묶음(두 줄 머리글)
+  { const g = await vatProgPickGroup(r[3]); if(g) col.group = g; }   // [2026.10.16] 묶음(두 줄 머리글) · [2026.10.19] 드롭다운
   if(col.type === 'select' && !(await vatProgEditOpts(col))) return;
   vatProgCols.push(col);
   renderVat(); scheduleGoogleSave();
@@ -3650,7 +3672,7 @@ async function vatProgEditOpts(col){
 }
 async function vatProgEditCol(id){
   const col = vatProgCols.find(c => c.id === id); if(!col) return;
-  const r = await smForm('진행 항목 수정', [{ label:'항목 이름', type:'textarea', rows:2, value: col.label }, { label:'입력 방식', options: VAT_PROG_TYPES.map(x => x[1]), value: (VAT_PROG_TYPES.find(x => x[0] === col.type) || VAT_PROG_TYPES[0])[1] }, { label:'다음 기수로 이어받기', options:['아니오','예'], value: col.carry ? '예' : '아니오' }, { label:'묶음 (위 머리글, 예: 매출·매입 - 비우면 묶지 않음)', placeholder:'예: 매출', value: col.group || '' }], { okText:'저장', cancelText:'삭제', icon:'✎' });
+  const r = await smForm('진행 항목 수정', [{ label:'항목 이름', type:'textarea', rows:2, value: col.label }, { label:'입력 방식', options: VAT_PROG_TYPES.map(x => x[1]), value: (VAT_PROG_TYPES.find(x => x[0] === col.type) || VAT_PROG_TYPES[0])[1] }, { label:'다음 기수로 이어받기', options:['아니오','예'], value: col.carry ? '예' : '아니오' }, { label:'묶음 (위 머리글)', options: vatProgGroupOpts(col.group || ''), value: col.group || '없음' }], { okText:'저장', cancelText:'삭제', icon:'✎' });
   if(r === undefined) return;   // [2026.10.15] 닫기(X) - 아무것도 안 바꿈
   if(r === null){
     const key = vatProgKey(), cur = vatProgKeyOrder(key);
@@ -3676,7 +3698,7 @@ async function vatProgEditCol(id){
     if(r[0].trim()) col.label = r[0].trim();
     col.type = (VAT_PROG_TYPES.find(x => x[1] === r[1]) || VAT_PROG_TYPES[0])[0];
     col.carry = r[2] === '예';
-    if((r[3] || '').trim()) col.group = r[3].trim(); else delete col.group;
+    { const g = await vatProgPickGroup(r[3]); if(g === null){} else if(g) col.group = g; else delete col.group; }   // [2026.10.19] 묶음 드롭다운(기타 = 이름 직접 입력, 취소하면 그대로)
     if(col.type === 'select') await vatProgEditOpts(col);   // 드롭다운이면 선택지 고치기(입력하고 추가 · 순서 · 삭제)
   }
   renderVat(); scheduleGoogleSave();
@@ -3711,20 +3733,55 @@ async function vatProgArrange(){
   const hid = vatProgViewObj().hidden;
   const draw = () => {
     const box = document.getElementById('vpArrList'); if(!box) return;
-    box.innerHTML = tmp.map((x, i) => `<div class="vp-arr-row${hid.includes(x.c.id) ? ' off' : ''}">
+    const gOpts = vatProgGroupOpts('', tmp.map(y => y.group)).filter(g => g !== VAT_PROG_GRP_ETC);
+    box.innerHTML = tmp.map((x, i) => `<div class="vp-arr-row${hid.includes(x.c.id) ? ' off' : ''}" data-row="${i}">
+      <span class="vp-arr-grip" data-grip="${i}" title="끌어서 위치 옮기기" aria-label="끌어서 위치 옮기기">⠿</span><input type="checkbox" class="vp-arr-pick" data-pk="${i}" ${x.pick ? 'checked' : ''} title="골라서 한 번에 묶기">
       <button type="button" class="vp-arr-mv" data-mv="${i},-1" ${i ? '' : 'disabled'} title="위로">▲</button><button type="button" class="vp-arr-mv" data-mv="${i},1" ${i < tmp.length - 1 ? '' : 'disabled'} title="아래로">▼</button>
       <span class="vp-arr-name" title="${escapeAttr(x.label)}">${taxjEsc(String(x.label).replace(/\s+/g, ' '))}${hid.includes(x.c.id) ? ' <small>(숨김)</small>' : ''}</span>
-      <input class="vp-arr-grp" data-g="${i}" value="${escapeAttr(x.group)}" placeholder="묶음" list="vpArrGroups"></div>`).join('')
-      + `<datalist id="vpArrGroups">${[...new Set(tmp.map(x => x.group).filter(Boolean).concat(['매출','매입']))].map(g => `<option value="${escapeAttr(g)}">`).join('')}</datalist>`;
+      ${x.etc ? `<input class="vp-arr-grp" data-g="${i}" value="${escapeAttr(x.group)}" placeholder="묶음 이름">`
+        : `<select class="vp-arr-grp" data-gs="${i}">${gOpts.map(g => `<option value="${escapeAttr(g === '없음' ? '' : g)}" ${(x.group || '') === (g === '없음' ? '' : g) ? 'selected' : ''}>${taxjEsc(g)}</option>`).join('')}<option value="__etc">${VAT_PROG_GRP_ETC}</option></select>`}</div>`).join('');
+    const bs = document.getElementById('vpArrBulkSel');
+    if(bs){ const keep = bs.value; bs.innerHTML = gOpts.map(g => `<option value="${escapeAttr(g === '없음' ? '' : g)}">${taxjEsc(g === '없음' ? '묶음 없음' : g)}</option>`).join('') + `<option value="__etc">${VAT_PROG_GRP_ETC}</option>`; if([...bs.options].some(o => o.value === keep)) bs.value = keep; }
+    const bb = document.getElementById('vpArrBulkBtn'), np = tmp.filter(y => y.pick).length;
+    if(bb){ bb.disabled = !np; bb.textContent = np ? `고른 ${np}개 묶기` : '골라서 묶기'; }
   };
-  const html = `<div class="vp-arr-top"><button type="button" class="btn ghost xs" id="vpArrAuto" title="이름 끝의 (매출)·(매입)을 떼어 묶음으로 옮겨요">(매출)·(매입)으로 묶기</button></div><div id="vpArrList" class="vp-arr"></div>`;
+  // [2026.10.19] "항목 몇 개 골라 한 번에 묶음에 넣기"(요청) - 줄 체크 → 위에서 묶음 고르고 '묶기'. 고른 항목은 첫 항목 자리로 모여 붙음(머리글이 한 칸으로 합쳐지게)
+  const html = `<div class="vp-arr-top"><span class="vp-arr-bulk"><select id="vpArrBulkSel" class="vp-arr-grp"></select><input id="vpArrBulkEtc" class="vp-arr-grp" placeholder="묶음 이름" style="display:none;"><button type="button" class="btn xs" id="vpArrBulkBtn" disabled>골라서 묶기</button></span><button type="button" class="btn ghost xs" id="vpArrAuto" title="이름 끝의 (매출)·(매입)을 떼어 묶음으로 옮겨요">(매출)·(매입)으로 묶기</button></div><div id="vpArrList" class="vp-arr"></div>`;
   const p = smDialog({ title:'항목 배치', message:'▲▼로 순서를 바꾸고, 묶음에 같은 이름(예: 매출)을 적으면 붙어 있는 항목끼리 위 머리글 한 칸으로 묶여요.', html, icon:'✎', okText:'적용', wide:true });
   draw();
   const box = document.getElementById('vpArrList');
   if(box){
     box.addEventListener('click', e => { const b = e.target.closest('[data-mv]'); if(!b) return; const [i, d] = b.dataset.mv.split(',').map(Number); const j = i + d; if(j < 0 || j >= tmp.length) return; [tmp[i], tmp[j]] = [tmp[j], tmp[i]]; draw(); });
     box.addEventListener('input', e => { const g = e.target.closest('[data-g]'); if(g) tmp[Number(g.dataset.g)].group = g.value.trim(); });
+    // [2026.10.19] 묶음 드롭다운 - 기타를 고르면 그 자리에 이름 입력칸
+    box.addEventListener('change', e => { const g = e.target.closest('[data-gs]'); if(!g) return; const x = tmp[Number(g.dataset.gs)];
+      if(g.value === '__etc'){ x.etc = true; x.group = ''; draw(); const inp = box.querySelector(`[data-g="${g.dataset.gs}"]`); if(inp) inp.focus(); } else x.group = g.value; });
+    // [2026.10.19] "마우스 갖다대면 아이콘이 생기고 끌어서 위치 이동"(요청) - 줄 왼쪽 ⠿를 잡고 위아래로 끌어 놓기(▲▼도 그대로)
+    let dragI = -1;
+    const clearMark = () => box.querySelectorAll('.drop-before, .drop-after').forEach(r => r.classList.remove('drop-before', 'drop-after'));
+    box.addEventListener('mousedown', e => { const gr = e.target.closest('[data-grip]'); if(gr) gr.parentElement.draggable = true; });
+    box.addEventListener('dragstart', e => { const row = e.target.closest('[data-row]'); if(!row) return; dragI = Number(row.dataset.row); row.classList.add('dragging'); e.dataTransfer.effectAllowed = 'move'; try{ e.dataTransfer.setData('text/plain', String(dragI)); }catch(_){} });
+    box.addEventListener('dragover', e => { if(dragI < 0) return; const row = e.target.closest('[data-row]'); if(!row) return; e.preventDefault(); clearMark(); const r = row.getBoundingClientRect(); row.classList.add(e.clientY < r.top + r.height / 2 ? 'drop-before' : 'drop-after'); });
+    box.addEventListener('drop', e => {
+      const row = e.target.closest('[data-row]'); if(dragI < 0 || !row) return; e.preventDefault();
+      let to = Number(row.dataset.row) + (row.classList.contains('drop-after') ? 1 : 0);
+      const [x] = tmp.splice(dragI, 1); if(to > dragI) to--; tmp.splice(to, 0, x); dragI = -1; draw();
+    });
+    box.addEventListener('dragend', () => { dragI = -1; clearMark(); box.querySelectorAll('[data-row]').forEach(r => { r.draggable = false; r.classList.remove('dragging'); }); });
   }
+  const bulkSel = document.getElementById('vpArrBulkSel'), bulkEtc = document.getElementById('vpArrBulkEtc'), bulkBtn = document.getElementById('vpArrBulkBtn');
+  if(box) box.addEventListener('change', e => { const pk = e.target.closest('[data-pk]'); if(pk){ tmp[Number(pk.dataset.pk)].pick = pk.checked; draw(); } });
+  if(bulkSel) bulkSel.addEventListener('change', () => { bulkEtc.style.display = bulkSel.value === '__etc' ? '' : 'none'; if(bulkSel.value === '__etc') bulkEtc.focus(); });
+  if(bulkBtn) bulkBtn.addEventListener('click', () => {
+    const picked = tmp.filter(x => x.pick); if(!picked.length) return;
+    const g = bulkSel.value === '__etc' ? bulkEtc.value.trim() : bulkSel.value;
+    if(bulkSel.value === '__etc' && !g){ bulkEtc.focus(); return; }
+    const at = tmp.indexOf(picked[0]);
+    picked.forEach(x => { x.group = g; x.etc = false; x.pick = false; });
+    const rest = tmp.filter(x => !picked.includes(x)), pos = rest.filter(x => tmp.indexOf(x) < at).length;
+    rest.splice(pos, 0, ...picked); tmp.splice(0, tmp.length, ...rest);
+    bulkSel.value = ''; bulkEtc.value = ''; bulkEtc.style.display = 'none'; draw();
+  });
   const auto = document.getElementById('vpArrAuto');
   if(auto) auto.addEventListener('click', () => {
     tmp.forEach(x => { const m = String(x.label).match(/^([\s\S]*?)\s*\((매출|매입)\)\s*$/); if(m && m[1].trim()){ x.label = m[1].trim(); x.group = m[2]; } });
