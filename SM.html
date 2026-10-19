@@ -1111,7 +1111,8 @@
   .vat-prog thead th.vp-div{ box-shadow:inset -1px 0 0 var(--border), 0 1px 0 var(--border); }
   .vat-prog .vp-th{ font:inherit; color:inherit; background:transparent; border:none; padding:2px; cursor:pointer; text-align:inherit; line-height:1.3; }
   .vat-prog .vp-th:hover{ color:var(--primary-dark); }
-  .vat-prog .vp-prev-btn{ width:26px; height:26px; }   /* [2026.10.16] 전기 보기 */
+  .vat-prog .vp-prev-btn{ width:26px; height:26px; }
+  .vat-prog .vp-tip-btn{ color:var(--amber); }   /* [2026.10.19] 진행 Tip도 회사웹처럼 전구 아이콘(요청) */   /* [2026.10.16] 전기 보기 */
   .vat-prog thead th.vp-grp{ color:var(--primary-dark); font-size:12px; box-shadow:inset 0 -1px 0 var(--border), inset -1px 0 0 var(--border), inset 1px 0 0 var(--border); }   /* [2026.10.16] 묶음 머리글 */
   .vat-prog .vp-range{ display:inline-flex; align-items:center; gap:2px; white-space:nowrap; color:var(--muted-soft); }
   .vat-prog .vp-range .vp-in{ width:122px; }
@@ -3361,6 +3362,9 @@ function vatTHelpHtml(h, year, period){
   return `<div class="vtip"><div class="vtip-h"><span>Tip</span>${year && RG[1] ? `<span class="vtip-period">${e(year)}년 ${e(String(period).replace(/(\d기)/, '$1 '))} · ${md(from)}~${md(RG[1])}</span>` : ''}</div>
     ${out.join('') || '<div class="hint" style="margin:8px 0 0;">적힌 내용이 없어요.</div>'}${memo ? `<div class="vtip-k vtip-memo-k">특이사항</div><div class="vtip-memo">${e(memo)}</div>` : ''}</div>`;
 }
+// [2026.10.19] "Tip은 회사웹처럼 아이콘, 전기 아이콘은 되돌리기 같아서 바꿔줘"(요청) - Tip = 전구(회사웹과 같은 모양), 전기 = 지난 서류(겹친 문서 + 왼쪽 화살표)
+const ICON_BULB = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6"/><path d="M10 22h4"/><path d="M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.2 1 2V17h6v-.3c0-.8.4-1.5 1-2A7 7 0 0 0 12 2z"/></svg>';
+const ICON_PREV_PERIOD = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 4h9a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z"/><path d="M6 7H5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h1"/><path d="M14.5 9.5L12 12l2.5 2.5"/><path d="M12 12h4.5"/></svg>';
 function vatTShowHelp(cid){
   const docs = taxjFull && taxjFull.docs; if(!docs) return;
   const c = taxjClientIndex(docs).byId[cid] || {};
@@ -3685,7 +3689,7 @@ async function vatProgPickGroup(sel){
   return r ? (r[0] || '').trim() : null;
 }
 async function vatProgAddCol(){
-  const r = await smForm('진행 항목 추가', [{ label:'항목 이름', placeholder:'예: 자료 요청' }, { label:'입력 방식', options: VAT_PROG_TYPES.map(x => x[1]), value:'글자' }, { label:'다음 기수로 이어받기', options:['아니오','예'], value:'아니오' }, { label:'묶음 (위 머리글)', options: vatProgGroupOpts(''), value:'없음' }], { okText:'추가' });
+  const r = await smForm('진행 항목 추가', [{ label:'항목 이름', placeholder:'예: 자료 요청' }, { label:'입력 방식 (드롭다운은 저장하면 선택지 입력 창이 떠요)', options: VAT_PROG_TYPES.map(x => x[1]), value:'글자' }, { label:'다음 기수로 이어받기', options:['아니오','예'], value:'아니오' }, { label:'묶음 (위 머리글)', options: vatProgGroupOpts(''), value:'없음' }], { okText:'추가' });
   if(!r || !r[0].trim()) return;
   const col = { id: vatProgUid('c'), label: r[0].trim(), type: (VAT_PROG_TYPES.find(x => x[1] === r[1]) || VAT_PROG_TYPES[0])[0], carry: r[2] === '예' };
   { const g = await vatProgPickGroup(r[3]); if(g) col.group = g; }   // [2026.10.16] 묶음(두 줄 머리글) · [2026.10.19] 드롭다운
@@ -3703,7 +3707,7 @@ async function vatProgEditOpts(col){
 }
 async function vatProgEditCol(id){
   const col = vatProgCols.find(c => c.id === id); if(!col) return;
-  const r = await smForm('진행 항목 수정', [{ label:'항목 이름', type:'textarea', rows:2, value: col.label }, { label:'입력 방식', options: VAT_PROG_TYPES.map(x => x[1]), value: (VAT_PROG_TYPES.find(x => x[0] === col.type) || VAT_PROG_TYPES[0])[1] }, { label:'다음 기수로 이어받기', options:['아니오','예'], value: col.carry ? '예' : '아니오' }, { label:'묶음 (위 머리글)', options: vatProgGroupOpts(col.group || ''), value: col.group || '없음' }], { okText:'저장', cancelText:'삭제', icon:'✎' });
+  const r = await smForm('진행 항목 수정', [{ label:'항목 이름', type:'textarea', rows:2, value: col.label }, { label:'입력 방식 (드롭다운은 저장하면 선택지 입력 창이 떠요)', options: VAT_PROG_TYPES.map(x => x[1]), value: (VAT_PROG_TYPES.find(x => x[0] === col.type) || VAT_PROG_TYPES[0])[1] }, { label:'다음 기수로 이어받기', options:['아니오','예'], value: col.carry ? '예' : '아니오' }, { label:'묶음 (위 머리글)', options: vatProgGroupOpts(col.group || ''), value: col.group || '없음' }], { okText:'저장', cancelText:'삭제', icon:'✎' });
   if(r === undefined) return;   // [2026.10.15] 닫기(X) - 아무것도 안 바꿈
   if(r === null){
     const key = vatProgKey(), cur = vatProgKeyOrder(key);
@@ -4004,7 +4008,7 @@ function vatProgHtml(docs){
     if(!x.hasTb){ x.office = lk.office || ''; x.tel = lk.tel || ''; }
     const cellv = { openDate: t(x.c.openDate), bizNo: t(innerBizNo(x.c.bizNo || '')), noticeYn: t(tb.noticeYn), excludeReason: t(tb.excludeReason), filingDuty: t(tb.filingDuty),
       prevSupply: num(tb.prevSupply), noticeTax: tb.noticeTax == null || tb.noticeTax === '' ? na : num(tb.noticeTax), office: t(x.office), tel: t(x.tel),
-      tip: (() => { const h = vatTHelp(docs, x.c.id); return (h.vehicleYn || (h.vehicles || []).length || (h.kinds || []).length || (h.recv || []).length || h.memo || Object.keys(h.staff || {}).length) ? `<button class="btn ghost xs" onclick="vatTShowHelp('${cid}')" title="회사웹 Tip 보기">Tip</button>` : na; })() };
+      tip: (() => { const h = vatTHelp(docs, x.c.id); return (h.vehicleYn || (h.vehicles || []).length || (h.kinds || []).length || (h.recv || []).length || h.memo || Object.keys(h.staff || {}).length) ? `<button class="sm-tool-ic vp-prev-btn vp-tip-btn" onclick="vatTShowHelp('${cid}')" title="회사웹 Tip 보기" aria-label="Tip">${ICON_BULB}</button>` : na; })() };
     const link = `<td class="${lastLink === 'name' ? 'vp-div' : ''}" style="font-weight:800; color:${x.c.entityType === '법인' ? '#0b5a78' : x.c.entityType === '개인' ? '#be185d' : 'inherit'};">${taxjEsc(x.c.name)}</td>`
       + VAT_PROG_LINK.slice(1).filter(([k]) => shown(k)).map(([k]) => `<td class="vp-sm${k === lastLink ? ' vp-div' : ''}"${k === 'prevSupply' || k === 'noticeTax' ? ' style="text-align:right;"' : ''}>${cellv[k]}</td>`).join('');
     const mine = vatProgCols.filter(c => shown(c.id)).map(c => {
@@ -4018,7 +4022,7 @@ function vatProgHtml(docs){
       if(c.type === 'select'){ const opts = c.opts || []; return `<td><select class="vp-in" style="min-width:84px;" onchange="vatProgSet('${cid}','${c.id}',this.value)"><option value=""></option>${(s && !opts.includes(s) ? [s] : []).concat(opts).map(o => `<option ${o === s ? 'selected' : ''}>${taxjEsc(o)}</option>`).join('')}</select></td>`; }
       return `<td><input class="vp-in" style="width:${w[c.id]}px;" value="${escapeAttr(s)}" title="${escapeAttr(s)}" onchange="this.title=this.value; vatProgSet('${cid}','${c.id}',this.value.trim())"></td>`;
     }).join('');
-    const prevCell = prevOn ? `<td style="text-align:center;">${vatProgPrevVals(pk, x.c.id).length ? `<button class="sm-tool-ic vp-prev-btn" onclick="vatProgShowPrev('${cid}')" title="${escapeAttr(vatProgKeyLabel(pk))} 입력 보기" aria-label="전기 보기">${ICON_HISTORY}</button>` : ''}</td>` : '';
+    const prevCell = prevOn ? `<td style="text-align:center;">${vatProgPrevVals(pk, x.c.id).length ? `<button class="sm-tool-ic vp-prev-btn" onclick="vatProgShowPrev('${cid}')" title="${escapeAttr(vatProgKeyLabel(pk))} 입력 보기" aria-label="전기 보기">${ICON_PREV_PERIOD}</button>` : ''}</td>` : '';
     return `<tr><td class="tx-seq">${n + 1}</td>${link}${prevCell}${mine}</tr>`;
   }).join('');
   return bar + segRow + `<div class="table-scroll vat-prog${vatProgOrdering ? ' vp-ordering' : ''}" style="margin-top:8px;"><table data-prev="${prevOn ? 1 : 0}"><thead>${grouped
