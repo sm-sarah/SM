@@ -859,6 +859,25 @@
   .wl-col2 > .card.wl-today-card{ background:#fff; border-top:4px solid var(--primary); box-shadow:0 2px 4px rgba(150,50,90,.08), 0 18px 36px -14px rgba(150,50,90,.35); }
   .wl-col2 > #wlMemo{ background:#fbf6f9; border-top:4px solid #d9bfcd; box-shadow:var(--shadow-sm); }
   #wlMemo:not(.wl-memo-closed) .wl-memo-list{ max-height:320px; overflow-y:auto; }
+  /* [2026.10.20] 부가세 신고도움·통합자료·신고서류 미리보기(회사웹처럼 크게 + 나란히 비교) */
+  .vt-docs-ov{ position:fixed; inset:0; z-index:1050; background:var(--bg); display:flex; flex-direction:column; }
+  .vt-docs-top{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; padding:10px 16px; background:#fff; border-bottom:1px solid var(--border); }
+  .vt-docs-top > b{ font-size:15px; color:var(--text); }
+  .vt-docs-sub{ font-size:12.5px; color:var(--muted); font-weight:600; }
+  .vt-docs-kinds{ margin:0 0 0 8px; }
+  .vt-docs-kinds .cl-subtab{ font-size:13px; padding:4px 10px; }
+  .vt-docs-sp{ flex:1; }
+  .vt-docs-grid{ flex:1 1 0; min-height:0; display:grid; gap:8px; padding:8px; }
+  .vt-docs-pane{ display:flex; flex-direction:column; min-width:0; min-height:0; background:#fff; border:1px solid var(--border); border-radius:var(--radius-sm); overflow:hidden; }
+  .vt-docs-ph{ display:flex; align-items:center; gap:8px; height:38px; box-sizing:border-box; padding:0 10px; border-bottom:1px solid var(--border); font-size:12.5px; }
+  .vt-docs-pk{ font-weight:800; color:var(--primary-dark); flex:0 0 auto; }
+  .vt-docs-fn{ flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--text); font-weight:600; }
+  .vt-docs-sel{ flex:1; min-width:0; height:26px; box-sizing:border-box; font-size:12.5px; padding:0 6px; }
+  .vt-docs-open{ flex:0 0 auto; font-size:12px; color:var(--muted); text-decoration:none; }
+  .vt-docs-open:hover{ color:var(--primary-dark); }
+  .vt-docs-body{ flex:1 1 0; min-height:0; }
+  .vt-docs-body iframe{ width:100%; height:100%; border:none; background:var(--bg); display:block; }
+  .vt-docs-empty{ text-align:center; padding:40px 10px; margin:0; }
   /* [2026.10.20] "어느 화면에서도 체크리스트·Today·Memo를 보고 작성"(요청, 시안 B) - 오른쪽 아래 버튼 3개, 누르면 그 카드만 팝업.
      홈 화면의 카드를 그대로 옮겨 와서 보여주므로(복사본 아님) 기능·저장은 홈과 같음. 홈에서는 이미 보이니 버튼을 숨김 */
   .sm-fab{ position:fixed; right:20px; bottom:20px; z-index:900; display:flex; flex-direction:column; gap:8px; }
@@ -3489,12 +3508,65 @@ function vatTShowHelp(cid){
 }
 // [2026.10.19] 회사웹 변경 반영 - 통합자료(__integ)·신고서류(__filed)도 같은 방식으로 보기
 const VAT_T_DOCS = { __docs:'신고도움', __integ:'통합자료', __filed:'신고서류' };
-function vatTShowDocs(cid, kind){
+// [2026.10.20] "개인웹은 신고도움 미리보기가 안 됨 - 회사웹처럼"(요청) - 회사웹 openVatDocsModal·openVatDocsCompare처럼 크게 미리보기 + 신고도움·통합자료·신고서류 나란히 비교 + 새 창(듀얼모니터).
+//   개인웹은 회사 공유 드라이브 파일을 직접 받을 권한이 없어서(drive.file) 구글 드라이브 미리보기 화면을 그대로 띄움 - 브라우저에 회사 계정으로 로그인돼 있으면 보임.
+//   개인웹에서는 조회만(올리기·이름 바꾸기·삭제·숫자 가져오기는 회사웹에서)
+function vatTDriveEmbed(url){ const u = String(url || ''); const m = u.match(/drive\.google\.com\/file\/d\/([\w-]+)/) || (/drive\.google\.com/.test(u) && u.match(/[?&]id=([\w-]+)/)); return m ? `https://drive.google.com/file/d/${m[1]}/preview` : ''; }
+function vatTDocsOf(docs, cid, kind){ return ((((docs.s__vatFilingTargets || {})[cid] || {})[kind] || {})[`${vatYear}-${vatTPeriod()}`]) || []; }
+function vatTDocsWindow(title){
+  const w = Math.min(1600, screen.availWidth), h = screen.availHeight;
+  const win = window.open('', '_blank', `popup=yes,width=${w},height=${h},left=${screen.availLeft || 0},top=0`);
+  if(!win){ smToast('팝업이 막혀 있어요. 브라우저에서 이 사이트의 팝업을 허용해 주세요'); return null; }
+  try{
+    const d = win.document; d.open(); d.write('<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title></title></head><body></body></html>'); d.close();
+    d.title = title; document.querySelectorAll('style, link[rel="stylesheet"]').forEach(el => d.head.appendChild(el.cloneNode(true)));
+    d.body.style.cssText = 'margin:0; overflow:hidden; background:var(--bg);';
+  }catch(e){ try{ win.close(); }catch(_){} return null; }
+  return win;
+}
+function vatTShowDocs(cid, kind, win){
   const docs = taxjFull && taxjFull.docs; if(!docs) return;
-  kind = kind || '__docs';
-  const c = taxjClientIndex(docs).byId[cid] || {};
-  const list = ((((docs.s__vatFilingTargets || {})[cid] || {})[kind] || {})[`${vatYear}-${vatTPeriod()}`]) || [];
-  smDialog({ title: `${c.name || ''} · ${VAT_T_DOCS[kind] || '신고도움'}`, icon:'i', cancelText:null, html: list.length ? list.map(f => `<div style="padding:5px 0; text-align:left;"><a href="${escapeAttr(f.url || '')}" target="_blank" rel="noopener">📎 ${taxjEsc(f.name || '파일')}</a></div>`).join('') : '올린 파일이 없어요' });
+  const KINDS = ['__docs', '__integ', '__filed'];
+  kind = KINDS.includes(kind) ? kind : '__docs';
+  const D = win ? win.document : document, c = taxjClientIndex(docs).byId[cid] || {};
+  const plab = `${vatYear}년 ${VAT_T_LABEL[vatTPeriod()] || vatTPeriod()}`;
+  const lists = {}; KINDS.forEach(k => { lists[k] = vatTDocsOf(docs, cid, k); });
+  const on = new Set([kind]), pickI = {};
+  const old = D.getElementById('vtDocsOv'); if(old) old.remove();
+  const ov = D.createElement('div'); ov.id = 'vtDocsOv'; ov.className = 'vt-docs-ov';
+  ov.innerHTML = `<div class="vt-docs-top"><b>${taxjEsc(c.name || '')}</b><span class="vt-docs-sub">${taxjEsc(plab)}</span>
+      <div class="cl-subtabs vt-docs-kinds" title="눌러서 켜고 끄면 나란히 비교해요 (최대 3개)"></div>
+      <span class="vt-docs-sp"></span>${win ? '' : '<button type="button" class="btn xs vt-docs-win" title="새 창으로 열기 - 다른 모니터로 옮길 수 있어요">새 창</button>'}<button type="button" class="btn xs primary vt-docs-close">닫기</button></div>
+    <div class="vt-docs-grid"></div>`;
+  D.body.appendChild(ov);
+  const onKey = e => { if(e.key === 'Escape'){ e.stopPropagation(); close(); } };
+  const close = () => { D.removeEventListener('keydown', onKey, true); ov.remove(); if(win){ try{ win.close(); }catch(_){} } };
+  D.addEventListener('keydown', onKey, true);
+  ov.querySelector('.vt-docs-close').onclick = close;
+  const wb = ov.querySelector('.vt-docs-win'); if(wb) wb.onclick = () => { const nw = vatTDocsWindow(`${c.name || ''} ${plab}`); if(!nw) return; close(); vatTShowDocs(cid, [...on][0], nw); };
+  const kindsEl = ov.querySelector('.vt-docs-kinds'), grid = ov.querySelector('.vt-docs-grid');
+  const drawKinds = () => {
+    kindsEl.innerHTML = KINDS.map(k => `<button type="button" class="cl-subtab ${on.has(k) ? 'on' : ''}" data-k="${k}">${VAT_T_DOCS[k]}<span>${lists[k].length}</span></button>`).join('');
+    kindsEl.querySelectorAll('[data-k]').forEach(b => b.onclick = () => { const k = b.dataset.k; if(on.has(k)){ if(on.size <= 1) return; on.delete(k); } else on.add(k); drawKinds(); drawGrid(); });
+  };
+  const drawGrid = () => {
+    const ks = KINDS.filter(k => on.has(k));
+    grid.style.gridTemplateColumns = `repeat(${ks.length}, minmax(0, 1fr))`;
+    grid.innerHTML = '';
+    ks.forEach(k => {
+      const list = lists[k], i = Math.min(pickI[k] || 0, Math.max(0, list.length - 1)), f = list[i];
+      const pane = D.createElement('div'); pane.className = 'vt-docs-pane';
+      pane.innerHTML = `<div class="vt-docs-ph"><span class="vt-docs-pk">${VAT_T_DOCS[k]}</span>
+          ${list.length > 1 ? `<select class="vt-docs-sel">${list.map((x, j) => `<option value="${j}" ${j === i ? 'selected' : ''}>${taxjEsc(x.name || '파일')}</option>`).join('')}</select>` : `<span class="vt-docs-fn" title="${escapeAttr((f && f.name) || '')}">${f ? taxjEsc(f.name || '파일') : ''}</span>`}
+          ${f && f.url ? `<a class="vt-docs-open" href="${escapeAttr(f.url)}" target="_blank" rel="noopener" title="드라이브에서 열기">드라이브 ↗</a>` : ''}</div>
+        <div class="vt-docs-body">${!f ? '<div class="hint vt-docs-empty">올린 파일이 없어요.</div>'
+          : vatTDriveEmbed(f.url) ? `<iframe src="${escapeAttr(vatTDriveEmbed(f.url))}" title="${escapeAttr(f.name || '')}" allow="autoplay"></iframe>`
+          : `<div class="hint vt-docs-empty">미리보기를 할 수 없는 파일이에요. <a href="${escapeAttr(f.url || '')}" target="_blank" rel="noopener">새 탭에서 열기</a></div>`}</div>`;
+      const sel = pane.querySelector('.vt-docs-sel'); if(sel) sel.onchange = () => { pickI[k] = Number(sel.value); drawGrid(); };
+      grid.appendChild(pane);
+    });
+  };
+  drawKinds(); drawGrid();
 }
 // 내가 만든 항목(원천세 신고현황의 '+ 항목 추가'와 같은 방식, 입력 방식 PAY_COL_TYPES 같이 씀)
 async function addVatCustomCol(){
@@ -3978,7 +4050,8 @@ async function vatProgEditCol(id){
   renderVat(); scheduleGoogleSave();
 }
 // [2026.10.16] "스크롤 생길 때 틀고정·열고정·숨기기"(요청) - 머리글은 이미 위에 고정. 열 고정은 고른 칸까지 왼쪽에 고정, 숨기기는 고른 칸을 안 보이게
-const VAT_PROG_LINK = [['name','상호'],['openDate','개업일'],['bizNo','사업자번호'],['noticeYn','예정고지 대상'],['excludeReason','예정고지(부과) 제외사유'],['filingDuty','신고의무 여부'],['prevSupply','직전 과세기간 공급가액 합계액'],['noticeTax','예정'],['office','관할 세무서'],['tel','담당자 전화번호'],['tip','Tip'],['fixedAsset','고정자산']];   // [2026.10.16] 회사웹 Tip도 진행에서 바로(요청) · [2026.10.19] 고정자산 유무도 회사웹 부가세 검증 신고서(세금계산서 고정자산)에서 바로(요청)
+const VAT_PROG_LINK = [['name','상호'],['openDate','개업일'],['bizNo','사업자번호'],['noticeYn','예정고지 대상'],['excludeReason','예정고지(부과) 제외사유'],['filingDuty','신고의무 여부'],['prevSupply','직전 과세기간 공급가액 합계액'],['noticeTax','예정'],['office','관할 세무서'],['tel','담당자 전화번호'],['tip','Tip'],['memo','메모'],['verify','검증'],['fixedAsset','고정자산']];   // [2026.10.20] 검증 = 자료끼리 맞춰 보는 자동 검증 모음(지금은 업종코드)   // [2026.10.20] "Tip·메모(회사웹)·고정자산·등록은 고정 항목으로"(요청) - 회사웹 메모 칸 추가, 등록(c.fa)은 고정자산 바로 뒤 고정 자리
+   // [2026.10.16] 회사웹 Tip도 진행에서 바로(요청) · [2026.10.19] 고정자산 유무도 회사웹 부가세 검증 신고서(세금계산서 고정자산)에서 바로(요청)
 function vatProgViewObj(){ if(!vatProgView || typeof vatProgView !== 'object') vatProgView = { freeze:'name', hidden:[] }; if(!Array.isArray(vatProgView.hidden)) vatProgView.hidden = [];
   // [2026.10.16] "직원·차량은 회사웹 Tip과 연동되니 진행에선 빼도 됨"(요청) - 내 항목 중 '직원…'·'차량…' 칸을 처음 한 번 숨김(지우지 않음 - '칸 숨기기'에서 다시 켤 수 있음)
   if(!vatProgView.tipHid && vatProgCols.length){ vatProgView.tipHid = 1; vatProgCols.filter(c => /^\s*(직원|차량)/.test(String(c.label))).forEach(c => { if(!vatProgView.hidden.includes(c.id)) vatProgView.hidden.push(c.id); }); }
@@ -3987,7 +4060,7 @@ function vatProgViewObj(){ if(!vatProgView || typeof vatProgView !== 'object') v
 // 그 이전 기수에서는 항목과 값이 그대로 보이고, endKey 기수부터는 안 보임
 function vatProgColLive(c, key){ return !c.endKey || vatProgKeyOrder(key || vatProgKey()) < vatProgKeyOrder(c.endKey); }
 function vatProgLiveCols(key){ return vatProgCols.filter(c => vatProgColLive(c, key)); }
-function vatProgAllCols(){ return VAT_PROG_LINK.map(([k, l]) => ({ key:k, label:l })).concat(vatProgLiveCols().map(c => ({ key:c.id, label: String(c.label).replace(/\s+/g, ' ') }))); }
+function vatProgAllCols(){ const live = vatProgLiveCols(), lab = c => ({ key:c.id, label: String(c.label).replace(/\s+/g, ' ') }); return VAT_PROG_LINK.map(([k, l]) => ({ key:k, label:l })).concat(live.filter(c => c.fa).map(lab), live.filter(c => !c.fa).map(lab)); }   // [2026.10.20] 등록(고정)은 회사웹 칸 바로 뒤
 function vatProgVisibleKeys(){ const h = vatProgViewObj().hidden; return vatProgAllCols().filter(c => c.key === 'name' || !h.includes(c.key)).map(c => c.key); }
 function vatProgSetFreeze(k){ vatProgViewObj().freeze = k; renderVat(); scheduleGoogleSave(); }
 async function vatProgHideCols(){
@@ -4026,7 +4099,7 @@ document.addEventListener('dragover', e => {
 document.addEventListener('drop', e => { if(!vpDragIds) return; const th = e.target.closest && e.target.closest('.vp-ordering th[data-vpids]'); if(!th) return; e.preventDefault(); const ids = vpDragIds; vpDragIds = null; vpOrderMove(ids, th.dataset.vpids.split(','), th.classList.contains('vp-drop-r')); });
 document.addEventListener('dragend', () => { if(!vpDragIds && !document.querySelector('.vp-dragging')) return; vpDragIds = null; document.querySelectorAll('.vp-dragging, .vp-drop-l, .vp-drop-r').forEach(x => x.classList.remove('vp-dragging', 'vp-drop-l', 'vp-drop-r')); });
 async function vatProgArrange(){
-  const live = vatProgLiveCols(); if(!live.length) return smAlert('배치할 항목이 없어요');
+  const live = vatProgLiveCols().filter(c => !c.fa); if(!live.length) return smAlert('배치할 항목이 없어요');   // [2026.10.20] 등록(고정 항목)은 배치에서 빼고 자리 고정
   const tmp = live.map(c => ({ c, label: c.label, group: c.group || '' }));
   const hid = vatProgViewObj().hidden;
   const draw = () => {
@@ -4090,7 +4163,7 @@ async function vatProgArrange(){
   });
   if(!(await p)) return;
   tmp.forEach(x => { x.c.label = x.label; if(x.group) x.c.group = x.group; else delete x.c.group; });
-  vatProgCols = tmp.map(x => x.c).concat(vatProgCols.filter(c => !vatProgColLive(c)));   // 이 기수부터 뺀 항목은 뒤에 그대로
+  vatProgCols = vatProgCols.filter(c => c.fa).concat(tmp.map(x => x.c), vatProgCols.filter(c => !c.fa && !vatProgColLive(c)));   // 이 기수부터 뺀 항목은 뒤에 그대로
   renderVat(); scheduleGoogleSave();
 }
 // [2026.10.19] 진행 날짜·기간 칸: 빈 칸은 달력 아이콘, 누르면 작은 창(결산·신고현황 날짜 창과 같은 모양)
@@ -4200,7 +4273,7 @@ function vatProgRangeInput(el, cid, colId){
 function vatProgApplyFreeze(){
   const t = document.querySelector('#tab-vat .vat-prog table'); if(!t || !t.tHead) return;
   const fk = vatProgViewObj().freeze;
-  const vk = vatProgVisibleKeys(), fi = fk ? vk.indexOf(fk) : -1, nLink = vk.filter(k => VAT_PROG_LINK.some(x => x[0] === k)).length;
+  const vk = vatProgVisibleKeys(), fi = fk ? vk.indexOf(fk) : -1, nLink = vk.filter(k => VAT_PROG_LINK.some(x => x[0] === k) || vatProgCols.some(c => c.fa && c.id === k)).length;
   const n = fk ? fi + 2 + (t.dataset.prev === '1' && fi >= nLink ? 1 : 0) : 1;   // 순번 + 고른 칸까지 (없음이면 순번만). [2026.10.16] 내 항목까지 고르면 사이의 전기 칸도
   // [2026.10.16] 두 줄 머리글(묶음)이면 칸 번호가 줄마다 달라 → 본문 첫 줄로 고정 끝 위치를 재고, 모든 칸을 위치로 판단
   const hr = t.tHead.rows; if(!hr.length) return;
@@ -4255,13 +4328,15 @@ function vatProgHtml(docs){
     w[c.id] = Math.max(56, Math.min(240, len * 12 + 14));
   });
   const vis = vatProgVisibleKeys(), shown = k => vis.includes(k);
-  const lastLink = VAT_PROG_LINK.map(x => x[0]).filter(shown).pop();
-  const linkHead = ['상호','개업일','사업자번호','예정고지<br>대상','예정고지(부과)<br>제외사유','신고의무<br>여부','직전 과세기간<br>공급가액 합계액','예정','관할 세무서','담당자<br>전화번호','Tip','고정자산']
-    .map((l, i) => shown(VAT_PROG_LINK[i][0]) ? `<th class="vp-link${VAT_PROG_LINK[i][0] === lastLink ? ' vp-div' : ''}" title="회사웹 값(조회만)">${l}</th>` : '').join('');
+  const faCol = vatProgLiveCols().find(c => c.fa), faOn = !!faCol && shown(faCol.id);   // [2026.10.20] 고정 '등록' 칸 - 회사웹 칸(Tip·메모·고정자산) 바로 뒤, 끌어서 옮기기·배치 대상 아님
+  const lastLink = faOn ? '__fa' : VAT_PROG_LINK.map(x => x[0]).filter(shown).pop();
+  const linkHead = ['상호','개업일','사업자번호','예정고지<br>대상','예정고지(부과)<br>제외사유','신고의무<br>여부','직전 과세기간<br>공급가액 합계액','예정','관할 세무서','담당자<br>전화번호','Tip','메모','검증','고정자산']
+    .map((l, i) => shown(VAT_PROG_LINK[i][0]) ? `<th class="vp-link${VAT_PROG_LINK[i][0] === lastLink ? ' vp-div' : ''}" title="회사웹 값(조회만)">${l}</th>` : '').join('')
+    + (faOn ? `<th class="vp-link vp-div" style="text-align:center;" title="고정 항목 · 회사웹 고정자산이 유일 때 체크해요">${taxjEsc(String(faCol.label))}</th>` : '');
   // [2026.10.16] 전기 보기 칸 - 전 기수에 이 거래처 값이 있을 때만 아이콘
   const prevOn = !!pk && Object.keys(vatProg[pk] || {}).some(id => vatProgPrevVals(pk, id).length);
   const prevHead = prevOn ? `<th style="text-align:center;" title="${escapeAttr(vatProgKeyLabel(pk))} 입력 보기">전기</th>` : '';
-  const myCols = vatProgCols.filter(c => shown(c.id)), grouped = myCols.some(c => c.group);
+  const myCols = vatProgCols.filter(c => shown(c.id) && !c.fa), grouped = myCols.some(c => c.group);
   const thOf = (c, rs) => `<th${rs ? ' rowspan="2"' : ''}${vpDragAttr([c.id])} style="${c.type === 'check' || c.type === 'checkdate' ? 'text-align:center;' : ''}"><button class="vp-th" onclick="vatProgEditCol('${c.id}')" title="눌러서 이름·입력 방식·이어받기·묶음 수정 또는 삭제${c.carry ? '\n(다음 기수로 이어받는 항목)' : ''}">${taxjEsc(c.label).replace(/\n/g, '<br>')}${c.carry ? '<span class="vp-carry">↻</span>' : ''}</button></th>`;
   // [2026.10.16] 묶음이 있으면 두 줄 머리글: 위 = 묶음 이름(붙어 있는 같은 묶음 합침) / 묶음 없는 칸은 두 줄 합침
   let head1 = '', head2 = '';
@@ -4275,7 +4350,7 @@ function vatProgHtml(docs){
       i = j;
     }
   }
-  const head = prevHead + vatProgCols.filter(c => shown(c.id)).map(c => `<th${vpDragAttr([c.id])} style="${c.type === 'check' || c.type === 'checkdate' ? 'text-align:center;' : ''}"><button class="vp-th" onclick="vatProgEditCol('${c.id}')" title="눌러서 이름·입력 방식·이어받기 수정 또는 삭제${c.carry ? '\n(다음 기수로 이어받는 항목)' : ''}">${taxjEsc(c.label).replace(/\n/g, '<br>')}${c.carry ? '<span class="vp-carry">↻</span>' : ''}</button></th>`).join('');
+  const head = prevHead + vatProgCols.filter(c => shown(c.id) && !c.fa).map(c => `<th${vpDragAttr([c.id])} style="${c.type === 'check' || c.type === 'checkdate' ? 'text-align:center;' : ''}"><button class="vp-th" onclick="vatProgEditCol('${c.id}')" title="눌러서 이름·입력 방식·이어받기 수정 또는 삭제${c.carry ? '\n(다음 기수로 이어받는 항목)' : ''}">${taxjEsc(c.label).replace(/\n/g, '<br>')}${c.carry ? '<span class="vp-carry">↻</span>' : ''}</button></th>`).join('');
   const rows = list.map((x, n) => {
     const cid = escapeAttr(x.c.id), v = per[x.c.id] || {}, t = s => s || s === 0 ? taxjEsc(String(s)) : na;
     const lk = v.__link || {}, tb = x.hasTb ? x.tb : lk;   // 회사웹 값이 있으면 회사웹, 없으면 엑셀에서 넣은 값
@@ -4294,10 +4369,22 @@ function vatProgHtml(docs){
         if(has) return `<b style="color:var(--primary-dark);" title="${escapeAttr('회사웹 부가세 검증 신고서 · 고정자산 세금계산서 공급가액 ' + amt.toLocaleString() + ' / 세액 ' + tax.toLocaleString())}">유</b>`;
         return any ? `<span title="회사웹 부가세 검증 신고서 기준 고정자산 없음">무</span>` : na;
       })(),
+      memo: (() => { const m = vatTMemoText(docs, x.c.id, vatYear, vatTPeriod(), vatTComb(docs, x.c.id, vatYear, vatTPeriod(), x.c.entityType)); return m ? `<button class="sm-tool-ic vp-prev-btn vp-tip-btn" onclick="vatTShowMemo('${cid}')" title="${escapeAttr(m)}" aria-label="메모">${ICON_MEMO_DOC}</button>` : na; })(),   // [2026.10.20] 회사웹 부가세 메모(총괄과 같음)
+      // [2026.10.20] "통합자료 주업종코드와 신고서 업종코드(31)가 맞는지 자동 검증"(요청) - 회사웹이 PDF를 올릴 때 읽어 둔 값(dataBizCode·reportBizCode)을 비교.
+      //   앞으로 자료끼리 맞춰 볼 것들도 이 칸에 칩으로 더함. 둘 중 하나라도 없으면 -(마우스를 올리면 무엇이 없는지)
+      verify: (() => {
+        const en = ((((docs.s__vatReviewFigures || {})[x.c.id] || {})[vatYear]) || {})[vatTPeriod()] || {};
+        const a = String(en.dataBizCode || ''), b = String(en.reportBizCode || ''), chips = [];
+        if(a && b) chips.push(a === b ? `<span style="color:#059669;" title="${escapeAttr(`업종코드 일치\n통합자료 주업종코드 ${a}\n신고서 업종코드(31) ${b}`)}">업종✓</span>`
+          : `<span style="color:#e11d48;" title="${escapeAttr(`업종코드가 달라요\n통합자료 주업종코드 ${a}\n신고서 업종코드(31) ${b}`)}">업종✕</span>`);
+        if(chips.length) return `<span style="font-size:12px; font-weight:800; white-space:nowrap;">${chips.join(' ')}</span>`;
+        const miss = [a ? '' : '통합자료 주업종코드', b ? '' : '신고서 업종코드(31)'].filter(Boolean).join(' · ');
+        return `<span title="${escapeAttr(`아직 비교할 수 없어요 - ${miss} 없음\n회사웹 부가세 총괄에서 통합자료·신고서류 PDF를 올리면 자동으로 읽어요`)}">${na}</span>`;
+      })(),
       tip: (() => { const h = vatTHelp(docs, x.c.id); return (h.vehicleYn || (h.vehicles || []).length || (h.kinds || []).length || (h.recv || []).length || h.memo || Object.keys(h.staff || {}).length) ? `<button class="sm-tool-ic vp-prev-btn vp-tip-btn" onclick="vatTShowHelp('${cid}')" title="회사웹 Tip 보기" aria-label="Tip">${ICON_BULB}</button>` : na; })() };
     const link = `<td class="${lastLink === 'name' ? 'vp-div' : ''}" style="font-weight:800; color:${x.c.entityType === '법인' ? '#0b5a78' : x.c.entityType === '개인' ? '#be185d' : 'inherit'};">${taxjEsc(x.c.name)}</td>`
       + VAT_PROG_LINK.slice(1).filter(([k]) => shown(k)).map(([k]) => `<td class="vp-sm${k === lastLink ? ' vp-div' : ''}"${k === 'prevSupply' || k === 'noticeTax' ? ' style="text-align:right;"' : ''}>${cellv[k]}</td>`).join('');
-    const mine = vatProgCols.filter(c => shown(c.id)).map(c => {
+    const cellOf = c => {
       const val = v[c.id];
       // [2026.10.19] "고정자산이 있으면 표시 + 등록 체크"(요청) - 고정 '등록' 칸(c.fa): 회사웹 고정자산 '유'일 때만 체크, 아니면 -(이미 적은 값은 그대로 보임)
       if(c.fa && x.fa !== 'y' && val == null) return `<td style="text-align:center;" title="회사웹 고정자산 유일 때 체크해요">${na}</td>`;
@@ -4317,9 +4404,11 @@ function vatProgHtml(docs){
       if(c.type === 'range') return `<td style="text-align:center;">${vatProgDateBtn(cid, c.id, val, true)}</td>`;
       if(c.type === 'select'){ const opts = c.opts || []; return `<td><select class="vp-in" style="min-width:84px;" onchange="vatProgSet('${cid}','${c.id}',this.value)"><option value=""></option>${(s && !opts.includes(s) ? [s] : []).concat(opts).map(o => `<option ${o === s ? 'selected' : ''}>${taxjEsc(o)}</option>`).join('')}</select></td>`; }
       return `<td><input class="vp-in" style="width:${w[c.id]}px;" value="${escapeAttr(s)}" title="${escapeAttr(s)}" onchange="this.title=this.value; vatProgSet('${cid}','${c.id}',this.value.trim())"></td>`;
-    }).join('');
+    };
+    const mine = vatProgCols.filter(c => shown(c.id) && !c.fa).map(cellOf).join('');
+    const faCell = faOn ? cellOf(faCol).replace(/^<td/, '<td class="vp-div"') : '';
     const prevCell = prevOn ? `<td style="text-align:center;">${vatProgPrevVals(pk, x.c.id).length ? `<button class="sm-tool-ic vp-prev-btn" onclick="vatProgShowPrev('${cid}')" title="${escapeAttr(vatProgKeyLabel(pk))} 입력 보기" aria-label="전기 보기">${ICON_PREV_PERIOD}</button>` : ''}</td>` : '';
-    return `<tr><td class="tx-seq">${n + 1}</td>${link}${prevCell}${mine}</tr>`;
+    return `<tr><td class="tx-seq">${n + 1}</td>${link}${faCell}${prevCell}${mine}</tr>`;
   }).join('');
   return bar + segRow + `<div class="table-scroll vat-prog${vatProgOrdering ? ' vp-ordering' : ''}" style="margin-top:8px;"><table data-prev="${prevOn ? 1 : 0}"><thead>${grouped
       ? `<tr><th class="tx-seq" rowspan="2">순번</th>${linkHead.replace(/<th /g, '<th rowspan="2" ')}${prevHead.replace('<th ', '<th rowspan="2" ')}${head1}</tr><tr>${head2}</tr>`
