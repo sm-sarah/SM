@@ -3561,9 +3561,10 @@ function vatVNorm(e){
   }
   return x;
 }
-function vatVerify(e){
+function vatVerify(e, ctx){
   if(!e) return null;
   e = vatVNorm(e);
+  ctx = ctx || {};
   // [2026.10.20] 회사웹 변경 반영 - "회사웹은 검증 다 됐는데 개인웹은 매입 ✕"(요청). 회사웹 검증이 금액·세액을 따로 보고, 매입 세금계산서에 고정자산(전자 외 제외)이 들어가고,
   // 계산서는 과표·면세로 옮겨지고, 매입 카드·현금은 신고서가 자료보다 클 때만 주의(!)로 바뀐 것을 그대로 옮김(reviewVatSalesGroups·reviewVatPurchaseGroups·reviewVatPrelimItems)
   const n = v => Number(v) || 0, ds = e.dataSales || {}, rs = e.reportSales || {}, dp = e.dataPurchase || {}, rp = e.reportPurchase || {};
@@ -3583,26 +3584,43 @@ function vatVerify(e){
     vatVItem('예정 매입', n(e.dataPrelimPurchase), n(e.reportPrelimPurchase)),
     vatVItem('예정고지세액', n(e.dataPrelim), n(e.reportPrelim)),
     vatVItem('예정신고미환급세액', n(e.dataPrelimRefund), n(e.reportPrelimRefund))];
-  const grp = (items, key) => items.every(x => x.state === 'none') ? null : items.every(x => x.state !== 'bad') ? 'ok' : ((e.manualCheck || {})[key] ? 'manual' : 'bad');
-  return { sales: grp(sales, 'sales'), purchase: grp(purchase, 'purchase'), prelim: grp(prelimItems, 'prelim'), items: { 매출: sales, 매입: purchase, 예정: prelimItems }, legacy: e.legacy || null };
+  // [2026.10.20] "과표·면세, 납부 칩도 개인웹 검증에"(요청) - 회사웹 reviewVatFreeGroups·reviewVatPayInfo와 같음. 과표·면세수입금액은 신고서 칸을 적었을 때만 검증
+  const hasV = v => v != null && v !== '';
+  const salesTotal = n(rs.taxInvoice) + n(rs.buyerIssued) + n(rs.cardCash) + n(rs.etcCase) + n(rs.zero) + n(rs.exportCase) + n(rs.missed);
+  const onlyIf = (it, entered) => { if(!entered) it.state = 'none'; return it; };
+  const free = [
+    onlyIf(vatVItem('과세표준 합계', salesTotal, n(rs.base)), hasV(rs.base)),
+    onlyIf(vatVItem('면세수입금액', n(ds.invoice) + n(ds.cardFree) + n(ds.cashFree) + n(rs.invoiceEtc), n(rs.freeTotal)), hasV(rs.freeTotal)),
+    vatVItem('계산서 발급', n(ds.invoice), n(rs.invoice)),
+    vatVItem('계산서 수취', n(dp.invoice), n(rp.invoice))];
+  let pay = [];
+  if(ctx.docs && ctx.cid){
+    const t = ((((ctx.docs.s__vatFilingTargets || {})[ctx.cid] || {})[ctx.year] || {})[ctx.period]) || {}, has = hasV(t.payTax);
+    let calc = 0; try{ calc = Number(vatTPayAuto(ctx.docs, ctx.cid, ctx.year, ctx.period, true)) || 0; }catch(err){}
+    pay = [onlyIf(vatVItem('납부(환급)세액', has ? Number(t.payTax) : 0, calc), has)];
+  }
+  const fin = !ctx.period || /확정/.test(ctx.period);   // 예정 검증은 확정 기수만(회사웹과 같음)
+  const grp = (items, key) => !items.length || items.every(x => x.state === 'none') ? null : items.every(x => x.state !== 'bad') ? 'ok' : ((e.manualCheck || {})[key] ? 'manual' : 'bad');
+  return { sales: grp(sales, 'sales'), purchase: grp(purchase, 'purchase'), free: grp(free, 'free'), prelim: fin ? grp(prelimItems, 'prelim') : null, pay: grp(pay, 'pay'),
+    items: { 매출: sales, 매입: purchase, '과표·면세': free, 예정: fin ? prelimItems : [], 납부: pay }, legacy: e.legacy || null };
 }
-function vatVerifyCellHtml(e){
-  const v = vatVerify(e);
-  if(!v || (!v.sales && !v.purchase && !v.prelim)) return v && v.legacy ? `<span class="hint" style="margin:0;" title="예전 양식 엑셀 요약(조회만) · 매출 신고 ${Math.round(Number(v.legacy.reportSales) || 0).toLocaleString()} · 매입 신고 ${Math.round(Number(v.legacy.reportPurchase) || 0).toLocaleString()}">엑셀 요약</span>` : PAY_NA;
+function vatVerifyCellHtml(e, ctx){
+  const v = vatVerify(e, ctx);
+  if(!v || (!v.sales && !v.purchase && !v.free && !v.prelim && !v.pay)) return v && v.legacy ? `<span class="hint" style="margin:0;" title="예전 양식 엑셀 요약(조회만) · 매출 신고 ${Math.round(Number(v.legacy.reportSales) || 0).toLocaleString()} · 매입 신고 ${Math.round(Number(v.legacy.reportPurchase) || 0).toLocaleString()}">엑셀 요약</span>` : PAY_NA;
   const C = { ok:['#059669','✓'], manual:['#b45309','✓'], bad:['#e11d48','✕'] };
   const tip = Object.entries(v.items).filter(([, its]) => its.some(x => x.state !== 'none')).map(([g, its]) => g + ': ' + its.filter(x => x.state !== 'none').map(x => x.label + (x.state === 'ok' ? ' ✓' : x.state === 'warn' ? ` !(과공제 ${x.diff.toLocaleString()}원)` : x.state === 'approx' ? ` ≈(${x.diff > 0 ? '+' : ''}${x.diff.toLocaleString()}원)` : ` ✕(자료 ${x.data.toLocaleString()} / 신고 ${x.report.toLocaleString()})`)).join(' · ')).join('\n')
-    + Object.entries((e.manualCheck || {})).map(([k, r]) => `\n수기검증(${{ sales:'매출', purchase:'매입', prelim:'예정' }[k] || k}): ${r}`).join('');
-  return `<span title="${escapeAttr(tip)}" style="font-size:12px; font-weight:800;">${[['매출', v.sales], ['매입', v.purchase], ['예정', v.prelim]].filter(([, st]) => st).map(([l, st]) => `<span style="color:${C[st][0]};">${l}${C[st][1]}</span>`).join(' ')}</span>`;
+    + Object.entries((e.manualCheck || {})).map(([k, r]) => `\n수기검증(${{ sales:'매출', purchase:'매입', free:'과표·면세', prelim:'예정', pay:'납부' }[k] || k}): ${r}`).join('');
+  return `<span title="${escapeAttr(tip)}" style="font-size:12px; font-weight:800;">${[['매출', v.sales], ['매입', v.purchase], ['과표·면세', v.free], ['예정', v.prelim], ['납부', v.pay]].filter(([, st]) => st).map(([l, st]) => `<span style="color:${C[st][0]};">${l}${C[st][1]}</span>`).join(' ')}</span>`;
 }
 // [2026.10.19] 회사웹 변경 반영 - "신고현황 옆에 예정신고 납부세액 + 납부기한"(회사웹). 직접 적은 값(entry.payTax)이 없으면 검증 신고서의 차가감 납부할 세액(연한 글씨)
-function vatTPayAuto(docs, cid, year, period){
+function vatTPayAuto(docs, cid, year, period, always){   // always = 검증용(신고서 칸이 비어 있어도 계산값을 돌려줌 - 회사웹 reviewVatPayCalc와 같음)
   const figs = ((docs.s__vatReviewFigures || {})[cid] || {})[year] || {}, e = vatVNorm(figs[period]);   // [2026.10.20] 예전 모양 값도 새 구조로 읽음
   if(!e) return null;
   const has = v => v != null && v !== '', N = v => Number(v) || 0, anyIn = o => !!o && (typeof o !== 'object' ? has(o) : Object.values(o).some(has));
   const r = e.reportSales || {}, b = e.reportPurchase || {};
   const sal = { amt: N(r.taxInvoice) + N(r.buyerIssued) + N(r.cardCash) + N(r.etcCase) + N(r.zero) + N(r.exportCase) + N(r.missed), tax: N(r.taxInvoiceTax) + N(r.buyerIssuedTax) + N(r.cardCashTax) + N(r.etcCaseTax) + N(r.missedTax) + N(r.badDebtTax) };
   const pur = { amt: N(b.taxInvoice) + N(b.taxInvoiceFixed) + N(b.prelimMissing) + N(b.etc) - N(b.disallowed) - N(b.deemed), tax: N(b.taxInvoiceTax) + N(b.taxInvoiceFixedTax) + N(b.prelimMissingTax) + N(b.etcTax) - N(b.disallowedTax) };
-  if(!(has(r.taxInvoice) || sal.amt || pur.amt)) return null;
+  if(!always && !(has(r.taxInvoice) || sal.amt || pur.amt)) return null;
   const fin = /확정/.test(period);
   let combined = false;
   if(fin){
@@ -3676,7 +3694,7 @@ function vatTableHtml(docs){
       ${docCell('__docs')}${docCell('__integ')}${docCell('__filed')}${helpCell}${payCells}
       <td>${hasHelp ? `<button class="sm-tool-ic vt-ic" onclick="vatTShowHelp('${cid}')" title="${escapeAttr(vatTHelpRows(help, year, period, comb).map(([k, v]) => k + ': ' + v).join('\n'))}" aria-label="Tip">${ICON_BULB}</button>` : na}</td>
       <td>${memo ? `<button class="sm-tool-ic vt-ic" onclick="vatTShowMemo('${cid}')" title="${escapeAttr(memo)}" aria-label="메모">${ICON_MEMO_DOC}</button>` : na}</td>
-      <td style="white-space:nowrap;">${vatVerifyCellHtml((((docs.s__vatReviewFigures || {})[x.c.id] || {})[year] || {})[period])}</td>
+      <td style="white-space:nowrap;">${vatVerifyCellHtml((((docs.s__vatReviewFigures || {})[x.c.id] || {})[year] || {})[period], { docs, cid: x.c.id, year, period })}</td>
       ${vatCustomCols.map(col => vatCustomCellHtml(x.c.id, col)).join('')}</tr>`;
   }).join('');
   const plab = `${year}년 ${VAT_T_LABEL[period]}`;
