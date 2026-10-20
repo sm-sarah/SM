@@ -3571,7 +3571,8 @@ let vatView = 'overview';
 const VAT_VIEWS = [['overview','총괄'], ['prog','진행']];
 function setVatView(v){ vatView = v; if(activeTab !== 'vat') switchTab('vat'); else renderVat(); }
 function vatViewTabsHtml(){ return `<div class="cl-subtabs pay-maintabs">${VAT_VIEWS.map(([k, l]) => `<button class="cl-subtab ${vatView === k ? 'on' : ''}" onclick="setVatView('${k}')">${l}</button>`).join('')}</div>`; }
-const VAT_PROG_TYPES = [['text','글자(줄글)'], ['memo','글자(팝업)'], ['check','체크'], ['num','숫자'], ['date','날짜'], ['range','기간'], ['select','드롭다운']];   // [2026.10.16] 날짜·기간·드롭다운 추가(요청). 드롭다운 선택지는 col.opts, 기간은 'YYYY-MM-DD~YYYY-MM-DD'
+const VAT_PROG_TYPES = [['text','글자(줄글)'], ['memo','글자(팝업)'], ['check','체크'], ['checkdate','체크+날짜'], ['num','숫자'], ['date','날짜'], ['range','기간'], ['select','드롭다운']];   // [2026.10.20] 체크+날짜(요청) - 체크하면 날짜 입력 창, 값은 날짜(YYYY-MM-DD) 또는 true(날짜 없이 체크), 마우스를 올리면 날짜
+   // [2026.10.16] 날짜·기간·드롭다운 추가(요청). 드롭다운 선택지는 col.opts, 기간은 'YYYY-MM-DD~YYYY-MM-DD'
 // 회사웹에서 연결하는 칸 - 엑셀 머리글이 이 이름(공백 무시)이면 내 항목으로 만들지 않음
 const VAT_PROG_LINK_RE = /^(순번|상호|개업일|사업자번호|예정고지대상|예정고지\(부과\)제외사유|제외사유|신고의무여부|직전과세기간공급가액합계액|예정|관할세무서|담당자전화번호)$/;
 // 처음 엑셀에서 항목을 만들 때 '다음 기수로 이어받기'를 켜 둘 항목(거래처 특이사항). 항목 수정에서 바꿀 수 있음
@@ -3598,6 +3599,7 @@ function vatProgCellVal(v, type){
   if(v == null || v === '') return null;
   if(v instanceof Date){ const d = new Date(v.getTime() + 12 * 3600000); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; }
   if(type === 'check') return /^(미해당|해당\s*없음|n\/?a|-|–)$/i.test(String(v).trim()) ? 'na' : v === true || /^(true|y|o|ㅇ|v|✓)$/i.test(String(v).trim());   // [2026.10.19] 엑셀의 미해당·해당없음·- = 미해당
+  if(type === 'checkdate'){ const t = String(v).trim(); if(/^(미해당|해당\s*없음|n\/?a|-|–)$/i.test(t)) return 'na'; if(v === true || /^(true|y|o|ㅇ|v|✓)$/i.test(t)) return true; if(v === false || /^false$/i.test(t)) return false; const d = closeParseDate(t, String(vatYear)); return /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : t; }   // [2026.10.20] 체크+날짜
   if(type === 'num') return typeof v === 'number' ? v : vatProgToNum(v);
   if(typeof v === 'boolean') return v ? 'TRUE' : 'FALSE';
   return String(v).trim();
@@ -3688,7 +3690,7 @@ function vatProgPrevVals(pk, cid){ const v = (vatProg[pk] || {})[cid] || {}; ret
 function vatProgShowPrev(cid){
   const pk = vatProgPrevKey(); if(!pk) return;
   const docs = taxjFull && taxjFull.docs, c = (docs && taxjClientIndex(docs).byId[cid]) || {};
-  const rows = vatProgPrevVals(pk, cid).map(([col, val]) => `<div class="vp-prev-row"><span class="vp-prev-k">${taxjEsc(String(col.label).replace(/\s+/g, ' '))}${col.carry ? ' <span class="vp-carry">↻</span>' : ''}</span><span class="vp-prev-v">${col.type === 'check' ? (val === 'na' ? '미해당' : '✓') : taxjEsc(vatProgFmtNum(val)).replace(/\n/g, '<br>')}</span></div>`).join('');
+  const rows = vatProgPrevVals(pk, cid).map(([col, val]) => `<div class="vp-prev-row"><span class="vp-prev-k">${taxjEsc(String(col.label).replace(/\s+/g, ' '))}${col.carry ? ' <span class="vp-carry">↻</span>' : ''}</span><span class="vp-prev-v">${col.type === 'checkdate' && val !== 'na' ? (val === true ? '✓' : `✓ ${taxjEsc(vatProgCheckDateLabel(val))}`) : col.type === 'check' || col.type === 'checkdate' ? (val === 'na' ? '미해당' : '✓') : taxjEsc(vatProgFmtNum(val)).replace(/\n/g, '<br>')}</span></div>`).join('');
   smDialog({ title: `${c.name || ''} · ${vatProgKeyLabel(pk)}`, html: `<div class="vp-prev">${rows || '<div class="empty" style="padding:12px;">전기에 적은 값이 없어요.</div>'}</div>`, icon:'↺', okText:'닫기', cancelText:null, wide:true });
 }
 async function vatProgFromPrev(){
@@ -3981,6 +3983,15 @@ function vatProgMemoPop(btn){
   ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length);
   setTimeout(() => document.addEventListener('mousedown', closeDatePopOutside, true), 0);
 }
+// [2026.10.20] 체크+날짜(요청) - 빈 체크를 누르면 체크 대신 날짜 입력 창(날짜 칸과 같은 창)을 열고, 저장하면 체크. 체크된 걸 누르면 체크·날짜 해제
+function vatProgCheckDateLabel(v){ return /^\d{4}-\d{2}-\d{2}$/.test(String(v || '')) ? String(v).replace(/-/g, '.') : String(v || ''); }
+function vatProgCheckDateTitle(v){ return !v ? '체크하면 날짜 입력 · 우클릭: 미해당(–)' : v === true ? '체크됨(날짜 없음) · 누르면 해제' : `${vatProgCheckDateLabel(v)} · 누르면 해제`; }
+function vatProgCheckDateClick(cb, e){
+  const { cid, col } = cb.dataset, cur = ((vatProg[vatProgKey()] || {})[cid] || {})[col];
+  if(cur){ vatProgSet(cid, col, null); cb.checked = false; cb.title = vatProgCheckDateTitle(null); return; }
+  e.preventDefault();   // 날짜를 저장해야 체크됨
+  vatProgDatePop(cb, 0);
+}
 function vatProgDateBtn(cid, colId, v, range){
   const txt = v && !(range ? /^(\d{4}-\d{2}-\d{2})?~(\d{4}-\d{2}-\d{2})?$/ : /^\d{4}-\d{2}-\d{2}$/).test(String(v));
   return `<button type="button" class="cl-dt vp-dt${txt ? ' txt' : ''}" data-cid="${cid}" data-col="${colId}" title="${escapeAttr(v || (range ? '기간 입력' : '날짜 입력'))}" onclick="vatProgDatePop(this,${range ? 1 : 0})">${vatProgFmtDateVal(v, range)}</button>`;
@@ -4009,7 +4020,8 @@ function vatProgDatePop(btn, range){
   const r = btn.getBoundingClientRect(), pw = pop.offsetWidth, ph = pop.offsetHeight;
   pop.style.left = Math.max(8, Math.min(window.innerWidth - pw - 8, r.left)) + 'px';
   pop.style.top = (r.bottom + ph + 8 > window.innerHeight ? r.top - ph - 4 : r.bottom + 4) + 'px';
-  const set = v => { vatProgSet(cid, col, v); btn.innerHTML = vatProgFmtDateVal(v, range); btn.title = v || (range ? '기간 입력' : '날짜 입력'); btn.classList.toggle('txt', !!v && !(range ? closeIsRange(v) : /^\d{4}-\d{2}-\d{2}$/.test(v))); closeDatePopClose(); };
+  const set = v => { vatProgSet(cid, col, v); if(btn.type === 'checkbox'){ btn.checked = !!v; btn.title = vatProgCheckDateTitle(v); closeDatePopClose(); return; }   // [2026.10.20] 체크+날짜 칸에서 연 창
+    btn.innerHTML = vatProgFmtDateVal(v, range); btn.title = v || (range ? '기간 입력' : '날짜 입력'); btn.classList.toggle('txt', !!v && !(range ? closeIsRange(v) : /^\d{4}-\d{2}-\d{2}$/.test(v))); closeDatePopClose(); };
   if(range){
     const ia = pop.querySelector('.cl-r-a'), ib = pop.querySelector('.cl-r-b'), it = pop.querySelector('.cl-r-t');
     let typed = false;
@@ -4089,7 +4101,7 @@ function vatProgHtml(docs){
   // 내 항목 칸 폭: 이름·값 길이에 맞춰(긴 글은 최대 240px, 마우스를 올리면 전체)
   const w = {};
   vatProgCols.forEach(c => {
-    if(c.type === 'check' || c.type === 'memo') return;
+    if(c.type === 'check' || c.type === 'checkdate' || c.type === 'memo') return;
     const len = Math.max(...String(c.label).split('\n').map(s => s.length), ...list.map(x => vatProgFmtNum((per[x.c.id] || {})[c.id]).length));
     w[c.id] = Math.max(56, Math.min(240, len * 12 + 14));
   });
@@ -4101,7 +4113,7 @@ function vatProgHtml(docs){
   const prevOn = !!pk && Object.keys(vatProg[pk] || {}).some(id => vatProgPrevVals(pk, id).length);
   const prevHead = prevOn ? `<th style="text-align:center;" title="${escapeAttr(vatProgKeyLabel(pk))} 입력 보기">전기</th>` : '';
   const myCols = vatProgCols.filter(c => shown(c.id)), grouped = myCols.some(c => c.group);
-  const thOf = (c, rs) => `<th${rs ? ' rowspan="2"' : ''}${vpDragAttr([c.id])} style="${c.type === 'check' ? 'text-align:center;' : ''}"><button class="vp-th" onclick="vatProgEditCol('${c.id}')" title="눌러서 이름·입력 방식·이어받기·묶음 수정 또는 삭제${c.carry ? '\n(다음 기수로 이어받는 항목)' : ''}">${taxjEsc(c.label).replace(/\n/g, '<br>')}${c.carry ? '<span class="vp-carry">↻</span>' : ''}</button></th>`;
+  const thOf = (c, rs) => `<th${rs ? ' rowspan="2"' : ''}${vpDragAttr([c.id])} style="${c.type === 'check' || c.type === 'checkdate' ? 'text-align:center;' : ''}"><button class="vp-th" onclick="vatProgEditCol('${c.id}')" title="눌러서 이름·입력 방식·이어받기·묶음 수정 또는 삭제${c.carry ? '\n(다음 기수로 이어받는 항목)' : ''}">${taxjEsc(c.label).replace(/\n/g, '<br>')}${c.carry ? '<span class="vp-carry">↻</span>' : ''}</button></th>`;
   // [2026.10.16] 묶음이 있으면 두 줄 머리글: 위 = 묶음 이름(붙어 있는 같은 묶음 합침) / 묶음 없는 칸은 두 줄 합침
   let head1 = '', head2 = '';
   if(grouped){
@@ -4114,7 +4126,7 @@ function vatProgHtml(docs){
       i = j;
     }
   }
-  const head = prevHead + vatProgCols.filter(c => shown(c.id)).map(c => `<th${vpDragAttr([c.id])} style="${c.type === 'check' ? 'text-align:center;' : ''}"><button class="vp-th" onclick="vatProgEditCol('${c.id}')" title="눌러서 이름·입력 방식·이어받기 수정 또는 삭제${c.carry ? '\n(다음 기수로 이어받는 항목)' : ''}">${taxjEsc(c.label).replace(/\n/g, '<br>')}${c.carry ? '<span class="vp-carry">↻</span>' : ''}</button></th>`).join('');
+  const head = prevHead + vatProgCols.filter(c => shown(c.id)).map(c => `<th${vpDragAttr([c.id])} style="${c.type === 'check' || c.type === 'checkdate' ? 'text-align:center;' : ''}"><button class="vp-th" onclick="vatProgEditCol('${c.id}')" title="눌러서 이름·입력 방식·이어받기 수정 또는 삭제${c.carry ? '\n(다음 기수로 이어받는 항목)' : ''}">${taxjEsc(c.label).replace(/\n/g, '<br>')}${c.carry ? '<span class="vp-carry">↻</span>' : ''}</button></th>`).join('');
   const rows = list.map((x, n) => {
     const cid = escapeAttr(x.c.id), v = per[x.c.id] || {}, t = s => s || s === 0 ? taxjEsc(String(s)) : na;
     const lk = v.__link || {}, tb = x.hasTb ? x.tb : lk;   // 회사웹 값이 있으면 회사웹, 없으면 엑셀에서 넣은 값
@@ -4144,6 +4156,10 @@ function vatProgHtml(docs){
       if(c.type === 'check') return `<td style="text-align:center;" oncontextmenu="event.preventDefault(); vatProgToggleNa('${cid}','${c.id}')" title="우클릭: 미해당(–) 표시/해제">${val === 'na'
         ? `<span class="vp-na" onclick="vatProgToggleNa('${cid}','${c.id}')" title="미해당 · 누르거나 우클릭하면 해제">–</span>`
         : `<input type="checkbox" ${val ? 'checked' : ''} onchange="vatProgSet('${cid}','${c.id}',this.checked)">`}</td>`;
+      // [2026.10.20] 체크+날짜(요청) - 체크하면 날짜 입력 창이 뜨고, 저장하면 체크됨. 마우스를 올리면 날짜. 체크를 풀면 날짜도 지움. 우클릭 미해당은 체크와 같음
+      if(c.type === 'checkdate') return `<td style="text-align:center;" oncontextmenu="event.preventDefault(); vatProgToggleNa('${cid}','${c.id}')">${val === 'na'
+        ? `<span class="vp-na" onclick="vatProgToggleNa('${cid}','${c.id}')" title="미해당 · 누르거나 우클릭하면 해제">–</span>`
+        : `<input type="checkbox" ${val ? 'checked' : ''} data-cid="${cid}" data-col="${c.id}" title="${escapeAttr(vatProgCheckDateTitle(val))}" onclick="vatProgCheckDateClick(this, event)">`}</td>`;
       const s = vatProgFmtNum(val);
       if(c.type === 'num') return `<td><input class="vp-in" style="width:${w[c.id]}px; text-align:right;" value="${escapeAttr(s)}" onchange="vatProgNumInput(this,'${cid}','${c.id}')"></td>`;
       // [2026.10.19] "날짜도 아이콘으로 처음에 나오게, 화면·입력 공간 잡을 필요 없음"(요청) - 빈 칸은 달력 아이콘 버튼만, 누르면 작은 창에서 입력, 입력하면 날짜(월/일)만 보임
