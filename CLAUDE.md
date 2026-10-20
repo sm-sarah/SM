@@ -41,6 +41,6 @@
 ## 4. 구성
 | 역할 | 내용 |
 |---|---|
-| 파일 | `SM.html` 한 파일 |
+| 파일 | `SM.html` 한 파일 (앱 설치용으로 `manifest.webmanifest`·`icon-*.png`·`sw.js`도 둠 - 2026.10.20, 휴대폰 설치는 실제 파일 주소가 필요해서) |
 | 데이터 저장 | 브라우저 localStorage + Google Sheets/Drive(Google 로그인) |
 | 연동 대상 | Tax.J (https://github.com/sm-sarah/Tax.J, Firestore `taxj-a3e01`) |
