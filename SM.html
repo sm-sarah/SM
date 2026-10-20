@@ -3745,7 +3745,7 @@ function vatTableHtml(docs){
       return `<td>${n ? `<button class="sm-tool-ic vt-ic" onclick="vatTShowDocs('${cid}','${k}')" title="${VAT_T_DOCS[k]} 파일 ${n}개" aria-label="${VAT_T_DOCS[k]} 파일">${ICON_CLIP}${n > 1 ? `<span class="vt-ic-n">${n}</span>` : ''}</button>` : na}</td>`; };
     const hs = x.en.helpSt || {}, hst = hs.st || '미진행';
     const helpCell = pre && x.st !== 'filing' ? `<td title="예정신고 대상이 아니에요">${na}</td>`
-      : `<td style="white-space:nowrap; font-size:12px; font-weight:800; color:${hst === '신고완료' ? 'var(--mint)' : hst === '신고서마감' ? 'var(--primary-dark)' : hst === '검토중' ? 'var(--amber)' : 'var(--muted)'};" title="신고현황(회사웹에서 바꿔요)">${hst}${hs.date ? ` ${Number(hs.date.slice(5,7))}/${Number(hs.date.slice(8,10))}` : ''}</td>`;
+      : `<td style="white-space:nowrap; font-size:12px; font-weight:800; color:${hst === '신고완료' ? 'var(--mint)' : hst === '신고서마감' ? 'var(--primary-dark)' : hst === '검토중' ? 'var(--amber)' : 'var(--muted)'};" title="신고현황(회사웹에서 바꿔요)${(() => { const md = d => d ? `${Number(d.slice(5,7))}/${Number(d.slice(8,10))}` : '', cd = hs.closeDate || (hst === '신고서마감' ? hs.date : ''), dd = hs.doneDate || (hst === '신고완료' ? hs.date : ''); return [cd ? ` · 신고서마감 ${md(cd)}` : '', dd ? ` · 신고완료 ${md(dd)}` : ''].join(''); })()}">${hst}${hs.date ? ` ${Number(hs.date.slice(5,7))}/${Number(hs.date.slice(8,10))}` : ''}</td>`;
     const payOn = pre ? x.st === 'filing' : x.st !== 'not-target';
     const payV = x.en.payTax == null || x.en.payTax === '' ? null : Number(x.en.payTax);
     let payAuto = null; if(payV == null && payOn){ try{ payAuto = vatTPayAuto(docs, x.c.id, year, period); }catch(e){} }
