@@ -9058,7 +9058,7 @@ function libPick(k, id, mode){
 }
 async function libUpload(input){
   const t = libUpTarget; const files = Array.from((input && input.files) || []);
-  const x = t && libItems(t.k).find(i => i.id === t.id);
+  let x = t && libItems(t.k).find(i => i.id === t.id);
   if(!x || !files.length) return;
   const big = files.find(f => f.size > 50 * 1024 * 1024);
   if(big){ smAlert('파일이 너무 커요', `${big.name}: 50MB 이하만 올릴 수 있어요.`); return; }
@@ -9069,9 +9069,13 @@ async function libUpload(input){
     note = r[0].trim();
   }
   x._uploading = files.length; renderLib(t.k);
+  // [2026.10.21] "서식 파일이 '올리는 중'만 뜨고 안 올라감"(요청) - 파일 고르는 창에서 돌아오면(창 포커스) 시트를 다시 읽어 서식 목록이 새 것으로 바뀌는데,
+  //   올린 파일은 바뀌기 전의 옛 항목(x)에 붙여서 화면·저장에서 사라졌음 → 올리는 동안 다시 읽기를 멈추고, 다 올린 뒤 지금 목록에서 항목을 다시 찾아 붙임
+  window.smUploadingN = (window.smUploadingN || 0) + 1;
   try{
     const up = [];
     for(const f of files) up.push(await smDriveUpload(f));
+    { const cur = libItems(t.k).find(i => i.id === t.id); if(cur && cur !== x){ delete x._uploading; x = cur; } }
     x.versions = x.versions || [];
     if(t.mode === 'ver' || !x.versions.length){
       const v = (x.versions[0] ? x.versions[0].v : 0) + 1;
@@ -9079,7 +9083,7 @@ async function libUpload(input){
     }else (x.versions[0].files = x.versions[0].files || []).push(...up);
     x.at = todayStr();
   }catch(e){ console.error(e); smAlert('올리지 못했어요', String(e && e.message || e), { tone:'danger' }); }
-  finally{ delete x._uploading; renderAll(); }
+  finally{ window.smUploadingN = Math.max(0, (window.smUploadingN || 1) - 1); delete x._uploading; { const cur = libItems(t.k).find(i => i.id === t.id); if(cur) delete cur._uploading; } renderAll(); }
 }
 async function libRemoveFile(k, id, fid){
   const x = libItems(k).find(i => i.id === id), v = x && (x.versions || [])[0];
@@ -9280,17 +9284,22 @@ function linkPickFiles(id){
   linkUploadTarget = id; smFileInput('smLinkFileInput', linkUploadFiles);
 }
 async function linkUploadFiles(input){
-  const x = links.find(l => l.id === linkUploadTarget);
+  const lid = linkUploadTarget;
+  let x = links.find(l => l.id === lid);
   const files = Array.from((input && input.files) || []);
   if(!x || !files.length) return;
   const big = files.find(f => f.size > 50 * 1024 * 1024);
   if(big){ smAlert('파일이 너무 커요', `${big.name}: 50MB 이하만 올릴 수 있어요.`); return; }
   x._uploading = files.length; renderLinks(); smToast(`${files.length}개 파일을 드라이브에 올리고 있어요…`);
+  window.smUploadingN = (window.smUploadingN || 0) + 1;   // [2026.10.21] 서식과 같은 이유 - 올리는 동안 시트 다시 읽기 멈춤, 다 올린 뒤 지금 목록의 항목에 붙임
   try{
-    for(const f of files){ (x.files = x.files || []).push(await smDriveUpload(f)); }
+    const up = [];
+    for(const f of files) up.push(await smDriveUpload(f));
+    { const cur = links.find(l => l.id === lid); if(cur && cur !== x){ delete x._uploading; x = cur; } }
+    (x.files = x.files || []).push(...up);
     x.at = todayStr(); smToast('첨부했어요.');
   }catch(e){ console.error(e); smAlert('첨부하지 못했어요', /Failed to fetch/i.test(String(e && e.message)) ? '드라이브에 연결하지 못했어요(인터넷 연결 또는 브라우저 확장 프로그램이 막았을 수 있어요). ' + String(e.message) : String(e && e.message || e), { tone:'danger' }); }
-  finally{ delete x._uploading; renderAll(); }
+  finally{ window.smUploadingN = Math.max(0, (window.smUploadingN || 1) - 1); delete x._uploading; { const cur = links.find(l => l.id === lid); if(cur) delete cur._uploading; } renderAll(); }
 }
 async function linkRemoveFile(id, fid){
   const x = links.find(l => l.id === id);
@@ -9794,6 +9803,7 @@ async function pollGoogleSheetForUpdates(){
   if(!googleAccessToken || !googleSpreadsheetId) return;
   if(saveTimer || savingNow) return;
   if(isEditingNow()) return;
+  if(window.smUploadingN > 0) return;   // [2026.10.21] 파일을 올리는 동안은 시트를 다시 읽지 않음(아래 libUpload 주석 참고)
   if(hasUnsavedChanges()){ scheduleGoogleSave(); return; }   // 저장 안 된 변경이 있으면 덮어쓰지 않고 먼저 저장 시도
   try {
     // [2026.10.16] "개인웹 깜빡임이 심하다"(요청) - 20초마다 시트를 읽고 바뀐 게 없어도 모든 화면을 다시 그려 깜빡였음 → 내용이 바뀐 때만 다시 그림
