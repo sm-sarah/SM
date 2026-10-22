@@ -1291,16 +1291,9 @@ function smTogglePcView(){ try{ localStorage.setItem('sm_pc_view', window.SM_PC_
   .att-chip{ display:inline-flex; align-items:center; gap:2px; background:#f6f1f4; border-radius:8px; padding:2px 4px 2px 8px; font-size:12px; max-width:100%; }
   .att-chip a{ color:var(--text); text-decoration:none; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:170px; }
   .att-chip a:hover{ color:var(--primary-dark); text-decoration:underline; }
-  /* [2026.10.22] 첨부 미리보기 창 */
-  .sm-modal.sm-pv{ max-width:min(1000px, 94vw); padding:18px 18px 16px; text-align:left; }
-  .sm-pv-head{ display:flex; align-items:center; gap:10px; margin:0 34px 12px 0; }
-  .sm-pv-name{ flex:1; min-width:0; font-size:15px; font-weight:800; color:var(--text); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .sm-pv-body{ height:min(76vh, 900px); border:1px solid var(--border); border-radius:12px; overflow:hidden; background:#faf6f8; display:flex; align-items:center; justify-content:center; }
-  .sm-pv-body iframe{ width:100%; height:100%; border:0; background:#fff; }
-  .sm-pv-img{ width:100%; height:100%; overflow:auto; display:flex; align-items:center; justify-content:center; }
-  .sm-pv-img img{ max-width:100%; max-height:100%; object-fit:contain; }
-  .sm-pv-text{ width:100%; height:100%; margin:0; padding:14px 16px; overflow:auto; background:#fff; font-size:13px; white-space:pre-wrap; word-break:break-all; }
-  .sm-pv-no{ text-align:center; font-size:13.5px; color:var(--muted); line-height:1.6; padding:20px; word-break:keep-all; }
+  /* [2026.10.22] 첨부 미리보기 창 - 오른쪽 아래 모서리를 끌어 크기 조절, '크게'는 화면 가득(안쪽 모양은 SM_PV_CSS) */
+  .sm-modal.sm-pv{ max-width:none; width:min(1000px, 94vw); height:min(88vh, 960px); min-width:380px; min-height:300px; max-height:calc(100vh - 16px); resize:both; overflow:hidden; padding:16px; display:flex; text-align:left; }
+  .sm-modal.sm-pv.full{ width:calc(100vw - 24px) !important; height:calc(100vh - 24px) !important; resize:none; }
   .att-chip button{ border:none; background:transparent; color:var(--muted); cursor:pointer; font-size:14px; line-height:1; padding:0 3px; }
   .att-chip button:hover{ color:#e2445c; }
   .att-add{ font-family:inherit; font-size:11.5px; font-weight:700; color:var(--muted); background:transparent; border:1px dashed var(--border); border-radius:8px; padding:2px 8px; cursor:pointer; }
@@ -9408,37 +9401,232 @@ const smExt = n => (/\.([a-z0-9]+)$/i.exec(String(n || '')) || [, ''])[1].toLowe
 const SM_PV_DIRECT = { pdf:'application/pdf', png:'image/png', jpg:'image/jpeg', jpeg:'image/jpeg', gif:'image/gif', webp:'image/webp', bmp:'image/bmp', txt:'text/plain', csv:'text/plain', md:'text/plain' };
 const SM_PV_DRIVE = ['doc','docx','xls','xlsx','ppt','pptx','rtf','odt','ods','odp'];
 function smFileSearchable(n){ const e = smExt(n); return ['pdf','txt','csv','md','rtf','html','htm'].includes(e) || SM_PV_DRIVE.includes(e); }
-async function smPreviewFile(f){
-  if(!f || !f.id) return;
-  const ext = smExt(f.name), direct = SM_PV_DIRECT[ext], viaDrive = SM_PV_DRIVE.includes(ext);
-  const old = document.getElementById('smPreview'); if(old) old.remove();
-  const bd = document.createElement('div');
-  bd.id = 'smPreview'; bd.className = 'sm-modal-backdrop';
-  bd.innerHTML = `<div class="sm-modal sm-pv" role="dialog" aria-label="첨부 미리보기">
-      <button class="sm-modal-x" aria-label="닫기" title="닫기">×</button>
-      <div class="sm-pv-head"><div class="sm-pv-name" title="${escapeAttr(f.name)}">${taxjEsc(f.name)}</div><button type="button" class="btn ghost xs" onclick="window.open(${escapeAttr(JSON.stringify(f.url))}, '_blank', 'noopener')">드라이브에서 열기</button></div>
-      <div class="sm-pv-body"><div class="hint" style="margin:0;">불러오는 중…</div></div></div>`;
-  document.body.appendChild(bd);
-  let blobUrl = '';
-  const close = () => { bd.remove(); if(blobUrl) URL.revokeObjectURL(blobUrl); document.removeEventListener('keydown', onKey, true); };
-  const onKey = e => { if(e.key === 'Escape'){ e.stopPropagation(); close(); } };
-  document.addEventListener('keydown', onKey, true);
-  bd.querySelector('.sm-modal-x').onclick = close;
-  bd.addEventListener('mousedown', e => { if(e.target === bd) close(); });
-  requestAnimationFrame(() => bd.classList.add('show'));
-  const body = bd.querySelector('.sm-pv-body');
-  const cannot = why => { body.innerHTML = `<div class="sm-pv-no"><div style="font-size:15px; font-weight:800; color:var(--text); margin-bottom:6px;">이 파일은 여기서 읽을 수 없어요</div><div>${taxjEsc(why)}</div><div style="margin-top:4px;">'드라이브에서 열기'로 열거나 내려받아 확인해 주세요.</div></div>`; };
-  if(!direct && !viaDrive){ cannot(ext === 'hwp' || ext === 'hwpx' ? '한글(.hwp) 파일은 미리보기를 할 수 없어요. PDF로 저장해 올리면 미리보기와 내용 검색이 돼요.' : `.${ext || '?'} 파일은 미리보기를 지원하지 않아요.`); return; }
-  if(viaDrive){ body.innerHTML = `<iframe src="https://drive.google.com/file/d/${encodeURIComponent(f.id)}/preview" allow="autoplay"></iframe>`; return; }
-  try{
+// [2026.10.22] "팝업 크기 조절·확대·손 도구, 새 창에서 열기·여러 개 비교 보기 - 미리보기 하는 곳 모두"(요청)
+//   보기 창 하나(smPvMount)를 팝업·새 창 모두에서 같이 씀. PDF는 PDF.js로 그려서 확대/축소·손 도구(끌어서 이동)·글자 선택이 되고,
+//   이미지·텍스트도 확대/축소·손 도구. 워드·엑셀 등은 드라이브 미리보기 화면(자체 확대 버튼 사용). 팝업은 오른쪽 아래 모서리를 끌어 크기 조절
+const SM_PV_CSS = `
+.sm-pv-root{--pv-border:#ead6df;--pv-text:#2a1d26;--pv-muted:#6d5a66;--pv-pri:#ec7ba6;--pv-pri-d:#c7527f;--pv-soft:#fdebf2;flex:1;display:flex;flex-direction:column;gap:10px;width:100%;height:100%;min-height:0;min-width:0;font-family:"Pretendard Variable","Pretendard",-apple-system,BlinkMacSystemFont,"Malgun Gothic","Apple SD Gothic Neo",sans-serif;color:var(--pv-text);text-align:left}
+.sm-pv-top{display:flex;align-items:center;gap:6px;position:relative}
+.sm-pv-title{flex:1;min-width:0;font-size:15px;font-weight:800;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sm-pv-tb{font-family:inherit;font-size:12.5px;font-weight:700;color:var(--pv-muted);background:#fff;border:1px solid var(--pv-border);border-radius:999px;height:30px;box-sizing:border-box;padding:0 12px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:4px;white-space:nowrap;flex:none}
+.sm-pv-tb:hover,.sm-pv-tb.on{color:var(--pv-pri-d);border-color:var(--pv-pri);background:var(--pv-soft)}
+.sm-pv-ib{width:30px;padding:0;font-size:16px;line-height:1}
+.sm-pv-x{width:30px;height:30px;border:none;border-radius:50%;background:transparent;color:var(--pv-muted);font-size:20px;line-height:1;cursor:pointer;flex:none}
+.sm-pv-x:hover{background:#f3eef1;color:var(--pv-text)}
+.sm-pv-panes{flex:1;min-height:0;display:flex;gap:10px}
+.sm-pv-pane{flex:1 1 0;min-width:0;display:flex;flex-direction:column;border:1px solid var(--pv-border);border-radius:12px;overflow:hidden;background:#f6f1f4}
+.sm-pv-ph{display:flex;align-items:center;gap:4px;padding:6px 8px;border-bottom:1px solid var(--pv-border);background:#fff}
+.sm-pv-ph .sm-pv-tb{height:28px;font-size:12px;padding:0 10px}
+.sm-pv-ph .sm-pv-ib{width:28px;padding:0}
+.sm-pv-pn{flex:1;min-width:30px;font-size:12.5px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding-left:4px}
+.sm-pv-z{font-size:12px;font-weight:700;color:var(--pv-muted);min-width:40px;text-align:center;flex:none}
+.sm-pv-sc{flex:1;min-height:0;overflow:auto;position:relative}
+.sm-pv-sc.hand{cursor:grab;user-select:none}.sm-pv-sc.hand.drag{cursor:grabbing}
+.sm-pv-sc.hand .textLayer{pointer-events:none}
+.sm-pv-pages{display:flex;flex-direction:column;align-items:center;gap:10px;padding:12px;width:max-content;min-width:100%;box-sizing:border-box}
+.sm-pv-page{position:relative;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.15)}
+.sm-pv-page canvas{display:block}
+.sm-pv-page .textLayer{position:absolute;inset:0;overflow:hidden;line-height:1;text-align:initial;opacity:1;text-size-adjust:none;forced-color-adjust:none}
+.sm-pv-page .textLayer span,.sm-pv-page .textLayer br{color:transparent;position:absolute;white-space:pre;cursor:text;transform-origin:0 0}
+.sm-pv-page .textLayer ::selection{background:rgba(236,123,166,.35)}
+.sm-pv-img{display:block;max-width:none;margin:12px auto;-webkit-user-drag:none}
+.sm-pv-text{margin:0;padding:14px 16px;background:#fff;white-space:pre-wrap;word-break:break-all;min-height:100%;box-sizing:border-box;font-size:13px}
+.sm-pv-frame{width:100%;height:100%;border:0;background:#fff;display:block}
+.sm-pv-msg{height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;font-size:13.5px;color:var(--pv-muted);line-height:1.6;padding:20px;box-sizing:border-box;word-break:keep-all}
+.sm-pv-msg b{font-size:15px;color:var(--pv-text);margin-bottom:6px}
+.sm-pv-menu{position:absolute;top:36px;right:0;z-index:5;background:#fff;border:1px solid var(--pv-border);border-radius:12px;box-shadow:0 10px 24px -8px rgba(33,31,61,.25);padding:6px;max-height:320px;overflow:auto;min-width:240px;max-width:380px}
+.sm-pv-menu .h{font-size:11.5px;font-weight:700;color:var(--pv-muted);padding:6px 10px 4px}
+.sm-pv-menu button{display:block;width:100%;text-align:left;font-family:inherit;font-size:13px;border:none;background:none;padding:7px 10px;border-radius:8px;cursor:pointer;color:var(--pv-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sm-pv-menu button:hover{background:var(--pv-soft);color:var(--pv-pri-d)}
+.sm-pv-menu .e{font-size:12.5px;color:var(--pv-muted);padding:7px 10px}
+body.sm-pv-win{margin:0;height:100vh;padding:14px;box-sizing:border-box;background:#fff;display:flex}
+`;
+const SM_PV_HAND = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 13V5.5a1.5 1.5 0 0 1 3 0V12"/><path d="M11 5.5v-2a1.5 1.5 0 0 1 3 0V12"/><path d="M14 5.5a1.5 1.5 0 0 1 3 0V12"/><path d="M17 7.5a1.5 1.5 0 0 1 3 0V16a6 6 0 0 1-6 6h-2a6 6 0 0 1-5-2.7L7 19c-.3-.5-1.4-2.4-3.3-5.7a1.5 1.5 0 0 1 .5-2 1.9 1.9 0 0 1 2.3.3L8 13"/></svg>';
+const SM_PV_ZOOMS = [0.25, 0.33, 0.5, 0.67, 0.75, 0.8, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2, 2.5, 3, 4, 5];
+const smPvBuf = {};   // 파일 id -> 내려받은 내용(Promise<ArrayBuffer>) - 비교·새 창에서 다시 받지 않게
+function smPvFetch(f){
+  if(!smPvBuf[f.id]) smPvBuf[f.id] = (async () => {
     if(!googleAccessToken) throw new Error('Google에 연결된 뒤에 볼 수 있어요.');
     const res = await fetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(f.id)}?alt=media`, { headers:{ Authorization:'Bearer ' + googleAccessToken } });
-    if(!res.ok) throw new Error(res.status === 404 ? '드라이브에서 파일을 찾지 못했어요(지워졌거나 휴지통에 있을 수 있어요).' : res.status === 401 ? 'Google 로그인이 만료됐어요. 잠시 뒤 다시 눌러 주세요.' : `드라이브 응답 ${res.status}`);
-    if(!document.body.contains(bd)) return;
-    if(ext === 'txt' || ext === 'csv' || ext === 'md'){ const t = await res.text(); body.innerHTML = `<pre class="sm-pv-text">${taxjEsc(t)}</pre>`; return; }
-    blobUrl = URL.createObjectURL(new Blob([await res.arrayBuffer()], { type: direct }));
-    body.innerHTML = direct.startsWith('image/') ? `<div class="sm-pv-img"><img src="${blobUrl}" alt="${escapeAttr(f.name)}"></div>` : `<iframe src="${blobUrl}"></iframe>`;
-  }catch(e){ cannot(String(e && e.message || e)); }
+    if(!res.ok) throw new Error(res.status === 404 ? '드라이브에서 파일을 찾지 못했어요(지워졌거나 휴지통에 있을 수 있어요).' : res.status === 401 ? 'Google 로그인이 만료됐어요. 잠시 뒤 다시 열어 주세요.' : `드라이브 응답 ${res.status}`);
+    return res.arrayBuffer();
+  })().catch(e => { delete smPvBuf[f.id]; throw e; });
+  return smPvBuf[f.id];
+}
+let smPdfjsP = null;
+function smPdfjs(){
+  if(window.pdfjsLib) return Promise.resolve(window.pdfjsLib);
+  if(!smPdfjsP) smPdfjsP = new Promise((ok, no) => {
+    const s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+    s.onload = () => { try{ window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'; ok(window.pdfjsLib); }catch(e){ no(e); } };
+    s.onerror = () => { smPdfjsP = null; no(new Error('PDF 보기 도구를 불러오지 못했어요.')); };
+    document.head.appendChild(s);
+  });
+  return smPdfjsP;
+}
+// 지금 화면에 보이는 첨부파일들(비교할 파일 고르기용)
+function smPvCandidates(){
+  const out = [], seen = new Set();
+  document.querySelectorAll('.att-chip a[data-f]').forEach(a => { try{ const f = JSON.parse(a.dataset.f); if(f && f.id && !seen.has(f.id)){ seen.add(f.id); out.push(f); } }catch(e){} });
+  return out;
+}
+function smPvPane(doc, f, removable, onRemove){
+  const win = doc.defaultView || window;
+  const ext = smExt(f.name), direct = SM_PV_DIRECT[ext], viaDrive = SM_PV_DRIVE.includes(ext);
+  const el = doc.createElement('div'); el.className = 'sm-pv-pane';
+  el.innerHTML = `<div class="sm-pv-ph"><span class="sm-pv-pn" title="${escapeAttr(f.name)}">${taxjEsc(f.name)}</span>
+      ${direct ? `<button class="sm-pv-tb sm-pv-ib" data-a="out" title="축소 (Ctrl+휠)">−</button><span class="sm-pv-z">-</span><button class="sm-pv-tb sm-pv-ib" data-a="in" title="확대 (Ctrl+휠)">+</button><button class="sm-pv-tb" data-a="fit" title="폭에 맞추기">맞춤</button><button class="sm-pv-tb sm-pv-ib on" data-a="hand" title="손 도구: 끌어서 이동 (끄면 글자 선택)" aria-label="손 도구">${SM_PV_HAND}</button>` : ''}
+      <button class="sm-pv-tb sm-pv-ib" data-a="drive" title="드라이브에서 열기" aria-label="드라이브에서 열기"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h6v6"/><path d="M20 4l-9 9"/><path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg></button>
+      ${removable ? '<button class="sm-pv-tb sm-pv-ib" data-a="close" title="비교에서 빼기">×</button>' : ''}</div>
+    <div class="sm-pv-sc hand"><div class="sm-pv-msg">불러오는 중…</div></div>`;
+  const sc = el.querySelector('.sm-pv-sc'), zl = el.querySelector('.sm-pv-z');
+  const cannot = why => { sc.classList.remove('hand'); sc.innerHTML = `<div class="sm-pv-msg"><b>이 파일은 여기서 읽을 수 없어요</b><div>${taxjEsc(why)}</div><div style="margin-top:4px;">위쪽 ↗(드라이브에서 열기)로 열거나 내려받아 확인해 주세요.</div></div>`; el.querySelectorAll('[data-a="out"],[data-a="in"],[data-a="fit"],[data-a="hand"],.sm-pv-z').forEach(b => b.remove()); };
+  let scale = 1, fit = true, draw = null, fitScale = () => 1, blobUrl = '';
+  const setScale = (s, keepFit) => { scale = Math.max(0.2, Math.min(5, s)); fit = !!keepFit; if(zl) zl.textContent = Math.round(scale * 100) + '%'; if(draw) draw(); };
+  const step = dir => { const i = SM_PV_ZOOMS.findIndex(z => dir > 0 ? z > scale + 0.001 : false); if(dir > 0) setScale(i < 0 ? 5 : SM_PV_ZOOMS[i]); else { const lower = SM_PV_ZOOMS.filter(z => z < scale - 0.001); setScale(lower.length ? lower[lower.length - 1] : 0.2); } };
+  el.querySelector('.sm-pv-ph').addEventListener('click', e => {
+    const a = e.target.closest('[data-a]'); if(!a) return;
+    const k = a.dataset.a;
+    if(k === 'in') step(1); else if(k === 'out') step(-1); else if(k === 'fit') setScale(fitScale(), true);
+    else if(k === 'hand'){ a.classList.toggle('on'); sc.classList.toggle('hand', a.classList.contains('on')); }
+    else if(k === 'drive') win.open(f.url, '_blank', 'noopener');
+    else if(k === 'close'){ if(blobUrl) URL.revokeObjectURL(blobUrl); el.remove(); if(onRemove) onRemove(f); }
+  });
+  // Ctrl+휠 확대·축소
+  sc.addEventListener('wheel', e => { if(!draw || !(e.ctrlKey || e.metaKey)) return; e.preventDefault(); setScale(scale * (e.deltaY < 0 ? 1.1 : 1 / 1.1)); }, { passive:false });
+  // 손 도구: 끌어서 이동
+  sc.addEventListener('mousedown', e => {
+    if(e.button !== 0 || !sc.classList.contains('hand')) return;
+    e.preventDefault();
+    const x = e.clientX, y = e.clientY, l = sc.scrollLeft, t = sc.scrollTop;
+    sc.classList.add('drag');
+    const mv = ev => { sc.scrollLeft = l - (ev.clientX - x); sc.scrollTop = t - (ev.clientY - y); };
+    const up = () => { sc.classList.remove('drag'); doc.removeEventListener('mousemove', mv); doc.removeEventListener('mouseup', up); };
+    doc.addEventListener('mousemove', mv); doc.addEventListener('mouseup', up);
+  });
+  // 창·칸 크기가 바뀌면 '맞춤' 상태일 때 다시 맞춤
+  try{ let rt = 0; new (win.ResizeObserver || ResizeObserver)(() => { if(!fit || !draw) return; clearTimeout(rt); rt = setTimeout(() => setScale(fitScale(), true), 120); }).observe(sc); }catch(e){}
+  // 확대할 때 보던 자리(가운데)를 유지
+  let firstDraw = true;
+  const keepCenter = fn => { if(firstDraw){ firstDraw = false; fn(); sc.scrollTop = 0; sc.scrollLeft = Math.max(0, (sc.scrollWidth - sc.clientWidth) / 2); return; } const rx = sc.scrollWidth ? (sc.scrollLeft + sc.clientWidth / 2) / sc.scrollWidth : 0.5, ry = sc.scrollHeight ? (sc.scrollTop + sc.clientHeight / 2) / sc.scrollHeight : 0; fn(); sc.scrollLeft = rx * sc.scrollWidth - sc.clientWidth / 2; sc.scrollTop = ry * sc.scrollHeight - sc.clientHeight / 2; };
+  (async () => {
+    if(!direct && !viaDrive){ cannot(ext === 'hwp' || ext === 'hwpx' ? '한글(.hwp) 파일은 미리보기를 할 수 없어요. PDF로 저장해 올리면 미리보기와 내용 검색이 돼요.' : `.${ext || '?'} 파일은 미리보기를 지원하지 않아요.`); return; }
+    if(viaDrive){ sc.classList.remove('hand'); sc.innerHTML = `<iframe class="sm-pv-frame" src="https://drive.google.com/file/d/${encodeURIComponent(f.id)}/preview"></iframe>`; return; }
+    try{
+      const buf = await smPvFetch(f);
+      if(ext === 'pdf'){
+        let lib = null; try{ lib = await smPdfjs(); }catch(e){}
+        if(!lib){ blobUrl = URL.createObjectURL(new Blob([buf], { type:'application/pdf' })); sc.classList.remove('hand'); sc.innerHTML = `<iframe class="sm-pv-frame" src="${blobUrl}"></iframe>`; el.querySelectorAll('[data-a="out"],[data-a="in"],[data-a="fit"],[data-a="hand"],.sm-pv-z').forEach(b => b.remove()); return; }
+        const pdf = await lib.getDocument({ data: buf.slice(0) }).promise;
+        const pages = []; for(let i = 1; i <= pdf.numPages; i++) pages.push(await pdf.getPage(i));
+        const baseW = Math.max(...pages.map(p => p.getViewport({ scale:1 }).width));
+        fitScale = () => Math.max(0.2, Math.min(5, (sc.clientWidth - 26) / baseW));
+        const wrap = doc.createElement('div'); wrap.className = 'sm-pv-pages';
+        const boxes = pages.map(() => { const b = doc.createElement('div'); b.className = 'sm-pv-page'; wrap.appendChild(b); return b; });
+        sc.innerHTML = ''; sc.appendChild(wrap);
+        let token = 0, rt = 0;
+        draw = () => {
+          const my = ++token;
+          keepCenter(() => pages.forEach((p, i) => { const v = p.getViewport({ scale }); boxes[i].style.width = v.width + 'px'; boxes[i].style.height = v.height + 'px'; }));
+          clearTimeout(rt);
+          rt = setTimeout(() => pages.forEach((p, i) => {
+            if(my !== token) return;
+            const v = p.getViewport({ scale }), dpr = win.devicePixelRatio || 1;
+            const cv = doc.createElement('canvas'); cv.width = Math.floor(v.width * dpr); cv.height = Math.floor(v.height * dpr); cv.style.width = v.width + 'px'; cv.style.height = v.height + 'px';
+            const tl = doc.createElement('div'); tl.className = 'textLayer'; tl.style.setProperty('--scale-factor', String(scale));
+            p.render({ canvasContext: cv.getContext('2d'), viewport: v, transform: dpr !== 1 ? [dpr, 0, 0, dpr, 0, 0] : null }).promise.then(() => {
+              if(my !== token) return;
+              boxes[i].replaceChildren(cv, tl);
+              try{ lib.renderTextLayer({ textContentSource: p.streamTextContent(), container: tl, viewport: v, textDivs: [] }); }catch(e){}
+            }).catch(() => {});
+          }), 60);
+        };
+      }else if(direct.startsWith('image/')){
+        blobUrl = URL.createObjectURL(new Blob([buf], { type: direct }));
+        const img = doc.createElement('img'); img.className = 'sm-pv-img'; img.alt = f.name; img.draggable = false;
+        await new Promise((ok, no) => { img.onload = ok; img.onerror = () => no(new Error('이미지를 열 수 없어요.')); img.src = blobUrl; });
+        fitScale = () => Math.max(0.2, Math.min(1, (sc.clientWidth - 26) / img.naturalWidth, (sc.clientHeight - 26) / img.naturalHeight));
+        sc.innerHTML = ''; sc.appendChild(img);
+        draw = () => keepCenter(() => { img.style.width = img.naturalWidth * scale + 'px'; });
+      }else{
+        let t = ''; try{ t = new TextDecoder('utf-8', { fatal:true }).decode(buf); }catch(e){ try{ t = new TextDecoder('euc-kr').decode(buf); }catch(_){ t = new TextDecoder().decode(buf); } }
+        sc.innerHTML = `<pre class="sm-pv-text">${taxjEsc(t)}</pre>`;
+        const pre = sc.firstChild; fitScale = () => 1;
+        draw = () => { pre.style.fontSize = (13 * scale) + 'px'; };
+      }
+      setScale(fitScale(), true);
+    }catch(e){ cannot(String(e && e.message || e)); }
+  })();
+  return el;
+}
+// 보기 창(팝업·새 창 공통): 위쪽 = 제목 + 비교 추가 + 새 창 + 크게 보기 + 닫기, 아래 = 파일별 칸(나란히)
+function smPvMount(doc, root, files, opt){
+  opt = opt || {};
+  const win = doc.defaultView || window;
+  let open = [];
+  root.innerHTML = `<div class="sm-pv-top"><div class="sm-pv-title"></div>
+      <button class="sm-pv-tb" data-a="add" title="다른 첨부파일을 옆에 나란히 열어 비교">＋ 비교</button>
+      ${opt.onNewWin ? '<button class="sm-pv-tb" data-a="win" title="브라우저 새 창으로 따로 띄우기">새 창</button>' : ''}
+      ${opt.onFull ? '<button class="sm-pv-tb" data-a="full" title="화면 가득 / 원래 크기">크게</button>' : ''}
+      ${opt.onClose ? '<button class="sm-pv-x" data-a="x" title="닫기 (Esc)" aria-label="닫기">×</button>' : ''}</div>
+    <div class="sm-pv-panes"></div>`;
+  const panes = root.querySelector('.sm-pv-panes'), title = root.querySelector('.sm-pv-title');
+  const setTitle = () => { title.textContent = open.length > 1 ? `${open.length}개 비교 보기` : (open[0] ? open[0].name : ''); title.title = open.map(f => f.name).join('\n'); try{ if(!opt.onClose) doc.title = title.textContent; }catch(e){} };
+  const closeMenu = () => { const m = root.querySelector('.sm-pv-menu'); if(m){ m.remove(); return true; } return false; };
+  const relabel = () => panes.querySelectorAll('.sm-pv-pane').forEach(p => { const has = !!p.querySelector('[data-a="close"]'); if(open.length > 1 && !has){ const b = doc.createElement('button'); b.className = 'sm-pv-tb sm-pv-ib'; b.dataset.a = 'close'; b.title = '비교에서 빼기'; b.textContent = '×'; p.querySelector('.sm-pv-ph').appendChild(b); } else if(open.length <= 1 && has) p.querySelector('[data-a="close"]').remove(); });
+  const add = f => {
+    if(open.some(x => x.id === f.id)) return;
+    open.push(f);
+    panes.appendChild(smPvPane(doc, f, open.length > 1, gone => { open = open.filter(x => x.id !== gone.id); relabel(); setTitle(); }));
+    relabel(); setTitle();
+  };
+  files.forEach(add);
+  root.querySelector('.sm-pv-top').addEventListener('click', e => {
+    const a = e.target.closest('[data-a]'); if(!a) return;
+    const k = a.dataset.a;
+    if(k === 'x') opt.onClose();
+    else if(k === 'full'){ const on = opt.onFull(); a.textContent = on ? '원래 크기' : '크게'; }
+    else if(k === 'win') opt.onNewWin(open.slice());
+    else if(k === 'add'){
+      if(closeMenu()) return;
+      const c = smPvCandidates().filter(f => !open.some(x => x.id === f.id));
+      const m = doc.createElement('div'); m.className = 'sm-pv-menu';
+      m.innerHTML = open.length >= 4 ? '<div class="e">한 번에 4개까지 나란히 볼 수 있어요.</div>'
+        : c.length ? '<div class="h">지금 화면의 첨부파일</div>' + c.map((f, i) => `<button data-i="${i}" title="${escapeAttr(f.name)}">${taxjEsc(f.name)}</button>`).join('')
+        : '<div class="e">같이 볼 다른 첨부파일이 이 화면에 없어요.</div>';
+      m.addEventListener('click', ev => { const b = ev.target.closest('button[data-i]'); if(!b) return; ev.stopPropagation(); closeMenu(); add(c[+b.dataset.i]); });
+      a.parentNode.appendChild(m);
+    }
+  });
+  doc.addEventListener('mousedown', e => { if(!e.target.closest('.sm-pv-menu, [data-a="add"]')) closeMenu(); });
+  return { closeMenu };
+}
+function smPvCss(doc){ if(!doc.getElementById('smPvCss')){ const s = doc.createElement('style'); s.id = 'smPvCss'; s.textContent = SM_PV_CSS; doc.head.appendChild(s); } }
+function smPvNewWindow(files){
+  const w = window.open('', '_blank', 'popup,width=1200,height=900');
+  if(!w){ smAlert('새 창을 열지 못했어요', '브라우저가 팝업을 막았어요. 주소창 오른쪽의 팝업 차단 아이콘에서 이 사이트를 허용해 주세요.'); return; }
+  w.document.open();
+  w.document.write(`<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${taxjEsc(files.length > 1 ? files.length + '개 비교 보기' : files[0].name)}</title><style>${SM_PV_CSS}</style></head><body class="sm-pv-win"><div class="sm-pv-root"></div></body></html>`);
+  w.document.close();
+  smPvMount(w.document, w.document.querySelector('.sm-pv-root'), files, {});
+}
+function smPreviewFile(f){ if(f && f.id) smPvOpen([f]); }
+function smPvOpen(files){
+  smPvCss(document);
+  const old = document.getElementById('smPreview'); if(old && old._close) old._close();
+  const bd = document.createElement('div'); bd.id = 'smPreview'; bd.className = 'sm-modal-backdrop';
+  const box = document.createElement('div'); box.className = 'sm-modal sm-pv'; box.setAttribute('role', 'dialog'); box.setAttribute('aria-label', '첨부 미리보기');
+  const root = document.createElement('div'); root.className = 'sm-pv-root';
+  box.appendChild(root); bd.appendChild(box); document.body.appendChild(bd);
+  let api = null;
+  const onKey = e => { if(e.key !== 'Escape' || document.getElementById('smPreview') !== bd) return; e.stopPropagation(); if(api && api.closeMenu()) return; close(); };
+  const close = () => { bd.remove(); document.removeEventListener('keydown', onKey, true); };
+  bd._close = close;
+  document.addEventListener('keydown', onKey, true);
+  // [2026.10.22] "화면 밖 누르면 미리보기가 사라져"(요청) - 바깥을 눌러도 닫히지 않음. 닫기는 X·Esc로만
+  api = smPvMount(document, root, files, { onClose: close, onFull: () => box.classList.toggle('full'), onNewWin: fs => { close(); smPvNewWindow(fs); } });
+  requestAnimationFrame(() => bd.classList.add('show'));
 }
 // 매뉴얼 검색어로 드라이브 첨부 본문 검색 → 맞는 파일 id 묶음(검색어별로 기억)
 const smFileHits = {};   // q -> Set(id) | 'pending' | 'error'
@@ -9456,7 +9644,7 @@ async function smFileContentSearch(q, onDone){
 }
 function smFilesHtml(files, removeJs){
   // [2026.10.22] "첨부 미리보기"(요청) - 누르면 이 화면 위에 미리보기 창(Ctrl/⌘+클릭은 예전처럼 드라이브 새 탭)
-  return (files || []).map(f => `<span class="att-chip"><a href="${escapeAttr(f.url)}" target="_blank" rel="noopener" title="미리보기 (Ctrl+클릭: 드라이브에서 열기)" onclick="if(event.ctrlKey || event.metaKey || event.shiftKey) return true; event.preventDefault(); smPreviewFile(${escapeAttr(JSON.stringify({ id:f.id, name:f.name, url:f.url }))});">📎 ${taxjEsc(f.name)}</a>${removeJs ? `<button onclick="${removeJs(f)}" title="첨부 빼기" aria-label="첨부 빼기">×</button>` : ''}</span>`).join('');
+  return (files || []).map(f => `<span class="att-chip"><a href="${escapeAttr(f.url)}" target="_blank" rel="noopener" title="미리보기 (Ctrl+클릭: 드라이브에서 열기)" data-f="${escapeAttr(JSON.stringify({ id:f.id, name:f.name, url:f.url }))}" onclick="if(event.ctrlKey || event.metaKey || event.shiftKey) return true; event.preventDefault(); smPreviewFile(JSON.parse(this.dataset.f));">📎 ${taxjEsc(f.name)}</a>${removeJs ? `<button onclick="${removeJs(f)}" title="첨부 빼기" aria-label="첨부 빼기">×</button>` : ''}</span>`).join('');
 }
 function linkHref(u){ u = String(u || '').trim(); if(!u) return ''; return /^[a-z][a-z0-9+.-]*:/i.test(u) ? u : 'https://' + u; }
 function linkFields(x){
