@@ -9254,6 +9254,34 @@ let linkSearch = '';
 let linkGroupSel = '';   // 보는 분야('' = 전체)
 const ICON_LINK = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>';
 // [2026.10.16] "분야를 직접 추가해서 분야별로 정리, 나중에 다른 분야로 이동"(요청) - 분야 관리에서 만든 순서대로, 그 밖에 링크에만 있는 분야는 뒤에, '기타'는 맨 뒤
+// [2026.10.22] "Claude 작업할 때 주는 관리 사이트 링크를 링크 메뉴 '클로드' 분야에 계속 업데이트"(요청)
+//   [구분, 이름, 주소, 용도]. 이 목록은 앱 코드에 들어 있어 화면에서 고치지 않고, Claude가 작업하다 관리 사이트 링크가 새로 생기거나 바뀌면
+//   요청이 없어도 여기에 넣고 배포함(규칙: 이 저장소와 Tax.J-src의 CLAUDE.md). 맨 아래 줄일수록 최근에 넣은 것
+const SM_CLAUDE_LINKS_AT = '2026-10-22';
+const SM_CLAUDE_LINKS = [
+  ["앱", "Tax.J", "https://sm-sarah.github.io/Tax.J/", "직원 접속 주소"],
+  ["GitHub", "저장소", "https://github.com/sm-sarah/Tax.J-src", "앱 파일 보관"],
+  ["GitHub", "파일 올리기", "https://github.com/sm-sarah/Tax.J/upload/main", "index.html 등 업로드 (안 열리면 저장소 › 파일 추가)"],
+  ["GitHub", "배포 상태", "https://github.com/sm-sarah/Tax.J/actions", "올린 뒤 사이트 반영 확인"],
+  ["GitHub", "액세스 토큰", "https://github.com/settings/tokens", "앱 안 GitHub 배포용 토큰"],
+  ["Firebase", "프로젝트 홈", "https://console.firebase.google.com/project/taxj-a3e01/overview", "Firebase 전체"],
+  ["Firebase", "Firestore 데이터", "https://console.firebase.google.com/project/taxj-a3e01/firestore/databases/-default-/data", "저장된 데이터 보기"],
+  ["Firebase", "Firestore 규칙", "https://console.firebase.google.com/project/taxj-a3e01/firestore/databases/-default-/rules", "보안 규칙"],
+  ["Firebase", "로그인 사용자", "https://console.firebase.google.com/project/taxj-a3e01/authentication/users", "로그인한 계정 목록"],
+  ["Google Cloud", "콘솔 홈", "https://console.cloud.google.com/home/dashboard?project=taxj-a3e01", "Google Cloud 전체"],
+  ["Google Cloud", "sendpush 함수", "https://console.cloud.google.com/run/detail/us-central1/sendpush/source?project=taxj-a3e01", "알림 발송 함수 소스 수정·재배포"],
+  ["Google Cloud", "sendpush 로그", "https://console.cloud.google.com/run/detail/us-central1/sendpush/logs?project=taxj-a3e01", "알림 오류 확인"],
+  ["Google Cloud", "스케줄러", "https://console.cloud.google.com/cloudscheduler?project=taxj-a3e01", "출퇴근 알림 자동 실행"],
+  ["Google Cloud", "Firestore 백업", "https://console.cloud.google.com/firestore/databases?project=taxj-a3e01", "(default) › 재해 복구에서 백업·시점복구"],
+  ["Google Cloud", "OAuth 클라이언트", "https://console.cloud.google.com/apis/credentials?project=taxj-a3e01", "구글 로그인 설정"],
+  ["Google Cloud", "결제·예산", "https://console.cloud.google.com/billing?project=taxj-a3e01", "요금·예산 알림"],
+  ["Google Cloud", "Cloud Shell", "https://shell.cloud.google.com/?show=terminal", "명령어 실행"],
+  ["Drive", "01.기장대리", "https://drive.google.com/drive/folders/0ALthlaDsIhh1Uk9PVA", "결재 첨부·자동백업 폴더"],
+  ["Google Cloud", "OAuth 브랜딩", "https://console.cloud.google.com/auth/branding?project=273460053868", "앱 게시 전 앱 이름·지원 이메일 등 입력"],
+  ["Google Cloud", "OAuth 대상(테스트 사용자)", "https://console.cloud.google.com/auth/audience?project=273460053868", "테스트 사용자 추가·앱 게시 상태"]
+];
+const SM_CLAUDE_GROUP = '클로드';
+function smClaudeLinks(){ return SM_CLAUDE_LINKS.map(([kind, name, url, memo], i) => ({ id: -1 - i, _builtin:true, _ord:i, group: SM_CLAUDE_GROUP, name, url, memo: `${kind} · ${memo}`, at: SM_CLAUDE_LINKS_AT })); }
 function linkGroups(){
   const cats = (linkCats || []).filter(c => c && c !== '기타');
   const extra = [...new Set(links.map(l => l.group || '기타'))].filter(g => !cats.includes(g)).sort((a, b) => (a === '기타') - (b === '기타') || a.localeCompare(b, 'ko'));
@@ -9759,17 +9787,17 @@ function renderLinks(){
   const el = document.getElementById('tab-links');
   if(!el) return;
   const q = linkSearch.trim().toLowerCase();
-  const allG = linkGroups();
+  const allG = linkGroups().filter(g => g !== SM_CLAUDE_GROUP).concat(SM_CLAUDE_GROUP);
   if(linkGroupSel && !allG.includes(linkGroupSel)) linkGroupSel = '';
-  const list = links.filter(l => !linkGroupSel || (l.group || '기타') === linkGroupSel)
+  const list = links.filter(l => (l.group || '기타') !== SM_CLAUDE_GROUP).concat(smClaudeLinks()).filter(l => !linkGroupSel || (l.group || '기타') === linkGroupSel)
     .filter(l => !q || [l.name, l.url, l.group, l.memo, ...(l.files || []).map(f => f.name)].some(v => String(v || '').toLowerCase().includes(q)));
   const cnt = g => links.filter(l => (l.group || '기타') === g).length;
   const showSeg = links.length || allG.length;
   // [2026.10.22] "링크, 서식 메뉴 칩에 목록 갯수 뜨는 것 없애줘"(요청) - 칩에는 분야 이름만
-  const groupSeg = showSeg ? `<div class="sm-seg wrap" style="flex-wrap:wrap; height:auto; min-height:37px;">${[['', '전체']].concat(allG.map(g => [g, g])).map(([g, l]) => `<button class="${linkGroupSel === g ? 'on' : ''}" onclick="linkGroupSel=${escapeAttr(JSON.stringify(g))}; renderLinks();"${g ? ` ondragover="if(linkDragId!==null){event.preventDefault(); this.classList.add('drop');}" ondragleave="this.classList.remove('drop')" ondrop="event.preventDefault(); this.classList.remove('drop'); linkMoveTo(linkDragId, ${escapeAttr(JSON.stringify(g))});"` : ''}>${taxjEsc(l)}</button>`).join('')}</div>` : '';
+  const groupSeg = showSeg ? `<div class="sm-seg wrap" style="flex-wrap:wrap; height:auto; min-height:37px;">${[['', '전체']].concat(allG.map(g => [g, g])).map(([g, l]) => `<button class="${linkGroupSel === g ? 'on' : ''}" onclick="linkGroupSel=${escapeAttr(JSON.stringify(g))}; renderLinks();"${g && g !== SM_CLAUDE_GROUP ? ` ondragover="if(linkDragId!==null){event.preventDefault(); this.classList.add('drop');}" ondragleave="this.classList.remove('drop')" ondrop="event.preventDefault(); this.classList.remove('drop'); linkMoveTo(linkDragId, ${escapeAttr(JSON.stringify(g))});"` : ''}>${taxjEsc(l)}</button>`).join('')}</div>` : '';
   const groups = {};
   list.forEach(l => { const g = l.group || '기타'; (groups[g] = groups[g] || []).push(l); });
-  const names = Object.keys(groups).sort((a, b) => (a === '기타') - (b === '기타') || a.localeCompare(b, 'ko'));
+  const names = Object.keys(groups).sort((a, b) => (a === SM_CLAUDE_GROUP) - (b === SM_CLAUDE_GROUP) || (a === '기타') - (b === '기타') || a.localeCompare(b, 'ko'));
   el.innerHTML = `
     <div class="card acc-wrap">
       <div class="toolbar">
@@ -9779,13 +9807,21 @@ function renderLinks(){
         <input type="file" id="linkFileInput" multiple style="display:none;" onchange="linkUploadFiles(this)">
       </div>
       ${groupSeg ? `<div class="toolbar" style="justify-content:center;">${groupSeg}</div>` : ''}<!-- [2026.10.16] 분야 칩 가로 가운데(요청) -->
-      ${!links.length ? `<div class="empty">아직 등록한 링크가 없어요. '링크 추가'로 넣어 주세요.</div>`
+      ${false ? `<div class="empty">아직 등록한 링크가 없어요. '링크 추가'로 넣어 주세요.</div>`
         : !list.length ? `<div class="empty">검색과 맞는 링크가 없어요.</div>`
         : names.map(g => `
         ${!linkGroupSel && (names.length > 1 || g !== '기타') ? `<div style="font-weight:800; font-size:13px; color:var(--primary-dark); margin:14px 0 4px;">${taxjEsc(g)}</div>` : ''}
         <div class="table-scroll"><table>
           <thead><tr><th style="width:24%;">사이트명</th><th style="width:56px;">링크</th><th>메모</th><th style="width:22%;">첨부</th><th style="width:70px;">수정일</th><th style="width:70px;"></th></tr></thead>
-          <tbody>${groups[g].sort((a, b) => String(a.name).localeCompare(String(b.name), 'ko')).map(l => `
+          <tbody>${groups[g].sort((a, b) => a._builtin && b._builtin ? a._ord - b._ord : String(a.name).localeCompare(String(b.name), 'ko')).map(l => l._builtin ? `
+            <tr title="Claude가 작업하면서 관리 사이트 링크가 생기거나 바뀌면 자동으로 채워 주는 목록이에요">
+              <td style="text-align:left; font-weight:700;">${taxjEsc(l.name)}</td>
+              <td style="text-align:center;"><a class="icon-btn" href="${escapeAttr(linkHref(l.url))}" target="_blank" rel="noopener" title="${escapeAttr(l.url)}" aria-label="링크 열기" style="color:var(--primary-dark); display:inline-flex;">${ICON_LINK}</a></td>
+              <td style="text-align:left; white-space:pre-wrap; font-size:13px;">${taxjEsc(l.memo || '')}</td>
+              <td></td>
+              <td style="font-size:12px; color:var(--muted);">${taxjEsc(l.at.slice(5).replace('-', '/'))}</td>
+              <td></td>
+            </tr>` : `
             <tr draggable="true" ondragstart="linkDragId=${l.id}; event.dataTransfer.effectAllowed='move';" ondragend="linkDragId=null;" title="끌어서 위쪽 분야 칩에 놓으면 그 분야로 옮겨져요">
               <td style="text-align:left; font-weight:700;">${taxjEsc(l.name)}</td>
               <td style="text-align:center;">${l.url ? `<a class="icon-btn" href="${escapeAttr(linkHref(l.url))}" target="_blank" rel="noopener" title="${escapeAttr(l.url)}" aria-label="링크 열기" style="color:var(--primary-dark); display:inline-flex;">${ICON_LINK}</a>` : ''}</td>
