@@ -1291,6 +1291,16 @@ function smTogglePcView(){ try{ localStorage.setItem('sm_pc_view', window.SM_PC_
   .att-chip{ display:inline-flex; align-items:center; gap:2px; background:#f6f1f4; border-radius:8px; padding:2px 4px 2px 8px; font-size:12px; max-width:100%; }
   .att-chip a{ color:var(--text); text-decoration:none; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:170px; }
   .att-chip a:hover{ color:var(--primary-dark); text-decoration:underline; }
+  /* [2026.10.22] 첨부 미리보기 창 */
+  .sm-modal.sm-pv{ max-width:min(1000px, 94vw); padding:18px 18px 16px; text-align:left; }
+  .sm-pv-head{ display:flex; align-items:center; gap:10px; margin:0 34px 12px 0; }
+  .sm-pv-name{ flex:1; min-width:0; font-size:15px; font-weight:800; color:var(--text); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .sm-pv-body{ height:min(76vh, 900px); border:1px solid var(--border); border-radius:12px; overflow:hidden; background:#faf6f8; display:flex; align-items:center; justify-content:center; }
+  .sm-pv-body iframe{ width:100%; height:100%; border:0; background:#fff; }
+  .sm-pv-img{ width:100%; height:100%; overflow:auto; display:flex; align-items:center; justify-content:center; }
+  .sm-pv-img img{ max-width:100%; max-height:100%; object-fit:contain; }
+  .sm-pv-text{ width:100%; height:100%; margin:0; padding:14px 16px; overflow:auto; background:#fff; font-size:13px; white-space:pre-wrap; word-break:break-all; }
+  .sm-pv-no{ text-align:center; font-size:13.5px; color:var(--muted); line-height:1.6; padding:20px; word-break:keep-all; }
   .att-chip button{ border:none; background:transparent; color:var(--muted); cursor:pointer; font-size:14px; line-height:1; padding:0 3px; }
   .att-chip button:hover{ color:#e2445c; }
   .att-add{ font-family:inherit; font-size:11.5px; font-weight:700; color:var(--muted); background:transparent; border:1px dashed var(--border); border-radius:8px; padding:2px 8px; cursor:pointer; }
@@ -8978,7 +8988,13 @@ function renderManuals(){
   const el = document.getElementById('tab-manuals');
   if(!el) return;
   const q = manualSearch.trim().toLowerCase();
-  const list = manuals.filter(m => (!manualCat || m.cat === manualCat) && (!q || [m.title, m.body, m.cat, ...(m.refs || []).map(r => r.name + ' ' + r.url), ...(m.files || []).map(f => f.name)].some(v => String(v || '').toLowerCase().includes(q))))
+  // [2026.10.22] 첨부파일 안 내용도 검색(요청) - 드라이브 본문 검색 결과가 오면 다시 그림
+  const qRaw = manualSearch.trim();
+  if(qRaw) smFileContentSearch(qRaw, () => { if(manualSearch.trim() === qRaw && activeTab === 'manuals' && document.activeElement?.id !== 'manualSearch') renderManuals(); else if(manualSearch.trim() === qRaw && activeTab === 'manuals') manualOnSearch(manualSearch); });
+  const hits = smFileHits[qRaw] instanceof Set ? smFileHits[qRaw] : null;
+  const inFile = m => !!hits && (m.files || []).some(f => hits.has(f.id));
+  const textHit = m => [m.title, m.body, m.cat, ...(m.refs || []).map(r => r.name + ' ' + r.url), ...(m.files || []).map(f => f.name)].some(v => String(v || '').toLowerCase().includes(q));
+  const list = manuals.filter(m => (!manualCat || m.cat === manualCat) && (!q || textHit(m) || inFile(m)))
     .sort((a, b) => manualCats.indexOf(a.cat) - manualCats.indexOf(b.cat) || String(a.title).localeCompare(String(b.title), 'ko'));
   if(!list.some(m => m.id === manualSel)) manualSel = list.length ? list[0].id : null;
   const sel = manuals.find(m => m.id === manualSel);
@@ -8997,8 +9013,13 @@ function renderManuals(){
         <div class="mn-list">
           <input type="text" id="manualSearch" placeholder="제목·내용 검색" value="${escapeAttr(manualSearch)}" oninput="manualOnSearch(this.value)">
           ${list.length ? list.map(m => `<button class="mn-item ${m.id === manualSel ? 'on' : ''}" onclick="manualSel=${m.id}; renderManuals();">
-              <span class="mn-item-t">${taxjEsc(m.title)}</span><span class="mn-item-s">${manualCat ? '' : taxjEsc(m.cat) + ' · '}${when(m.at)}</span></button>`).join('')
+              <span class="mn-item-t">${taxjEsc(m.title)}</span><span class="mn-item-s">${manualCat ? '' : taxjEsc(m.cat) + ' · '}${when(m.at)}${q && !textHit(m) && inFile(m) ? ' · 첨부 내용에 있음' : ''}</span></button>`).join('')
             : `<div class="empty">${manuals.length ? (q ? '검색과 맞는 매뉴얼이 없어요.' : '이 분야에는 아직 매뉴얼이 없어요.') : "아직 매뉴얼이 없어요. '매뉴얼 추가'로 정리해 보세요."}</div>`}
+          ${q ? (() => { const st = smFileHits[qRaw];
+              const noRead = manuals.filter(m => !manualCat || m.cat === manualCat).flatMap(m => m.files || []).filter(f => !smFileSearchable(f.name)).length;
+              const msg = [!googleAccessToken ? 'Google에 연결하면 첨부파일 안 내용도 같이 찾아요.' : st === 'pending' ? '첨부파일 안 내용도 찾는 중…' : st === 'error' ? '첨부파일 안 내용은 지금 찾지 못했어요.' : '',
+                noRead ? `한글·이미지 등 첨부 ${noRead}개는 내용을 읽을 수 없어서 파일명으로만 찾아요.` : ''].filter(Boolean);
+              return msg.length ? `<div class="hint" style="margin:6px 2px 0; font-size:12px;">${msg.map(taxjEsc).join('<br>')}</div>` : ''; })() : ''}
         </div>
         <div class="mn-view">
           ${sel ? `
@@ -9380,8 +9401,62 @@ async function linkRemoveFile(id, fid){
   renderAll();
   smDriveTrash(fid);
 }
+// ===== [2026.10.22] 첨부 미리보기·내용 검색(요청: "공식 문서면 가능하면 좋겠고, 이미지 등 검색·읽기 힘들면 '읽을 수 없어요' 멘트") =====
+// 미리보기: PDF·이미지·텍스트는 드라이브에서 받아 바로 보여 주고, 워드·엑셀·파워포인트는 드라이브 미리보기 화면, 한글(.hwp) 등은 '미리보기할 수 없어요'
+// 내용 검색: 드라이브 본문 검색(fullText). 드라이브가 내용을 못 읽는 한글·이미지·압축 파일은 검색할 수 없다고 따로 알려 줌
+const smExt = n => (/\.([a-z0-9]+)$/i.exec(String(n || '')) || [, ''])[1].toLowerCase();
+const SM_PV_DIRECT = { pdf:'application/pdf', png:'image/png', jpg:'image/jpeg', jpeg:'image/jpeg', gif:'image/gif', webp:'image/webp', bmp:'image/bmp', txt:'text/plain', csv:'text/plain', md:'text/plain' };
+const SM_PV_DRIVE = ['doc','docx','xls','xlsx','ppt','pptx','rtf','odt','ods','odp'];
+function smFileSearchable(n){ const e = smExt(n); return ['pdf','txt','csv','md','rtf','html','htm'].includes(e) || SM_PV_DRIVE.includes(e); }
+async function smPreviewFile(f){
+  if(!f || !f.id) return;
+  const ext = smExt(f.name), direct = SM_PV_DIRECT[ext], viaDrive = SM_PV_DRIVE.includes(ext);
+  const old = document.getElementById('smPreview'); if(old) old.remove();
+  const bd = document.createElement('div');
+  bd.id = 'smPreview'; bd.className = 'sm-modal-backdrop';
+  bd.innerHTML = `<div class="sm-modal sm-pv" role="dialog" aria-label="첨부 미리보기">
+      <button class="sm-modal-x" aria-label="닫기" title="닫기">×</button>
+      <div class="sm-pv-head"><div class="sm-pv-name" title="${escapeAttr(f.name)}">${taxjEsc(f.name)}</div><button type="button" class="btn ghost xs" onclick="window.open(${escapeAttr(JSON.stringify(f.url))}, '_blank', 'noopener')">드라이브에서 열기</button></div>
+      <div class="sm-pv-body"><div class="hint" style="margin:0;">불러오는 중…</div></div></div>`;
+  document.body.appendChild(bd);
+  let blobUrl = '';
+  const close = () => { bd.remove(); if(blobUrl) URL.revokeObjectURL(blobUrl); document.removeEventListener('keydown', onKey, true); };
+  const onKey = e => { if(e.key === 'Escape'){ e.stopPropagation(); close(); } };
+  document.addEventListener('keydown', onKey, true);
+  bd.querySelector('.sm-modal-x').onclick = close;
+  bd.addEventListener('mousedown', e => { if(e.target === bd) close(); });
+  requestAnimationFrame(() => bd.classList.add('show'));
+  const body = bd.querySelector('.sm-pv-body');
+  const cannot = why => { body.innerHTML = `<div class="sm-pv-no"><div style="font-size:15px; font-weight:800; color:var(--text); margin-bottom:6px;">이 파일은 여기서 읽을 수 없어요</div><div>${taxjEsc(why)}</div><div style="margin-top:4px;">'드라이브에서 열기'로 열거나 내려받아 확인해 주세요.</div></div>`; };
+  if(!direct && !viaDrive){ cannot(ext === 'hwp' || ext === 'hwpx' ? '한글(.hwp) 파일은 미리보기를 할 수 없어요. PDF로 저장해 올리면 미리보기와 내용 검색이 돼요.' : `.${ext || '?'} 파일은 미리보기를 지원하지 않아요.`); return; }
+  if(viaDrive){ body.innerHTML = `<iframe src="https://drive.google.com/file/d/${encodeURIComponent(f.id)}/preview" allow="autoplay"></iframe>`; return; }
+  try{
+    if(!googleAccessToken) throw new Error('Google에 연결된 뒤에 볼 수 있어요.');
+    const res = await fetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(f.id)}?alt=media`, { headers:{ Authorization:'Bearer ' + googleAccessToken } });
+    if(!res.ok) throw new Error(res.status === 404 ? '드라이브에서 파일을 찾지 못했어요(지워졌거나 휴지통에 있을 수 있어요).' : res.status === 401 ? 'Google 로그인이 만료됐어요. 잠시 뒤 다시 눌러 주세요.' : `드라이브 응답 ${res.status}`);
+    if(!document.body.contains(bd)) return;
+    if(ext === 'txt' || ext === 'csv' || ext === 'md'){ const t = await res.text(); body.innerHTML = `<pre class="sm-pv-text">${taxjEsc(t)}</pre>`; return; }
+    blobUrl = URL.createObjectURL(new Blob([await res.arrayBuffer()], { type: direct }));
+    body.innerHTML = direct.startsWith('image/') ? `<div class="sm-pv-img"><img src="${blobUrl}" alt="${escapeAttr(f.name)}"></div>` : `<iframe src="${blobUrl}"></iframe>`;
+  }catch(e){ cannot(String(e && e.message || e)); }
+}
+// 매뉴얼 검색어로 드라이브 첨부 본문 검색 → 맞는 파일 id 묶음(검색어별로 기억)
+const smFileHits = {};   // q -> Set(id) | 'pending' | 'error'
+async function smFileContentSearch(q, onDone){
+  if(!q || smFileHits[q] || !googleAccessToken) return;
+  smFileHits[q] = 'pending';
+  try{
+    const folder = await smAttachFolder();
+    const esc = s => s.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    const qq = encodeURIComponent(`fullText contains '${esc(q)}' and '${folder}' in parents and trashed=false`);
+    const r = await smDriveFetch(`https://www.googleapis.com/drive/v3/files?q=${qq}&fields=files(id)&pageSize=200&spaces=drive`);
+    smFileHits[q] = new Set((r.files || []).map(x => x.id));
+  }catch(e){ console.warn('첨부 내용 검색 실패', e); smFileHits[q] = 'error'; }
+  if(onDone) onDone();
+}
 function smFilesHtml(files, removeJs){
-  return (files || []).map(f => `<span class="att-chip"><a href="${escapeAttr(f.url)}" target="_blank" rel="noopener" title="드라이브에서 열기">📎 ${taxjEsc(f.name)}</a>${removeJs ? `<button onclick="${removeJs(f)}" title="첨부 빼기" aria-label="첨부 빼기">×</button>` : ''}</span>`).join('');
+  // [2026.10.22] "첨부 미리보기"(요청) - 누르면 이 화면 위에 미리보기 창(Ctrl/⌘+클릭은 예전처럼 드라이브 새 탭)
+  return (files || []).map(f => `<span class="att-chip"><a href="${escapeAttr(f.url)}" target="_blank" rel="noopener" title="미리보기 (Ctrl+클릭: 드라이브에서 열기)" onclick="if(event.ctrlKey || event.metaKey || event.shiftKey) return true; event.preventDefault(); smPreviewFile(${escapeAttr(JSON.stringify({ id:f.id, name:f.name, url:f.url }))});">📎 ${taxjEsc(f.name)}</a>${removeJs ? `<button onclick="${removeJs(f)}" title="첨부 빼기" aria-label="첨부 빼기">×</button>` : ''}</span>`).join('');
 }
 function linkHref(u){ u = String(u || '').trim(); if(!u) return ''; return /^[a-z][a-z0-9+.-]*:/i.test(u) ? u : 'https://' + u; }
 function linkFields(x){
