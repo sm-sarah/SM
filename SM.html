@@ -4563,7 +4563,7 @@ function renderVatInner(){
    항목 closeCols = [{ id, label, type:'date'|'text'|'check'|'num', carry }] - 모든 회차 공통. 값은 works에만 저장
    ========================================================= */
 let closeYear = '', closeRound = '', closeQuery = '', closePicked = new Set();
-const CLOSE_TYPES = [['date','날짜'], ['range','기간'], ['text','글자'], ['check','체크'], ['num','숫자']];   // [2026.10.15] 기간(시작~끝 날짜) 추가(요청)
+const CLOSE_TYPES = [['date','날짜'], ['range','기간'], ['text','글자'], ['check','체크'], ['num','숫자'], ['memo','메모(목록)']];   // [2026.10.23] 메모(목록) 추가(요청)   // [2026.10.15] 기간(시작~끝 날짜) 추가(요청)
 const CLOSE_LINK_RE = /^(순번|상호|상호명|법인등록번호|사업자번호|개업일)$/;
 const CLOSE_CARRY_RE = /^(차량|급여종류|비고)/;
 const CLOSE_QUICK = ['x', '-', '미해당'];
@@ -4874,7 +4874,7 @@ function closeTableHtml(docs){
   const w = {};
   closeCols.forEach(c => {
     if(c.type === 'check') return;
-    if(c.type === 'date' || c.type === 'range'){ w[c.id] = 0; return; }
+    if(c.type === 'date' || c.type === 'range' || c.type === 'memo'){ w[c.id] = 0; return; }
     const len = Math.max(...String(c.label).split('\n').map(s => s.length), ...rows.map(x => String((d.v[x.id] || {})[c.id] ?? '').length));
     w[c.id] = Math.max(56, Math.min(240, len * 12 + 14));
   });
@@ -4888,6 +4888,7 @@ function closeTableHtml(docs){
     const cells = closeCols.map(c => {
       const val = v[c.id];
       if(c.type === 'check') return `<td style="text-align:center;"><input type="checkbox" ${val ? 'checked' : ''} onchange="closeSetVal('${cid}','${c.id}',this.checked)"></td>`;
+      if(c.type === 'memo') return `<td style="text-align:center;">${closeMemoBtn(cid, c.id, val)}</td>`;   // [2026.10.23] 메모(목록) - 아이콘(개수), 눌러서 목록 보기·추가
       if(c.type === 'range') return `<td style="text-align:center;"><button type="button" class="cl-dt${val && !closeIsRange(val) ? ' txt' : ''}" data-cid="${cid}" data-col="${c.id}" title="${escapeAttr(val || '')}" onclick="closeRangePop(this)">${taxjEsc(closeFmtRange(val))}</button></td>`;
       if(c.type === 'date') return `<td style="text-align:center;"><button type="button" class="cl-dt${val && !CLOSE_ISO_RE.test(val) ? ' txt' : ''}" data-cid="${cid}" data-col="${c.id}" title="${escapeAttr(val || '')}" onclick="closeDatePop(this)">${taxjEsc(closeFmtDate(val))}</button></td>`;
       const s = val == null ? '' : typeof val === 'number' ? val.toLocaleString('ko-KR') : String(val);
@@ -4901,7 +4902,56 @@ function closeTableHtml(docs){
   return `<div class="table-scroll vat-prog" style="margin-top:8px;"><table><thead><tr>${head}</tr></thead>
     <tbody>${body || `<tr><td colspan="${closeCols.length + 6}"><div class="empty" style="padding:18px;">${q ? '검색 결과가 없어요.' : '거래처가 없어요.'}</div></td></tr>`}</tbody></table></div>`;
 }
+// [2026.10.23] "결산 메뉴 메모랑 비고 합치고, 리스트 형태로 입력해서 팝업으로 보기"(요청)
+//   메모(목록) = 한 줄이 한 항목('\n'으로 이어 저장 - 예전 글자 값도 그대로 읽힘). 칸에는 아이콘 + 개수, 마우스를 올리면 번호 목록, 누르면 목록 창(추가·삭제)
+function closeMemoLines(v){ return String(v == null ? '' : v).split('\n').map(x => x.trim()).filter(Boolean); }
+function closeMemoBtn(cid, colId, v){
+  const L = closeMemoLines(v);
+  return `<button type="button" class="cl-dt vp-dt vp-memo${L.length ? ' has' : ''}" data-cid="${cid}" data-col="${colId}" title="${escapeAttr(L.length ? L.map((x, i) => `${i + 1}) ${x}`).join('\n') : '메모 입력')}" aria-label="메모" onclick="closeMemoPop(this)">${ICON_MEMO_DOC}${L.length ? `<span class="vt-ic-n">${L.length}</span>` : ''}</button>`;
+}
+function closeMemoPop(btn){
+  closeDatePopClose();
+  const { cid, col } = btn.dataset;
+  let items = closeMemoLines(closeGet(cid, col));
+  const pop = document.createElement('div');
+  pop.id = 'closeDatePop'; pop.className = 'cl-pop'; pop.style.width = '320px';
+  const draw = () => {
+    pop.innerHTML = `<div style="font-weight:800; font-size:12.5px;">메모 ${items.length ? `<span class="hint" style="margin:0; display:inline;">${items.length}개</span>` : ''}</div>
+      <div style="max-height:260px; overflow:auto; display:flex; flex-direction:column; gap:4px;">${items.length ? items.map((x, i) => `<div style="display:flex; gap:6px; align-items:flex-start; font-size:12.5px; line-height:1.45;"><span style="color:var(--muted); font-weight:700; min-width:18px;">${i + 1})</span><span style="flex:1; white-space:pre-wrap; word-break:break-all;">${taxjEsc(x)}</span><button type="button" data-del="${i}" title="이 줄 지우기" style="border:none; background:none; color:var(--muted-soft); cursor:pointer; padding:0 2px;">✕</button></div>`).join('') : '<div class="hint" style="margin:0;">아직 메모가 없어요.</div>'}</div>
+      <input type="text" class="cl-pop-text cl-memo-add" placeholder="새 메모 입력 후 Enter (추가)" style="font:inherit; font-size:12.5px; border:1px solid var(--border); border-radius:8px; padding:6px 8px;">`;
+    pop.querySelectorAll('[data-del]').forEach(b => b.onclick = e => { e.stopPropagation(); items.splice(Number(b.dataset.del), 1); save(); draw(); });
+    const inp = pop.querySelector('.cl-memo-add');
+    inp.addEventListener('keydown', e => { if(e.key === 'Enter' && !e.isComposing){ e.preventDefault(); const t = inp.value.trim(); if(t){ items.push(t); save(); draw(); pop.querySelector('.cl-memo-add').focus(); } } if(e.key === 'Escape') closeDatePopClose(); });
+    inp.focus();
+  };
+  const save = () => {
+    closeSetVal(cid, col, items.join('\n'));
+    btn.classList.toggle('has', items.length > 0);
+    btn.title = items.length ? items.map((x, i) => `${i + 1}) ${x}`).join('\n') : '메모 입력';
+    btn.innerHTML = ICON_MEMO_DOC + (items.length ? `<span class="vt-ic-n">${items.length}</span>` : '');
+  };
+  draw();
+  document.body.appendChild(pop);
+  const r = btn.getBoundingClientRect(), pw = pop.offsetWidth, ph = pop.offsetHeight;
+  pop.style.left = Math.max(8, Math.min(window.innerWidth - pw - 8, r.right - pw)) + 'px';
+  pop.style.top = (r.bottom + ph + 8 > window.innerHeight ? Math.max(8, r.top - ph - 4) : r.bottom + 4) + 'px';
+  setTimeout(() => document.addEventListener('mousedown', closeDatePopOutside, true), 0);
+}
+// 한 번만: '비고'와 '메모' 두 항목이 따로 있으면 '비고' 하나(메모(목록))로 합침 - 회차마다 비고 줄 + 메모 줄을 이어 붙임(메모 값은 지우지 않고 남겨 둠)
+function closeMergeMemoCols(){
+  const bi = closeCols.find(c => String(c.label).trim() === '비고'), me = closeCols.find(c => String(c.label).trim() === '메모');
+  if(!bi || !me || bi === me) return false;
+  Object.values(closeData).forEach(d => Object.values((d && d.v) || {}).forEach(r => {
+    const L = closeMemoLines(r[bi.id]).concat(closeMemoLines(r[me.id]).filter(x => !closeMemoLines(r[bi.id]).includes(x)));
+    if(L.length) r[bi.id] = L.join('\n');
+  }));
+  bi.type = 'memo';
+  closeCols = closeCols.filter(c => c !== me);
+  scheduleGoogleSave();
+  return true;
+}
 function renderClose(){
+  try{ closeMergeMemoCols(); }catch(e){ console.warn('결산 비고·메모 합치기', e); }
   const el = document.getElementById('tab-close');
   if(!el) return;
   const a = document.activeElement;
