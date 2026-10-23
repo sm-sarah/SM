@@ -8080,6 +8080,8 @@ function setPayCustomVal(key, colId, value){
 function payCustomCellHtml(key, col){
   const v = ((payCustomVals[payMonth] || {})[key] || {})[col.id];
   const k = escapeAttr(key);
+  // [2026.10.23] "신고서류가 해당없음이면 납부마감·신고서 저장 둘 다 비활성화"(요청) - '신고서 저장' 내 항목도 "-"만
+  if(/신고서\s*저장/.test(col.label || '') && ((payCustomVals[payMonth] || {})[key] || {})._billSent === '해당없음') return `<td><span style="color:#d4c6cd;" title="신고서류 해당없음 - 신고서 저장 없음">-</span></td>`;
   if(col.type === 'check') return `<td><input type="checkbox" ${v ? 'checked' : ''} onchange="setPayCustomVal('${k}','${col.id}',this.checked)"></td>`;
   if(col.type === 'text') return `<td class="note-cell"><input type="text" value="${escapeAttr(v || '')}" onchange="setPayCustomVal('${k}','${col.id}',this.value)" style="width:100%"></td>`;
   return `<td><div class="date-cell">${payDateBtnHtml(key, col.id, v)}</div></td>`;   // [2026.10.23] ✓로 바꿔서 '완료' 칩은 뺌(요청)
@@ -8164,7 +8166,8 @@ function payBulk(){
     const item = itemSel.value, usePicked = payRowsShown.some(r => payPicked.has(r.key));
     // [2026.10.15] "멘트 발송도 일괄적용"(요청) - 멘트 발송은 미납인 줄에만 있는 칸이라 미납 줄만 보여줌
     const isUnpaid = r => ((payCustomVals[payMonth] || {})[r.key] || {})._payState === '미납';
-    list.innerHTML = payRowsShown.map((r, i) => item === '_payMsg' && !isUnpaid(r) ? '' : (() => { const cur = payBulkCur(r.key, item), on = usePicked ? payPicked.has(r.key) : !cur;
+    const billNA = r => ((payCustomVals[payMonth] || {})[r.key] || {})._billSent === '해당없음';   // [2026.10.23] 신고서류 해당없음 줄은 납부마감 일괄 입력에서 뺌
+    list.innerHTML = payRowsShown.map((r, i) => (item === '_payMsg' && !isUnpaid(r)) || (['__paid','__unpaid','_payMsg'].includes(item) && billNA(r)) ? '' : (() => { const cur = payBulkCur(r.key, item), on = usePicked ? payPicked.has(r.key) : !cur;
       return `<label style="display:flex; align-items:center; gap:8px; padding:7px 0; border-bottom:1px dashed var(--border); font-size:12.5px; cursor:pointer;">
         <input type="checkbox" class="pb-chk" data-i="${i}" ${on ? 'checked' : ''} style="width:auto; margin:0;">
         <span style="margin:0; font-size:12.5px; color:var(--text); font-weight:700; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${taxjEsc(r.name)}${r.lane ? ` <span style="display:inline; margin:0; font-size:11px; color:${r.lane === 'sameMonth' ? '#059669' : '#e11d48'};">${r.lane === 'sameMonth' ? '당월' : '익월'}</span>` : ''}</span>
@@ -8212,6 +8215,8 @@ function payBillCellsHtml(key){
   const sent = `<td>${payDateInputHtml(key, '_billSent', v._billSent)}</td>`;
   // [2026.10.15] "납부마감 쪽 스타일이 뒤죽박죽"(요청) - 완납/미납은 작은 둥근 칩 모양 선택칸(색으로 구분), 확인일·멘트 발송일은 같은 열에 맞춰
   //   [상태 | 확인일] / [멘트 | 발송일] 두 줄 격자로. 멘트 줄의 '발송' 표시는 날짜와 겹쳐서 뺌
+  // [2026.10.23] "신고서류가 해당없음이면 납부마감도 비활성화"(요청) - 납부할 서류가 없으니 납부마감 칸은 "-"만
+  if(v._billSent === '해당없음') return [sent, `<td><span style="color:#d4c6cd;" title="신고서류 해당없음 - 납부마감 없음">-</span></td>`];
   const sel = `<select class="pay-st ${st === '완납' ? 'ok' : st === '미납' ? 'no' : ''}" onchange="setPayState('${k}', this.value)" title="납부 확인">${['', '완납', '미납'].map(o => `<option value="${o}" ${o === st ? 'selected' : ''}>${o || '-'}</option>`).join('')}</select>`;
   const pay = `<td><div class="pay-grid">${sel}<span>${st ? payDateBtnHtml(key, '_payCheck', v._payCheck, '확인일') : ''}</span>
       ${st === '미납' ? `<span class="pay-lab">멘트</span><span>${payDateBtnHtml(key, '_payMsg', v._payMsg, '멘트 발송일')}</span>` : ''}</div></td>`;
