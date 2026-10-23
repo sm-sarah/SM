@@ -7424,19 +7424,22 @@ function renderSubmit(){
   const md = d => `${Number(d.slice(5,7))}.${Number(d.slice(8,10))}`;
   const na = '<span style="color:#d4c6cd;">-</span>';
   // 칸: 제출 = 제출일(또는 처리 글자) / 미제출 = ~제출기한(지남 빨강·3일 안 주황) / 대상 아님 = - (회사웹과 같음)
-  const cellHtml = x => x.st === 'done' ? `<span style="font-weight:700; color:#059669;">${taxjEsc(x.date ? md(x.date) : x.note)}</span>${x.amt && x.amt.state ? amtMark(x.amt) : ''}`
+  // [2026.10.23] "초록색이 너무 많다"(요청) - 제출일 글자는 진한 기본 글자색, ✓만 초록
+  const cellHtml = x => x.st === 'done' ? `<span style="font-weight:700; color:var(--text);">${taxjEsc(x.date ? md(x.date) : x.note)}</span>${x.amt && x.amt.state ? amtMark(x.amt) : ''}`
     : x.st === 'todo' ? (x.due ? `<span style="font-weight:700; color:${x.dueLeft < 0 ? '#e11d48' : x.dueLeft <= 3 ? '#b45309' : 'var(--muted)'};" title="제출기한 ${x.due}${x.dueLeft < 0 ? ` (${-x.dueLeft}일 지남)` : ` (D-${x.dueLeft})`}">~${md(x.due)}</span>` : '<span style="font-weight:700; color:#b45309;">미제출</span>') + (x.amt && x.amt.state ? amtMark(x.amt) : '')
     : na;
   const amtMark = a => ` <span title="제출금액 ${a.rep == null ? '-' : a.rep.toLocaleString()} · 급여 합계 ${a.calc.toLocaleString()}" style="font-weight:800; color:${a.state === 'ok' ? '#059669' : '#e11d48'};">${a.state === 'ok' ? '✓' : '✕'}</span>`;
   // 순번·상호명은 같은 거래처 줄끼리 합침(rowspan)
   let seq = 0;
+  submitRowsShown = rows.map(r => ({ key: r.key, pk: monthly ? r.p : period, name: r.c.name, lane: r.dual ? r.lane : '', done: mineOf(r).done }));
   const body = rows.map((r, idx) => {
     const first = idx === 0 || rows[idx - 1].c !== r.c;
     let n = 1; if(first) while(rows[idx + n] && rows[idx + n].c === r.c) n++;
     if(first) seq++;
     const span = n > 1 ? ` rowspan="${n}"` : '', m = mineOf(r), pk = monthly ? r.p : period, k = escapeAttr(r.key);
     const laneLab = r.dual ? `<span style="color:var(--muted); font-weight:600;">/</span><span style="color:${r.lane === 'sameMonth' ? '#059669' : '#e11d48'};">${r.lane === 'sameMonth' ? '당월' : '익월'}</span>` : '';
-    const laneTag = dueView ? `<span style="font-size:11px; font-weight:700; margin-right:4px; color:${r.lane === 'sameMonth' ? '#059669' : '#e11d48'};">${r.lane === 'sameMonth' ? '당월지급' : '익월지급'}</span>` : '';
+    // [2026.10.23] "제출월 기준에서 당월지급 표기가 의미가 있어? 초록색이 너무 많다"(요청) - 귀속월·지급월 두 칸만 봐도 당월·익월이 보여서 지급월 칸의 당월지급/익월지급 글자는 뺌
+    const laneTag = '';
     const info = monthly ? `<td style="white-space:nowrap; font-weight:700;">${taxjEsc(r.base)}${laneLab}</td><td>${r.payKinds.length ? taxjEsc(r.payKinds.join(', ')) : na}</td>
       <td style="white-space:nowrap; font-weight:700;">${r.p.slice(0,4) !== period.slice(0,4) ? r.p.slice(2,4) + '년 ' : ''}${Number(r.p.slice(5,7))}월</td><td style="white-space:nowrap;">${laneTag}${Number(r.payMonth.slice(5,7))}월</td>` : '';
     return `<tr>${first ? `<td class="tx-seq"${span}>${seq}</td><td class="tx-name"${span} title="${taxjEsc(r.memo ? '회사 메모: ' + r.memo : '')}">${taxjEsc(r.c.name)}${r.c.status === '해지' ? ' <span class="cl-gone-tag">해지</span>' : ''}${r.memo ? ' <span class="hint" style="margin:0;">✎</span>' : ''}</td>` : ''}
@@ -7445,7 +7448,7 @@ function renderSubmit(){
         if(x.st === 'hide') return `<td>${na}</td><td>${na}</td>`;
         const closeTd = x.st === 'off' && !cv ? `<td>${na}</td>` : `<td>${payDateBtnHtmlS(r.key, it, cv, pk)}</td>`;
         return closeTd + `<td>${cellHtml(x)}</td>`; }).join('')}
-      <td><div class="date-cell"><input type="date" value="${m.done}" onchange="updateSubmitMine('${k}','done',this.value,'${pk}')">${m.done ? pill('확인','ok') : `<button class="btn xs" onclick="updateSubmitMine('${k}','done','${todayStr()}','${pk}')">오늘</button>`}</div></td>
+      <td><button type="button" class="cl-dt" data-key="${k}" data-pk="${escapeAttr(pk)}" title="${escapeAttr(m.done ? '신고서류 저장 ' + m.done : '신고서류 저장일 입력 (달력·오늘)')}" onclick="submitSavedPop(this)">${payFmtDate(m.done)}</button></td><!-- [2026.10.23] "내 확인 → 신고서류 저장, 아이콘만(눌러서 달력·오늘)"(요청) -->
       <td class="note-cell"><input type="text" value="${escapeAttr(m.note)}" onchange="updateSubmitMine('${k}','note',this.value,'${pk}')" style="width:100%"></td>
     </tr>`; }).join('');
   const prevNote = res.prevCnt ? `<button class="btn ghost xs" onclick="setSubmitView('due')" title="제출월 기준으로 보기" style="color:#b45309;">${Number(res.prevMonth.slice(5,7))}월 귀속 익월지급분 미제출 ${res.prevCnt}칸 ›</button>` : '';
@@ -7456,21 +7459,81 @@ function renderSubmit(){
         <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">${payStatusSegHtml()}<div class="sm-seg" id="submitModeSeg">${['월별','반기','연간'].map(m => `<button class="${submitMode === m ? 'on' : ''}" onclick="setSubmitMode('${m}')">${SUBMIT_MODE_LABEL[m]}</button>`).join('')}</div></div>
         <div style="display:flex; align-items:center; gap:10px;"><select onchange="submitYear=this.value; renderSubmit();">${years.map(y => `<option value="${y}" ${y===submitYear?'selected':''}>${y}년${submitMode === '연간' ? ' 귀속' : ''}</option>`).join('')}</select>
         ${sub}${viewSeg}</div>
-        <div style="justify-self:end; display:flex; align-items:center; gap:10px;">${prevNote}<label class="hint" style="margin:0; display:inline-flex; align-items:center; gap:4px; cursor:pointer;"><input type="checkbox" ${submitOnlyLeft ? 'checked' : ''} onchange="submitOnlyLeft=this.checked; renderSubmit();"> 남은 것만</label></div>
+        <div style="justify-self:end; display:flex; align-items:center; gap:10px;">${prevNote}<button class="sm-tool-ic" onclick="submitSavedBulk()" title="신고서류 저장일 일괄 입력 - 날짜를 고르고 거래처를 체크해서 한 번에 넣어요" aria-label="신고서류 저장일 일괄 입력">${ICON_BULK}</button><label class="hint" style="margin:0; display:inline-flex; align-items:center; gap:4px; cursor:pointer;"><input type="checkbox" ${submitOnlyLeft ? 'checked' : ''} onchange="submitOnlyLeft=this.checked; renderSubmit();"> 남은 것만</label></div>
       </div>
       ${!taxjFull ? '<div class="empty">Tax.J에 연결하면 회사웹 지급명세서 제출현황이 여기에 채워져요.</div>' : `
       <div class="summary-row">
         <div class="stat tone-blue"><div class="n">${all.length}</div><div class="label">제출 대상(줄)</div></div>
         <div class="stat tone-mint"><div class="n">${doneN}</div><div class="label">회사 제출 완료</div></div>
-        <div class="stat"><div class="n">${mineN}</div><div class="label">내 확인</div></div>
+        <div class="stat"><div class="n">${mineN}</div><div class="label">신고서류 저장</div></div>
       </div>
       <div class="progress-bar"><div class="fill tone-mint" style="width:${pct}%"></div></div>
       ${rows.length ? `<div class="table-scroll" style="margin-top:16px;"><table>
-        <thead><tr><th class="tx-seq" rowspan="2">순번</th><th rowspan="2">상호명</th>${monthly ? '<th rowspan="2">신고</th><th rowspan="2">발생급여</th><th rowspan="2">귀속월</th><th rowspan="2" title="그 귀속월 급여를 지급한 달 - 제출기한 기준">지급월</th>' : ''}${items.map(([it, l]) => { const b = monthly ? SUBMIT_DUE_BASIS[SUBMIT_DUE[it]] : ''; return `<th colspan="2">${l}${b ? `<br><span style="font-size:9.5px; font-weight:600;">${b}</span>` : ''}</th>`; }).join('')}<th rowspan="2">내 확인</th><th rowspan="2">내 메모</th></tr>
+        <thead><tr><th class="tx-seq" rowspan="2">순번</th><th rowspan="2">상호명</th>${monthly ? '<th rowspan="2">신고</th><th rowspan="2">발생급여</th><th rowspan="2">귀속월</th><th rowspan="2" title="그 귀속월 급여를 지급한 달 - 제출기한 기준">지급월</th>' : ''}${items.map(([it, l]) => { const b = monthly ? SUBMIT_DUE_BASIS[SUBMIT_DUE[it]] : ''; return `<th colspan="2">${l}${b ? `<br><span style="font-size:9.5px; font-weight:600;">${b}</span>` : ''}</th>`; }).join('')}<th rowspan="2">신고서류 저장</th><th rowspan="2">내 메모</th></tr>
         <tr>${items.map(() => '<th>마감</th><th>제출일</th>').join('')}</tr></thead>
         <tbody>${body}</tbody></table></div>`
       : `<div class="empty">${submitOnlyLeft && all.length ? '남은 제출이 없어요.' : dueView ? `${Number(period.slice(5,7))}월에 제출기한이 오는 칸이 없어요.` : '이 기간에 제출할 지급명세서가 있는 거래처가 없어요.'}</div>`}`}
     </div>`;
+}
+// [2026.10.23] 신고서류 저장일(예전 '내 확인', 저장 자리 submitMine[기간][줄].done 그대로) - ＋ 버튼을 누르면 달력·오늘·지우기
+let submitRowsShown = [];
+function submitSavedPop(btn){
+  closeDatePopClose();
+  const { key, pk } = btn.dataset, cur = ((submitMine[pk] || {})[key] || {}).done || '';
+  const pop = document.createElement('div');
+  pop.id = 'closeDatePop'; pop.className = 'cl-pop';
+  pop.innerHTML = `<input type="date" class="cl-pop-date" value="${/^\d{4}-\d{2}-\d{2}$/.test(cur) ? cur : ''}"><div class="cl-pop-row"><button type="button" data-v="__today">오늘</button><button type="button" data-v="해당없음">해당없음</button><button type="button" data-v="노무사">노무사</button><button type="button" data-v="__clear" class="del">지우기</button></div>`; // [2026.10.23] "해당없음·노무사도 고르게(회사웹처럼)"(요청)
+  document.body.appendChild(pop);
+  const r = btn.getBoundingClientRect(), pw = pop.offsetWidth, ph = pop.offsetHeight;
+  pop.style.left = Math.max(8, Math.min(window.innerWidth - pw - 8, r.left)) + 'px';
+  pop.style.top = (r.bottom + ph + 8 > window.innerHeight ? r.top - ph - 4 : r.bottom + 4) + 'px';
+  const set = v => { closeDatePopClose(); updateSubmitMine(key, 'done', v, pk); };
+  const di = pop.querySelector('.cl-pop-date');
+  di.addEventListener('change', () => { if(di.value) set(di.value); });
+  pop.querySelectorAll('[data-v]').forEach(b => b.onclick = () => set(b.dataset.v === '__today' ? todayStr() : b.dataset.v === '__clear' ? '' : b.dataset.v));
+  setTimeout(() => document.addEventListener('mousedown', closeDatePopOutside, true), 0);
+  try{ di.showPicker(); }catch(e){ di.focus(); }
+}
+// [2026.10.23] 신고서류 저장일 일괄 입력(요청) - 신고현황 날짜 일괄 입력 창과 같은 모양. 기본 체크 = 아직 저장일이 없는 줄
+function submitSavedBulk(){
+  if(!submitRowsShown.length) return smAlert('입력할 줄이 없어요', '지금 표에 보이는 거래처가 없어요.');
+  const wrap = document.createElement('div');
+  wrap.className = 'sm-modal-backdrop';
+  wrap.innerHTML = `<div class="sm-modal wide" role="dialog" aria-modal="true">
+      <button type="button" class="sm-modal-x" title="닫기" aria-label="닫기">×</button>
+      <div class="sm-modal-ic">✓</div>
+      <div class="sm-modal-title">신고서류 저장일 일괄 입력</div>
+      <div class="sm-modal-fields">
+        <label class="sm-modal-field"><span>날짜</span><div style="display:flex; gap:6px;"><input type="date" class="pb-date" value="${todayStr()}" style="flex:1;"><button type="button" class="btn xs pb-today">오늘</button></div></label>
+        <div class="sm-modal-field"><span style="display:flex; align-items:center; gap:6px;"><input type="checkbox" class="pb-all" style="width:auto; margin:0;"> 거래처 <b class="pb-cnt" style="margin-left:auto; font-weight:700;"></b></span>
+          <div class="pb-list" style="max-height:300px; overflow:auto; border:1px solid var(--border); border-radius:12px; padding:2px 10px;">${submitRowsShown.map((r, i) => `<label style="display:flex; align-items:center; gap:8px; padding:7px 0; border-bottom:1px dashed var(--border); font-size:12.5px; cursor:pointer;">
+            <input type="checkbox" class="pb-chk" data-i="${i}" ${r.done ? '' : 'checked'} style="width:auto; margin:0;">
+            <span style="margin:0; font-size:12.5px; color:var(--text); font-weight:700; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${taxjEsc(r.name)}${r.lane ? ` <span style="display:inline; margin:0; font-size:11px; color:${r.lane === 'sameMonth' ? '#059669' : '#e11d48'};">${r.lane === 'sameMonth' ? '당월' : '익월'}</span>` : ''}</span>
+            <span class="hint" style="display:inline; margin:0; white-space:nowrap;">${r.done ? payFmtDate(r.done) : ''}</span></label>`).join('')}</div></div>
+      </div>
+      <div class="sm-modal-btns"><button type="button" class="sm-modal-cancel">취소</button><button type="button" class="sm-modal-ok">입력</button></div>
+    </div>`;
+  document.body.appendChild(wrap);
+  requestAnimationFrame(() => wrap.classList.add('show'));
+  const $ = q => wrap.querySelector(q), list = $('.pb-list');
+  const sync = () => { const all = [...list.querySelectorAll('.pb-chk')], on = all.filter(x => x.checked).length; $('.pb-all').checked = all.length > 0 && on === all.length; $('.pb-all').indeterminate = on > 0 && on < all.length; $('.pb-cnt').textContent = `${on} / ${all.length}`; };
+  const close = () => { document.removeEventListener('keydown', onKey, true); wrap.classList.remove('show'); setTimeout(() => wrap.remove(), 150); };
+  const apply = () => {
+    const date = $('.pb-date').value || todayStr();
+    const picked = [...list.querySelectorAll('.pb-chk')].filter(x => x.checked).map(x => submitRowsShown[Number(x.dataset.i)]);
+    if(!picked.length) return smAlert('거래처를 골라 주세요', '목록에서 입력할 거래처를 하나 이상 체크해 주세요.');
+    picked.forEach(r => { const per = submitMine[r.pk] = submitMine[r.pk] || {}; const row = per[r.key] = per[r.key] || { done:'', note:'' }; row.done = date; });
+    close(); renderSubmit(); scheduleGoogleSave();
+    smAlert('입력했어요', `신고서류 저장 · ${picked.length}줄에 ${date}`, { icon:'✓' });
+  };
+  const onKey = e => { if(e.key === 'Escape'){ e.preventDefault(); e.stopPropagation(); close(); } };
+  document.addEventListener('keydown', onKey, true);
+  list.querySelectorAll('.pb-chk').forEach(x => x.addEventListener('change', sync));
+  $('.pb-today').onclick = () => { $('.pb-date').value = todayStr(); };
+  $('.pb-all').addEventListener('change', e => { list.querySelectorAll('.pb-chk').forEach(x => { x.checked = e.target.checked; }); sync(); });
+  $('.sm-modal-x').onclick = close; $('.sm-modal-cancel').onclick = close; $('.sm-modal-ok').onclick = apply;
+  wrap.addEventListener('mousedown', e => { if(e.target === wrap) close(); });
+  sync();
 }
 // 내 마감일 칸 - 신고현황 날짜 칸처럼 ＋ 버튼(누르면 날짜 창)
 function payDateBtnHtmlS(key, item, v, pk){
@@ -7481,7 +7544,7 @@ function submitDatePop(btn){
   const { key, item, pk } = btn.dataset, cur = ((((submitMine[pk] || {})[key] || {}).close) || {})[item] || '';
   const pop = document.createElement('div');
   pop.id = 'closeDatePop'; pop.className = 'cl-pop';
-  pop.innerHTML = `<input type="date" class="cl-pop-date" value="${cur}"><div class="cl-pop-row"><button type="button" data-v="__today">오늘</button><button type="button" data-v="__clear" class="del">지우기</button></div>`;
+  pop.innerHTML = `<input type="date" class="cl-pop-date" value="${/^\d{4}-\d{2}-\d{2}$/.test(cur) ? cur : ''}"><div class="cl-pop-row"><button type="button" data-v="__today">오늘</button><button type="button" data-v="해당없음">해당없음</button><button type="button" data-v="노무사">노무사</button><button type="button" data-v="__clear" class="del">지우기</button></div>`; // [2026.10.23] "해당없음·노무사도 고르게(회사웹처럼)"(요청)
   document.body.appendChild(pop);
   const r = btn.getBoundingClientRect(), pw = pop.offsetWidth, ph = pop.offsetHeight;
   pop.style.left = Math.max(8, Math.min(window.innerWidth - pw - 8, r.left)) + 'px';
@@ -7489,7 +7552,7 @@ function submitDatePop(btn){
   const set = v => { closeDatePopClose(); setSubmitClose(key, item, v, pk); };
   const di = pop.querySelector('.cl-pop-date');
   di.addEventListener('change', () => { if(di.value) set(di.value); });
-  pop.querySelectorAll('[data-v]').forEach(b => b.onclick = () => set(b.dataset.v === '__today' ? todayStr() : ''));
+  pop.querySelectorAll('[data-v]').forEach(b => b.onclick = () => set(b.dataset.v === '__today' ? todayStr() : b.dataset.v === '__clear' ? '' : b.dataset.v));
   setTimeout(() => document.addEventListener('mousedown', closeDatePopOutside, true), 0);
   try{ di.showPicker(); }catch(e){ di.focus(); }
 }
@@ -10317,6 +10380,28 @@ initAuthGate();
 // ── 앱 설치(PWA) ──
 // [2026.10.20] 휴대폰 앱 설치에 필요한 서비스 워커(sw.js - 저장 없이 그대로 통과만). 파일로 열었을 땐 건너뜀
 if('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(e => console.warn('sw', e));
+// [2026.10.23] "개인웹도 새로 배포되면 새로고침하라고 알림"(요청) - 열 때 이 파일의 지문(ETag·수정시각)을 기억했다가, 5분마다·화면으로 돌아올 때 다시 확인해서
+//   바뀌었으면 화면 위에 "새 버전이 올라왔어요" 안내를 띄움(새로고침 / 나중에 - 나중에를 누르면 30분 뒤 다시)
+(function(){
+  if(location.protocol !== 'https:') return;
+  let base = null, shown = false, snoozeUntil = 0;
+  const sig = async ()=>{ const r = await fetch(location.pathname + '?_v=' + Date.now(), { method:'HEAD', cache:'no-store' }); if(!r.ok) return null; return r.headers.get('etag') || r.headers.get('last-modified') || null; };
+  function banner(){
+    if(shown || Date.now() < snoozeUntil) return; shown = true;
+    const b = document.createElement('div');
+    b.style.cssText = 'position:fixed; top:14px; left:50%; transform:translateX(-50%); z-index:99999; display:flex; align-items:center; gap:10px; background:var(--primary); color:#fff; border-radius:999px; padding:7px 10px 7px 16px; font-size:13px; font-weight:700; box-shadow:var(--shadow-md); white-space:nowrap;';
+    b.innerHTML = '<span>새 버전이 올라왔어요</span><button type="button" data-a="go" style="border:none; border-radius:999px; padding:4px 12px; font-size:12px; font-weight:800; background:#fff; color:var(--primary); cursor:pointer;">새로고침</button><button type="button" data-a="later" style="border:none; background:transparent; color:#fff; opacity:.85; font-size:12px; font-weight:700; cursor:pointer;">나중에</button>';
+    b.querySelector('[data-a="go"]').onclick = ()=> location.reload();
+    b.querySelector('[data-a="later"]').onclick = ()=>{ b.remove(); shown = false; snoozeUntil = Date.now() + 30*60*1000; };
+    document.body.appendChild(b);
+  }
+  async function check(){
+    try{ const v = await sig(); if(!v) return; if(base === null){ base = v; return; } if(v !== base) banner(); }catch(e){}
+  }
+  check();
+  setInterval(check, 5*60*1000);
+  document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState === 'visible') check(); });
+})();
 let deferredInstallPrompt = null;
 window.addEventListener('beforeinstallprompt', e => {
   e.preventDefault();
