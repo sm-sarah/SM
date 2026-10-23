@@ -1141,6 +1141,7 @@ function smTogglePcView(){ try{ localStorage.setItem('sm_pc_view', window.SM_PC_
   /* [2026.10.14] 결산 날짜 칸·날짜 고르기 창 */
   .cl-dt{ font:inherit; font-size:12.5px; min-width:46px; height:26px; padding:0 6px; border:1px solid transparent; border-radius:6px; background:transparent; color:var(--text); cursor:pointer; white-space:nowrap; }
   .cl-dt:hover{ border-color:var(--border); background:#fff; }
+  .pay-chk{ color:#059669; font-weight:800; font-size:13px; }   /* [2026.10.23] 신고현황 완료 ✓(요청) */
   .cl-dt:empty::before{ content:'＋'; color:var(--muted-soft); font-size:11px; }
   .cl-dt.txt{ color:var(--muted); }
   /* [2026.10.19] 부가세 진행 날짜·기간 칸 - 빈 칸은 ＋ 대신 작은 달력 아이콘 */
@@ -8010,7 +8011,7 @@ function payOverviewHtml(docs){
 // payCustomCols·payCustomVals(내가 만든 항목)는 다른 저장 항목과 함께 위쪽에 선언
 const PAY_COL_TYPES = [['date','날짜'], ['check','체크'], ['text','글자']];
 // [2026.10.15] "항목 추가하면 위치도 조정 가능? 예: 급여명세서 전달 왼쪽"(요청) - 내 항목마다 pos(어느 칸 앞에 둘지) 저장. 없으면 맨 끝
-const PAY_COL_POS = [['end','맨 끝 (메모 뒤)'], ['cycle','신고 앞'], ['payslip','급여명세서 전달 앞'], ['payroll','급여마감 앞'], ['close','신고서 마감 앞'], ['filed','신고일자 앞'], ['bill','납부서 발송 앞'], ['paid','납부마감 앞'], ['memo','메모 앞']];
+const PAY_COL_POS = [['end','맨 끝 (메모 뒤)'], ['cycle','신고 앞'], ['payslip','급여명세서 전달 앞'], ['payroll','급여마감 앞'], ['close','신고서 마감 앞'], ['filed','신고일자 앞'], ['bill','신고서류 앞'], ['paid','납부마감 앞'], ['memo','메모 앞']];
 function payPosKey(label){ return (PAY_COL_POS.find(x => x[1] === label) || PAY_COL_POS[0])[0]; }
 function payPosLabel(key){ return (PAY_COL_POS.find(x => x[0] === (key || 'end')) || PAY_COL_POS[0])[1]; }
 function payFocusMonth(docs){
@@ -8081,7 +8082,7 @@ function payCustomCellHtml(key, col){
   const k = escapeAttr(key);
   if(col.type === 'check') return `<td><input type="checkbox" ${v ? 'checked' : ''} onchange="setPayCustomVal('${k}','${col.id}',this.checked)"></td>`;
   if(col.type === 'text') return `<td class="note-cell"><input type="text" value="${escapeAttr(v || '')}" onchange="setPayCustomVal('${k}','${col.id}',this.value)" style="width:100%"></td>`;
-  return `<td><div class="date-cell">${payDateBtnHtml(key, col.id, v)}${v ? pill('완료','ok') : ''}</div></td>`;
+  return `<td><div class="date-cell">${payDateBtnHtml(key, col.id, v)}</div></td>`;   // [2026.10.23] ✓로 바꿔서 '완료' 칩은 뺌(요청)
 }
 // [2026.10.15] "날짜 입력하는 곳은 연월일이 안 보여도 된다. 아이콘·플러스 버튼 하나로, 입력하면 조회만 되면 된다"(요청)
 //   빈 칸 = ＋ 버튼(결산 날짜 칸 .cl-dt와 같은 모양), 누르면 작은 창(달력·오늘·지우기), 입력하면 날짜(월/일)만 보임
@@ -8091,16 +8092,20 @@ function payFmtDate(v){
   const [y, m, d] = v.split('-');
   return `${y === String(new Date().getFullYear()) ? '' : y.slice(2) + '.'}${Number(m)}/${Number(d)}`;
 }
+// [2026.10.23] "완료된 건 다 ✓ 표시, 마우스를 올리면 날짜"(요청) - 신고현황 날짜 칸은 날짜 대신 ✓(글자 값 '해당없음' 등은 그대로 글자)
+function payChkHtml(v){ return /^\d{4}-\d{2}-\d{2}$/.test(String(v || '')) ? '<span class="pay-chk">✓</span>' : payFmtDate(v); }
 function payDateBtnHtml(key, id, v, title){
-  return `<button type="button" class="cl-dt" data-key="${escapeAttr(key)}" data-col="${id}" title="${escapeAttr(v || title || '날짜 입력')}" onclick="payDatePop(this)">${payFmtDate(v)}</button>`;
+  return `<button type="button" class="cl-dt" data-key="${escapeAttr(key)}" data-col="${id}" title="${escapeAttr(v ? (title ? title + ' ' : '') + v : (title || '날짜 입력'))}" onclick="payDatePop(this)">${payChkHtml(v)}</button>`;
 }
+// 회사웹에서 가져온 날짜 칸(급여마감·신고서 마감·신고일자 등)도 ✓ + 마우스를 올리면 날짜
+function taxjChk(v){ return v ? `<span class="pay-chk" title="${escapeAttr(String(v))}">✓</span>` : '<span style="color:#d4c6cd;">-</span>'; }
 function payDatePop(btn){
   closeDatePopClose();
   const { key, col } = btn.dataset, cur = ((payCustomVals[payMonth] || {})[key] || {})[col] || '';
   const pop = document.createElement('div');
   pop.id = 'closeDatePop'; pop.className = 'cl-pop';   // 결산 날짜 창과 같은 모양·닫기 동작
   pop.innerHTML = `<input type="date" class="cl-pop-date" value="${/^\d{4}-\d{2}-\d{2}$/.test(cur) ? cur : ''}">
-    <div class="cl-pop-row"><button type="button" data-v="__today">오늘</button><button type="button" data-v="__clear" class="del">지우기</button></div>`;
+    <div class="cl-pop-row"><button type="button" data-v="__today">오늘</button><button type="button" data-v="해당없음">해당없음</button><button type="button" data-v="__clear" class="del">지우기</button></div>`; // [2026.10.23] 반기는 신고서류가 없어서 해당없음(요청)
   document.body.appendChild(pop);
   const r = btn.getBoundingClientRect(), pw = pop.offsetWidth, ph = pop.offsetHeight;
   pop.style.left = Math.max(8, Math.min(window.innerWidth - pw - 8, r.left)) + 'px';
@@ -8109,7 +8114,7 @@ function payDatePop(btn){
   const di = pop.querySelector('.cl-pop-date');
   di.addEventListener('change', () => { if(di.value) set(di.value); });
   di.addEventListener('keydown', e => { if(e.key === 'Escape') closeDatePopClose(); });
-  pop.querySelectorAll('[data-v]').forEach(b => b.onclick = () => set(b.dataset.v === '__today' ? todayStr() : ''));
+  pop.querySelectorAll('[data-v]').forEach(b => b.onclick = () => set(b.dataset.v === '__today' ? todayStr() : b.dataset.v === '__clear' ? '' : b.dataset.v));
   setTimeout(() => document.addEventListener('mousedown', closeDatePopOutside, true), 0);
   try{ di.showPicker(); }catch(e){ di.focus(); }
 }
@@ -8122,7 +8127,7 @@ function payPickAll(on){ document.querySelectorAll('#tab-pay .pay-pick').forEach
 //   체크 기본값 = 표에서 고른 줄이 있으면 그 줄, 없으면 그 항목이 비어 있는 줄. 납부마감 완납·미납은 날짜 = 확인일
 let payRowsShown = [];   // 신고현황 표에 지금 보이는 줄 [{ key, name, lane }] - payStatusHtml에서 채움
 function payBulkItems(){
-  return [['_billSent', '납부서 발송'], ['__paid', '납부마감 · 완납'], ['__unpaid', '납부마감 · 미납'], ['_payMsg', '납부마감 · 미납 멘트 발송'],
+  return [['_billSent', '신고서류'], ['__paid', '납부마감 · 완납'], ['__unpaid', '납부마감 · 미납'], ['_payMsg', '납부마감 · 미납 멘트 발송'],
     ...payCustomCols.filter(c => c.type === 'date').map(c => [c.id, c.label])];
 }
 function payBulkCur(key, item){
@@ -8194,7 +8199,7 @@ function payBulk(){
 //   _billSent = 납부서 발송일 / _payState = '완납'|'미납' / _payCheck = 확인일 / _payMsg = 미납 멘트 발송일
 function payDateInputHtml(key, id, v, label){
   const k = escapeAttr(key);
-  return `<div class="date-cell">${label ? `<span class="hint" style="margin:0; white-space:nowrap;">${label}</span>` : ''}${payDateBtnHtml(key, id, v)}${v ? pill('발송','ok') : ''}</div>`;
+  return `<div class="date-cell">${label ? `<span class="hint" style="margin:0; white-space:nowrap;">${label}</span>` : ''}${payDateBtnHtml(key, id, v)}</div>`;   // [2026.10.23] ✓로 바꿔서 '발송' 칩은 뺌(요청)
 }
 function setPayState(key, v){
   const cur = (payCustomVals[payMonth] || {})[key] || {};
@@ -8254,11 +8259,11 @@ function payStatusHtml(docs){
       const ho = halfOff(c.id);
       if(!ho && v.returnClose && v.returnCloseLocal) cntClose++;
       if(!ho && v.national && v.local) cntFiled++;
-      const slip = skipAll || v.payslipNA ? '<span class="hint" style="margin:0;">해당 없음</span>' : taxjMd(v.payslip);
+      const slip = skipAll || v.payslipNA ? '<span class="hint" style="margin:0;">해당 없음</span>' : taxjChk(v.payslip);
       // [2026.10.13] "신고서 마감을 국세·지방세 나눠서, 그리고 신고일자"(요청) - 신고서 마감(returnClose·returnCloseLocal)·신고일자(national·local)를 각각 국세·지방세 칸으로.
       // 반기 거래처의 6·12월 외 달은 신고서 마감·신고가 없어서 두 칸을 합쳐 '반기'
       const halfTd = what => `<td colspan="2"><span class="hint" style="margin:0;" title="반기 신고 - 6·12월에 ${what}">반기</span></td>`;
-      const taxTds = (a, b, what) => ho ? halfTd(what) : `<td>${taxjMd(a)}</td><td>${taxjMd(b)}</td>`;
+      const taxTds = (a, b, what) => ho ? halfTd(what) : `<td>${taxjChk(a)}</td><td>${taxjChk(b)}</td>`;
       // [2026.10.14] "같은 거래처라 한 표에 나오게"(요청) - 당월·익월 두 줄이면 순번·상호명 칸을 합치고(rowspan) 두 줄 사이 선을 옅게
       const span = dual ? ` rowspan="${lanes.length}"` : '';
       const cc = pos => payCustomCols.filter(col => (col.pos || 'end') === pos).map(col => payCustomCellHtml(key, col)).join('');
@@ -8268,7 +8273,7 @@ function payStatusHtml(docs){
         ${li ? '' : `<td class="tx-seq"${span}>${n}</td><td class="tx-name"${span}>${taxjEsc(c.name)}</td>`}
         ${cc('cycle')}<td style="white-space:nowrap; font-weight:700;">${payCycleLabelHtml(base, dual ? k : '')}</td>
         ${li ? '' : `<td style="white-space:nowrap;"${span}>${(ov[c.id] || {}).actualPayDay ? taxjEsc(ov[c.id].actualPayDay) : PAY_NA}</td>`}<!-- [2026.10.23] "신고 오른쪽에 총괄의 실지급일"(요청) - 회사웹 원천세 › 총괄의 실 급여일(s__itOverview.actualPayDay), 거래처당 한 칸 -->
-        ${cc('payslip')}<td>${slip}</td>${cc('payroll')}<td>${taxjMd(v.payroll)}</td>
+        ${cc('payslip')}<td>${slip}</td>${cc('payroll')}<td>${taxjChk(v.payroll)}</td>
         ${cc('close')}${taxTds(v.returnClose, v.returnCloseLocal, '신고서 마감')}${cc('filed')}${taxTds(v.national, v.local, '신고')}
         ${cc('bill')}${billTd}${cc('paid')}${paidTd}
         ${cc('memo')}<td style="text-align:left; white-space:pre-wrap; min-width:140px; font-size:12.5px;">${v.memo ? taxjEsc(v.memo) : PAY_NA}</td>
@@ -8293,7 +8298,7 @@ function payStatusHtml(docs){
       <div class="stat"><div class="n">${cntClose} · ${cntFiled}</div><div class="label">신고서 마감 · 신고 완료</div></div>
     </div>
     <div class="progress-bar"><div class="fill tone-blue" style="width:${pct}%"></div></div>
-    ${rows.length ? `<div class="table-scroll" style="margin-top:16px;"><table><thead><tr><th class="tx-seq" rowspan="2">순번</th><th rowspan="2">상호명</th>${ch('cycle')}<th rowspan="2">신고</th><th rowspan="2">실 급여일</th>${ch('payslip')}<th rowspan="2">급여명세서 전달</th>${ch('payroll')}<th rowspan="2">급여마감</th>${ch('close')}<th colspan="2">신고서 마감</th>${ch('filed')}<th colspan="2">신고일자</th>${ch('bill')}<th rowspan="2">납부서 발송</th>${ch('paid')}<th rowspan="2">납부마감</th>${ch('memo')}<th rowspan="2">메모</th>
+    ${rows.length ? `<div class="table-scroll" style="margin-top:16px;"><table><thead><tr><th class="tx-seq" rowspan="2">순번</th><th rowspan="2">상호명</th>${ch('cycle')}<th rowspan="2">신고</th><th rowspan="2">실 급여일</th>${ch('payslip')}<th rowspan="2">급여명세서 전달</th>${ch('payroll')}<th rowspan="2">급여마감</th>${ch('close')}<th colspan="2">신고서 마감</th>${ch('filed')}<th colspan="2">신고일자</th>${ch('bill')}<th rowspan="2">신고서류</th>${ch('paid')}<th rowspan="2">납부마감</th>${ch('memo')}<th rowspan="2">메모</th>
       ${ch('end')}</tr><tr><th>국세</th><th>지방세</th><th>국세</th><th>지방세</th></tr></thead><tbody>${rows.join('')}</tbody></table></div>`
       : `<div class="empty">${q ? '검색 결과가 없어요.' : `${yy}년 ${mm}월 귀속 신고대상이 없어요.`}</div>`}`;
 }
@@ -10401,11 +10406,13 @@ if('serviceWorker' in navigator && location.protocol === 'https:') navigator.ser
   function banner(){
     if(shown || Date.now() < snoozeUntil) return; shown = true;
     const b = document.createElement('div');
-    b.style.cssText = 'position:fixed; top:14px; left:50%; transform:translateX(-50%); z-index:99999; display:flex; align-items:center; gap:10px; background:var(--primary); color:#fff; border-radius:999px; padding:7px 10px 7px 16px; font-size:13px; font-weight:700; box-shadow:var(--shadow-md); white-space:nowrap;';
+    // [2026.10.23] "새로고침 안내는 왼쪽 위 빈자리에"(요청) - 머리줄(header) 왼쪽 빈 칸 안에 넣음(없으면 화면 왼쪽 위 모서리)
+    const slot = document.querySelector('header > span:first-child');
+    b.style.cssText = (slot ? 'position:relative; width:max-content;' : 'position:fixed; top:14px; left:16px; z-index:99999;') + ' display:inline-flex; align-items:center; gap:10px; background:var(--primary); color:#fff; border-radius:999px; padding:7px 10px 7px 16px; font-size:13px; font-weight:700; box-shadow:var(--shadow-md); white-space:nowrap;';
     b.innerHTML = '<span>새 버전이 올라왔어요</span><button type="button" data-a="go" style="border:none; border-radius:999px; padding:4px 12px; font-size:12px; font-weight:800; background:#fff; color:var(--primary); cursor:pointer;">새로고침</button><button type="button" data-a="later" style="border:none; background:transparent; color:#fff; opacity:.85; font-size:12px; font-weight:700; cursor:pointer;">나중에</button>';
     b.querySelector('[data-a="go"]').onclick = ()=> location.reload();
     b.querySelector('[data-a="later"]').onclick = ()=>{ b.remove(); shown = false; snoozeUntil = Date.now() + 30*60*1000; };
-    document.body.appendChild(b);
+    (slot || document.body).appendChild(b);
   }
   async function check(){
     try{ const v = await sig(); if(!v) return; if(base === null){ base = v; return; } if(v !== base) banner(); }catch(e){}
