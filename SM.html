@@ -7198,7 +7198,8 @@ const SUBMIT_INCOME_MAP = {
 const SUBMIT_DUE = { 사업간이:'pay', 기타간이:'pay', 일용지급:'pay', 일용근확:'att15', 특고:'att15', 학자금상환:'pay10' };
 const SUBMIT_MODE_LABEL = { 월별:'매월', 반기:'반기', 연간:'연간' };
 let submitMode = '월별', submitYear = '', submitMonth = '', submitHalf = 'H1', submitOnlyLeft = false;
-let submitView = 'att';   // [2026.10.15] 회사웹 submitState.view와 같음 - att = 귀속월 기준, due = 제출월 기준(월별만)
+let submitView = 'due';   // [2026.10.23] 회사웹 변경 반영 - 기본 제출월 기준(요청)
+   // [2026.10.15] 회사웹 submitState.view와 같음 - att = 귀속월 기준, due = 제출월 기준(월별만)
 // 보기 전환: 달도 같이 옮김(9월 귀속 ↔ 10월 제출) - 회사웹 setSubmitView와 같음
 function setSubmitView(v){
   submitInit();
@@ -7235,8 +7236,22 @@ function submitDueOf(item, period, payMonth){
 function submitItemApplicableS(v){ return v === true || v === '검토중' || v === '제출완료' || v === '완료'; }
 function submitPeriodMonthsS(){ return submitMonths().map(m => `${submitYear}-${pad2(m)}`); }
 // 검토표(급여검증)에 그 귀속기간 금액이 있으면 제출대상(회사웹 submitAutoApplicable). 연결 안 되는 칸은 null
+// [2026.10.23] 회사웹 변경 반영(요청) - 반기 거래처는 급여 금액을 반기 끝에 몰아 입력하므로, 그 달 발생급여(payKinds)에 사업·기타·일용을 고르면
+//   매월 목록에 넣고 그 칸을 제출대상으로 봄(회사웹 submitHalfKindApplicable과 같음)
+const SUBMIT_HALF_KIND_OF = { 사업간이:'사업', 기타간이:'기타', 일용지급:'일용', 일용근확:'일용' };
+function submitHalfKindS(cid, itemKey, period, keys){
+  const want = SUBMIT_HALF_KIND_OF[itemKey], pp = String(period);
+  if(!want || !/^\d{4}-\d{2}$/.test(pp)) return false;
+  const d = { s__filingCycles: taxjDoc('filingCycles') || {} };
+  if(!payCycleRecs(d, cid).length) return false;
+  const rec = payCycleAt(d, cid, pp);
+  if(!rec || (rec.cycle || '매월') !== '반기') return false;
+  const rf = taxjDoc('reviewFigures') || {}, y = pp.slice(0,4), m = String(Number(pp.slice(5,7)));
+  return (keys || [cid, cid + '@nextMonth']).some(k => ((((rf[k] || {})[y] || {})[m] || {}).payKinds || []).includes(want));
+}
 function submitAutoS(cid, itemKey, period, keys){
   const f = SUBMIT_INCOME_MAP[itemKey]; if(!f) return null;
+  if(submitHalfKindS(cid, itemKey, period, keys)) return true;
   const rf = taxjDoc('reviewFigures') || {}, pp = String(period), year = pp.slice(0,4);
   const months = /^\d{4}$/.test(pp) ? [1,2,3,4,5,6,7,8,9,10,11,12] : /^\d{4}-\d{2}$/.test(pp) ? [Number(pp.slice(5,7))] : (/H2/.test(pp) ? [7,8,9,10,11,12] : [1,2,3,4,5,6]);
   return (keys || [cid, cid + '@nextMonth']).some(k => { const yd = (rf[k] || {})[year] || {}; return months.some(m => f.some(x => Number(((yd[String(m)] || {}).income || {})[x]))); });
@@ -7246,7 +7261,8 @@ function submitPayrollTargetS(cid, periods, keys){
   const fields = new Set(SUBMIT_ITEMS[submitMode].flatMap(([k]) => SUBMIT_INCOME_MAP[k] || [])), rf = taxjDoc('reviewFigures') || {};
   return (periods || submitPeriodMonthsS()).some(per => {
     const y = per.slice(0,4), m = String(Number(per.slice(5,7)));
-    return (keys || [cid, cid + '@nextMonth']).some(k => Object.entries(((((rf[k] || {})[y] || {})[m] || {}).income) || {}).some(([f, v]) => fields.has(f) && Number(v)));
+    return (keys || [cid, cid + '@nextMonth']).some(k => Object.entries(((((rf[k] || {})[y] || {})[m] || {}).income) || {}).some(([f, v]) => fields.has(f) && Number(v)))
+      || (submitMode === '월별' && SUBMIT_ITEMS['월별'].some(([it]) => submitHalfKindS(cid, it, per, keys)));   // [2026.10.23] 반기 거래처 발생급여(회사웹 변경 반영)
   });
 }
 // [2026.10.15] 회사웹 변경 반영 - 지급명세서 검증(원천세_2026.xlsx 거래처 시트 수식 그대로, 회사웹 submitAmtInfoM·submitAmtInfo). 제출금액이 적힌 칸만 ✓ 일치 / ✕ 불일치
