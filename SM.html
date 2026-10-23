@@ -564,6 +564,18 @@ function smTogglePcView(){ try{ localStorage.setItem('sm_pc_view', window.SM_PC_
   .task-list .task-date{ font-size:13px; color:var(--slate); }
   .empty{ font-size:14px; }
   .stat .label, .hero-tile .label{ font-size:13px; }
+  /* [2026.10.23] "각 메뉴 화면 내용의 글자가 좀 크다"(요청) - 메뉴 화면(.tab) 안의 기본 글자만 1px 정도씩 줄임(왼쪽 메뉴·머리줄·칸 여백·폭 설정은 그대로) */
+  .tab{ font-size:14px; }
+  .tab table{ font-size:13px; }
+  .tab th{ font-size:11.5px; }
+  .tab select, .tab input[type=text], .tab input[type=date], .tab input[type=number]{ font-size:13px; }
+  .tab button.btn{ font-size:12.5px; }
+  .tab button.btn.xs{ font-size:11.5px; }
+  .tab .tag, .tab .pill, .tab .type-tag{ font-size:11.5px; }
+  .tab .empty{ font-size:13px; }
+  .tab .stat .label, .tab .hero-tile .label{ font-size:12px; }
+  .tab .stat .n{ font-size:19px; }
+  .tab .date-cell input[type=date]{ font-size:11.5px; }
 
   /* 달력: 요일 줄 빈 공간 제거, 칸을 흰색+테두리로 구분 */
   .cal-head .month-label{ font-size:18px; }
