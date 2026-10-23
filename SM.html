@@ -8176,6 +8176,7 @@ function payStatusHtml(docs){
       rows.push(`<tr${dual ? (li ? ' class="pay-lane-2"' : ' class="pay-lane-1"') : ''}>
         ${li ? '' : `<td class="tx-seq"${span}>${n}</td><td class="tx-name"${span}>${taxjEsc(c.name)}</td>`}
         ${cc('cycle')}<td style="white-space:nowrap; font-weight:700;">${payCycleLabelHtml(base, dual ? k : '')}</td>
+        ${li ? '' : `<td style="white-space:nowrap;"${span}>${(ov[c.id] || {}).actualPayDay ? taxjEsc(ov[c.id].actualPayDay) : PAY_NA}</td>`}<!-- [2026.10.23] "신고 오른쪽에 총괄의 실지급일"(요청) - 회사웹 원천세 › 총괄의 실 급여일(s__itOverview.actualPayDay), 거래처당 한 칸 -->
         ${cc('payslip')}<td>${slip}</td>${cc('payroll')}<td>${taxjMd(v.payroll)}</td>
         ${cc('close')}${taxTds(v.returnClose, v.returnCloseLocal, '신고서 마감')}${cc('filed')}${taxTds(v.national, v.local, '신고')}
         ${cc('bill')}${billTd}${cc('paid')}${paidTd}
@@ -8201,7 +8202,7 @@ function payStatusHtml(docs){
       <div class="stat"><div class="n">${cntClose} · ${cntFiled}</div><div class="label">신고서 마감 · 신고 완료</div></div>
     </div>
     <div class="progress-bar"><div class="fill tone-blue" style="width:${pct}%"></div></div>
-    ${rows.length ? `<div class="table-scroll" style="margin-top:16px;"><table><thead><tr><th class="tx-seq" rowspan="2">순번</th><th rowspan="2">상호명</th>${ch('cycle')}<th rowspan="2">신고</th>${ch('payslip')}<th rowspan="2">급여명세서 전달</th>${ch('payroll')}<th rowspan="2">급여마감</th>${ch('close')}<th colspan="2">신고서 마감</th>${ch('filed')}<th colspan="2">신고일자</th>${ch('bill')}<th rowspan="2">납부서 발송</th>${ch('paid')}<th rowspan="2">납부마감</th>${ch('memo')}<th rowspan="2">메모</th>
+    ${rows.length ? `<div class="table-scroll" style="margin-top:16px;"><table><thead><tr><th class="tx-seq" rowspan="2">순번</th><th rowspan="2">상호명</th>${ch('cycle')}<th rowspan="2">신고</th><th rowspan="2">실 급여일</th>${ch('payslip')}<th rowspan="2">급여명세서 전달</th>${ch('payroll')}<th rowspan="2">급여마감</th>${ch('close')}<th colspan="2">신고서 마감</th>${ch('filed')}<th colspan="2">신고일자</th>${ch('bill')}<th rowspan="2">납부서 발송</th>${ch('paid')}<th rowspan="2">납부마감</th>${ch('memo')}<th rowspan="2">메모</th>
       ${ch('end')}</tr><tr><th>국세</th><th>지방세</th><th>국세</th><th>지방세</th></tr></thead><tbody>${rows.join('')}</tbody></table></div>`
       : `<div class="empty">${q ? '검색 결과가 없어요.' : `${yy}년 ${mm}월 귀속 신고대상이 없어요.`}</div>`}`;
 }
