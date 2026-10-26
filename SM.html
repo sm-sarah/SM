@@ -8298,13 +8298,15 @@ function payStatusHtml(docs){
     // [2026.10.15] "회사웹에서 9월 귀속 대상이 아닌 거래처(엘비케이파트너스 등)도 나온다"(요청) - 예전엔 신고구분만 등록돼 있어도 나왔음.
     // 회사웹 신고현황(renderIncomeTaxFilingStatusTable)과 같게 그 달 신고대상(applicable + 당월·익월 지급)으로 등록된 거래처만
     const own = payTarget(docs, c.id, p);
-    if(!(own && own.applicable && (own.sameMonthPay || own.nextMonthPay))) return;
+    // [2026.10.26] "신고현황은 급여가 있는 모든 거래처가 나오게 - 반기 상관없이"(요청) - 그 달 신고구분이 반기(대상)인 거래처는 그 달 신고대상 표시가 없어도 매달 보여줌
+    const halfOn = !!(rec && payRecApp(rec) && rec.cycle === '반기' && recs.length && p >= recs[0].effectiveFrom);
+    if(!halfOn && !(own && own.applicable && (own.sameMonthPay || own.nextMonthPay))) return;
     // [2026.10.15] "미대상도 나온다. 그 달 귀속 급여가 있는 거래처만"(요청) - 회사웹 filingApplicableAt과 같게 그 달 신고구분이 미대상이거나
     // 신고구분 시작 전 달이면 신고대상 표시가 남아 있어도 뺌(신고구분 이력이 없으면 신고대상 등록만으로 판단)
     if(recs.length && !(p >= recs[0].effectiveFrom && payRecApp(rec))) return;
     // [2026.10.14] "노아하우징쿱은 26.9월에 급여가 없는데도 나온다"(요청) - 반기 신고 거래처는 그 달에 급여(그 달 신고대상 등록)가 있거나
     // 이 달에 적은 기록이 있을 때만 보여줌(예전엔 신고구분만 보고 반기 안의 모든 달에 나왔음). 매월 거래처는 그대로
-    if(rec && payRecApp(rec) && rec.cycle === '반기'){ const own = payTarget(docs, c.id, p); if(!(own && own.marked && own.applicable) && !has('sameMonth') && !has('nextMonth')) return; }
+    // [2026.10.26] 반기 거래처를 그 달 급여(신고대상 표시)·기록이 있을 때만 보여주던 조건은 뺌(요청 - 반기 상관없이 매달)
     let lanes = tOn ? [t.sameMonthPay ? 'sameMonth' : null, t.nextMonthPay ? 'nextMonth' : null].filter(Boolean) : [];
     ['sameMonth','nextMonth'].forEach(k => { if(!lanes.includes(k) && has(k)) lanes.push(k); });
     if(!lanes.length) lanes = ['sameMonth'];
