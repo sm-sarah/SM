@@ -1500,6 +1500,10 @@ function smTogglePcView(){ try{ localStorage.setItem('sm_pc_view', window.SM_PC_
   table.cl-table td.cl-off{ background:#faf6f8; color:#d9cdd3 !important; }
   table.cl-table td.cl-off *{ color:#d9cdd3 !important; }
   table.cl-table tbody tr:hover td{ background:rgba(236,123,166,.06); }
+  /* [2026.10.26] "개인웹도 마우스를 올린 줄에 음영"(요청) - 모든 메뉴 표. 칸의 원래 배경색은 그대로 두고 그 위에 연한 핑크를 덧씌움 */
+  .tab .table-scroll tbody tr:hover > td{ background-image:linear-gradient(rgba(236,123,166,.08), rgba(236,123,166,.08)); }
+  /* [2026.10.26] 가로로 밀어서 상호명 칸이 안 보일 때 마우스 옆에 뜨는 거래처 이름표 */
+  #smRowName{ position:fixed; z-index:3500; pointer-events:none; background:var(--text); color:#fff; font-size:12px; font-weight:700; padding:4px 10px; border-radius:999px; box-shadow:var(--shadow-md); white-space:nowrap; display:none; }
   table.cl-table td.cl-name-cell{ cursor:pointer; }
   table.cl-table tbody tr:hover td.cl-name-cell{ background:var(--primary-soft) !important; }
   table.cl-table .cl-taxtype.kj, table.cl-table .cl-taxtype.sd{ font-weight:600; }
@@ -10452,6 +10456,30 @@ initAuthGate();
 <script>
 // ── 앱 설치(PWA) ──
 // [2026.10.20] 휴대폰 앱 설치에 필요한 서비스 워커(sw.js - 저장 없이 그대로 통과만). 파일로 열었을 땐 건너뜀
+// [2026.10.26] "가로 스크롤이 길어지면 어느 거래처인지 모르겠다 - 거래처 팝업 같은 게 뜨면"(요청) - 표의 줄에 마우스를 올렸을 때 그 줄의 상호명 칸이
+//   화면(표 스크롤 영역) 밖으로 밀려나 안 보이면, 마우스 옆에 거래처 이름표를 띄움. 상호명 칸 = .tx-name / .vp-sticky / .cl-name-cell (두 줄 합친 거래처는 윗줄에서 찾음)
+(function(){
+  let tag = null;
+  const hide = () => { if(tag) tag.style.display = 'none'; };
+  const nameCellOf = tr => { for(let r = tr, n = 0; r && n < 6; r = r.previousElementSibling, n++){ const c = r.querySelector(':scope > td.tx-name, :scope > td.vp-sticky, :scope > td.cl-name-cell'); if(c) return c; } return null; };
+  document.addEventListener('mousemove', e => {
+    const tr = e.target.closest && e.target.closest('.tab .table-scroll tbody tr');
+    if(!tr){ hide(); return; }
+    const box = tr.closest('.table-scroll'), cell = nameCellOf(tr);
+    if(!box || !cell){ hide(); return; }
+    const br = box.getBoundingClientRect(), cr = cell.getBoundingClientRect();
+    const sticky = getComputedStyle(cell).position === 'sticky';
+    if(sticky || (cr.left >= br.left - 2 && cr.right <= br.right + 2)){ hide(); return; }   // 상호명이 보이면 안 띄움
+    const name = (cell.textContent || '').replace(/\s+/g, ' ').trim();
+    if(!name){ hide(); return; }
+    if(!tag){ tag = document.createElement('div'); tag.id = 'smRowName'; document.body.appendChild(tag); }
+    tag.textContent = name; tag.style.display = 'block';
+    const w = tag.offsetWidth;
+    tag.style.left = Math.min(window.innerWidth - w - 8, e.clientX + 14) + 'px';
+    tag.style.top = Math.max(8, e.clientY - 34) + 'px';
+  }, { passive:true });
+  document.addEventListener('scroll', hide, true);
+})();
 if('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(e => console.warn('sw', e));
 // [2026.10.23] "개인웹도 새로 배포되면 새로고침하라고 알림"(요청) - 열 때 이 파일의 지문(ETag·수정시각)을 기억했다가, 5분마다·화면으로 돌아올 때 다시 확인해서
 //   바뀌었으면 화면 위에 "새 버전이 올라왔어요" 안내를 띄움(새로고침 / 나중에 - 나중에를 누르면 30분 뒤 다시)
