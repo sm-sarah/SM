@@ -3859,7 +3859,8 @@ function vatTableHtml(docs){
       <td style="white-space:nowrap;">${x.c.bizTypeCode ? taxjEsc(x.c.bizTypeCode) : na}</td><td class="vat-t-biz"${x.c.bizType ? ` title="${escapeAttr(x.c.bizType)}"` : ''}>${x.c.bizType ? taxjEsc(x.c.bizType) : na}</td>
       ${stCell}<td>${reason}</td>
       <td style="text-align:right;">${num(x.tb.prevSupply)}</td><td style="text-align:right;">${num(x.tb.noticeTax)}</td>
-      <td>${x.tb.office ? taxjEsc(x.tb.office) : na}</td><td style="white-space:nowrap;"${x.tb.dueDate ? ` title="${escapeAttr(x.tb.dueDate)}"` : ''}>${x.tb.dueDate ? taxjEsc(vatTDueShort(x.tb.dueDate)) : na}</td>
+      <td>${x.tb.office ? taxjEsc(x.tb.office) : na}</td>${(() => { const man = (x.en || {}).dueManual || '', dv = man || x.tb.dueDate || '';   // [2026.10.26] "회사웹에서 수기로 고친 납부기한이 연동 안 된다"(요청) - 회사웹 dueManual(직접 고친 값)이 있으면 그 값, 없으면 택스봇 값
+        return `<td style="white-space:nowrap;"${dv ? ` title="${escapeAttr(man ? `${dv} (회사웹에서 직접 고친 값 · 택스봇 ${x.tb.dueDate || '없음'})` : dv)}"` : ''}>${dv ? taxjEsc(vatTDueShort(dv)) : na}</td>`; })()}
       ${sendCells}
       ${docCell('__docs')}${docCell('__integ')}${docCell('__filed')}${helpCell}${payCells}
       <td>${hasHelp ? `<button class="sm-tool-ic vt-ic" onclick="vatTShowHelp('${cid}')" title="${escapeAttr(vatTHelpRows(help, year, period, comb).map(([k, v]) => k + ': ' + v).join('\n'))}" aria-label="Tip">${ICON_BULB}</button>` : na}</td>
