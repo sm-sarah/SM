@@ -9416,7 +9416,7 @@ const ICON_LINK = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" s
 // [2026.10.22] "Claude 작업할 때 주는 관리 사이트 링크를 링크 메뉴 '클로드' 분야에 계속 업데이트"(요청)
 //   [구분, 이름, 주소, 용도]. 이 목록은 앱 코드에 들어 있어 화면에서 고치지 않고, Claude가 작업하다 관리 사이트 링크가 새로 생기거나 바뀌면
 //   요청이 없어도 여기에 넣고 배포함(규칙: 이 저장소와 Tax.J-src의 CLAUDE.md). 맨 아래 줄일수록 최근에 넣은 것
-const SM_CLAUDE_LINKS_AT = '2026-10-22';
+const SM_CLAUDE_LINKS_AT = '2026-10-27';
 const SM_CLAUDE_LINKS = [
   ["앱", "Tax.J", "https://sm-sarah.github.io/Tax.J/", "직원 접속 주소"],
   ["GitHub", "저장소", "https://github.com/sm-sarah/Tax.J-src", "앱 파일 보관"],
@@ -9437,7 +9437,8 @@ const SM_CLAUDE_LINKS = [
   ["Google Cloud", "Cloud Shell", "https://shell.cloud.google.com/?show=terminal", "명령어 실행"],
   ["Drive", "01.기장대리", "https://drive.google.com/drive/folders/0ALthlaDsIhh1Uk9PVA", "결재 첨부·자동백업 폴더"],
   ["Google Cloud", "OAuth 브랜딩", "https://console.cloud.google.com/auth/branding?project=273460053868", "앱 게시 전 앱 이름·지원 이메일 등 입력"],
-  ["Google Cloud", "OAuth 대상(테스트 사용자)", "https://console.cloud.google.com/auth/audience?project=273460053868", "테스트 사용자 추가·앱 게시 상태"]
+  ["Google Cloud", "OAuth 대상(테스트 사용자)", "https://console.cloud.google.com/auth/audience?project=273460053868", "테스트 사용자 추가·앱 게시 상태"],
+  ["Firebase", "Realtime Database 규칙", "https://console.firebase.google.com/project/taxj-a3e01/database/taxj-a3e01-default-rtdb/rules", "접속 신호·비숑 멘트 기록(bichonLog) 읽기·쓰기 규칙"]
 ];
 const SM_CLAUDE_GROUP = '클로드';
 function smClaudeLinks(){ return SM_CLAUDE_LINKS.map(([kind, name, url, memo], i) => ({ id: -1 - i, _builtin:true, _ord:i, group: SM_CLAUDE_GROUP, name, url, memo: `${kind} · ${memo}`, at: SM_CLAUDE_LINKS_AT })); }
