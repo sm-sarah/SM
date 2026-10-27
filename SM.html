@@ -1141,6 +1141,14 @@ function smTogglePcView(){ try{ localStorage.setItem('sm_pc_view', window.SM_PC_
   /* [2026.10.14] 결산 날짜 칸·날짜 고르기 창 */
   .cl-dt{ font:inherit; font-size:12.5px; min-width:46px; height:26px; padding:0 6px; border:1px solid transparent; border-radius:6px; background:transparent; color:var(--text); cursor:pointer; white-space:nowrap; }
   .cl-dt:hover{ border-color:var(--border); background:#fff; }
+  /* [2026.10.27] 신고 메뉴별 중요사항 띠(요청: "신고메뉴마다 중요사항 고정") - 화면 위쪽에 항상 펼쳐 둠 */
+  .mn-band{ background:#fffaf0; border:1px solid #f1dfb4; border-radius:var(--radius-md); padding:8px 12px; margin-bottom:12px; font-size:12.5px; line-height:1.5; }
+  .mn-band .mn-head{ font-weight:800; color:#a16207; margin-bottom:2px; }
+  .mn-band .mn-row{ display:flex; gap:6px; align-items:flex-start; }
+  .mn-band .mn-no{ color:#b45309; font-weight:700; min-width:16px; }
+  .mn-band .mn-txt{ flex:1; white-space:pre-wrap; word-break:break-all; }
+  .mn-band input{ font:inherit; font-size:12.5px; border:1px solid #f1dfb4; border-radius:6px; padding:3px 8px; background:#fff; }
+  .mn-band .mn-add{ width:100%; margin-top:4px; box-sizing:border-box; }
   .cl-memo-act{ border:none; background:none; color:var(--muted-soft); cursor:pointer; padding:0 3px; font-size:12px; line-height:1.45; opacity:0; transition:opacity .12s; }   /* [2026.10.27] 결산 메모 줄 - 마우스를 올리면 수정·삭제(요청) */
   .cl-memo-row:hover .cl-memo-act, .cl-memo-act:focus-visible{ opacity:1; }
   .cl-memo-act:hover{ color:var(--primary-dark); }
@@ -1848,6 +1856,7 @@ let vatProg = {};       // { '연도-기수': { 회사웹 거래처id: { 항목i
 let closeCols = [];     // [2026.10.14] 결산 항목 [{ id, label, type, carry }] - works에만 저장
 let closeData = {};     // { '연도-회차': { date, roster, snap, v } }
 let vatCustomVals = {};   // { '연도-기수(예: 2026-2기예정)': { 거래처id: { 항목id: 값 } } }
+let menuNotes = {};   // [2026.10.27] 신고 메뉴별 중요사항(요청) { vat:[], pay:[], close:[], corp:[], indiv:[] } - works에만 저장
 let quickMemos = [], nextMemoId = 1;   // [2026.10.15] 홈 빠른 메모 [{ id, text, at(YYYY-MM-DD HH:MM), edited }]
 let payCustomVals = {};   // { 'YYYY-MM': { '거래처id|sameMonth': { 항목id: 값 } } }
 let attendMine = {};   // [2026.10.12] 근태경비 탭 내 확인·메모 { 'clock:날짜' | 'leave:id' | 'exp:종류:id' | 'month:YYYY-MM': { done, note } } - works에만 저장
@@ -5812,6 +5821,7 @@ const GOOGLE_DATA_KEYS = [
   'vatProgCols','vatProg','vatProgView',   // [2026.10.14] 부가세 진행표
   'closeCols','closeData',   // [2026.10.14] 결산
   'quickMemos','nextMemoId',   // [2026.10.15] 홈 빠른 메모
+  'menuNotes',   // [2026.10.27] 신고 메뉴별 중요사항
   'accountVault',   // [2026.10.08] 계정 보관함이 Google 시트에 저장되지 않아 다시 열면 "보관함 만들기"가 다시 뜨던 문제 수정(요청)
 ];
 
@@ -5827,7 +5837,7 @@ function collectGoogleSnapshot(){
     trashBin, nextTrashId,
     links, nextLinkId, linkCats, forms, nextFormId, formCats, laws, nextLawId, lawCats,
     manuals, nextManualId, manualCats,
-    accountVault, submitMine, attendMine, payCustomCols, payCustomVals, vatCustomCols, vatCustomVals, vatProgCols, vatProg, vatProgView, closeCols, closeData, quickMemos, nextMemoId,
+    accountVault, submitMine, attendMine, payCustomCols, payCustomVals, vatCustomCols, vatCustomVals, vatProgCols, vatProg, vatProgView, closeCols, closeData, quickMemos, nextMemoId, menuNotes,
   };
 }
 
@@ -5893,6 +5903,7 @@ async function loadFromGoogleSheet(){
     if(map.payCustomCols) payCustomCols = JSON.parse(map.payCustomCols);
     if(map.payCustomVals) payCustomVals = JSON.parse(map.payCustomVals);
     if(map.quickMemos) quickMemos = JSON.parse(map.quickMemos);
+    if(map.menuNotes) menuNotes = JSON.parse(map.menuNotes) || {};
     if(map.nextMemoId) nextMemoId = JSON.parse(map.nextMemoId);
     if(map.vatCustomCols) vatCustomCols = JSON.parse(map.vatCustomCols);
     if(map.vatCustomVals) vatCustomVals = JSON.parse(map.vatCustomVals);
@@ -6151,6 +6162,7 @@ function applySnapshot(o){
   if(o.payCustomCols) payCustomCols = o.payCustomCols;
   if(o.payCustomVals) payCustomVals = o.payCustomVals;
   if(o.quickMemos) quickMemos = o.quickMemos;
+  if(o.menuNotes) menuNotes = o.menuNotes;
   if(o.nextMemoId) nextMemoId = o.nextMemoId;
   if(o.vatCustomCols) vatCustomCols = o.vatCustomCols;
   if(o.vatCustomVals) vatCustomVals = o.vatCustomVals;
@@ -6789,7 +6801,7 @@ async function resetAllData(){
   clients = [];
   tasks = [];
   vatData = {}; payData = {}; corpData = {}; indivData = {};
-  submitMine = {}; attendMine = {}; payCustomCols = []; payCustomVals = {}; quickMemos = []; nextMemoId = 1; vatCustomCols = []; vatCustomVals = {}; vatProgCols = []; vatProg = {}; closeCols = []; closeData = {};
+  submitMine = {}; attendMine = {}; payCustomCols = []; payCustomVals = {}; quickMemos = []; nextMemoId = 1; vatCustomCols = []; vatCustomVals = {}; vatProgCols = []; vatProg = {}; closeCols = []; closeData = {}; menuNotes = {};
   worklistChecklist = {}; worklistSchedule = {};
   events = [];
   clientsOther = []; clientsTerminated = [];
@@ -10428,6 +10440,48 @@ function renderAccounts(){
 /* =========================================================
    초기 렌더 (로그인 성공 후에만 실행됨)
    ========================================================= */
+
+// [2026.10.27] 신고 메뉴별 중요사항(요청: "신고메뉴마다 중요사항 고정시키고 싶은데" → "위쪽에 항상 펼친 띠")
+// 부가세·원천세·결산·법인세·종소세 화면 맨 위에 띠로 늘 보이게. 마우스를 올리면 ✎ 수정 · ✕ 삭제, 아래 칸에 입력 후 Enter = 추가. works에만 저장
+const MENU_NOTE_TABS = { vat:'tab-vat', pay:'tab-pay', close:'tab-close', corp:'tab-corp', indiv:'tab-indiv' };
+const menuNoteEdit = {};
+function menuNoteMount(k){
+  const el = document.getElementById(MENU_NOTE_TABS[k]);
+  if(!el) return;
+  let band = el.querySelector(':scope > .mn-band');
+  if(!band){ band = document.createElement('div'); band.className = 'mn-band'; el.insertAdjacentElement('afterbegin', band); }
+  const items = Array.isArray(menuNotes[k]) ? menuNotes[k] : [];
+  const ei = menuNoteEdit[k] == null ? -1 : menuNoteEdit[k];
+  band.innerHTML = `<div class="mn-head">📌 중요사항${items.length ? ` <span class="hint" style="margin:0; display:inline;">${items.length}개</span>` : ''}</div>`
+    + items.map((x, i) => `<div class="mn-row cl-memo-row"><span class="mn-no">${i + 1}.</span>${i === ei
+      ? `<input type="text" class="mn-edit" value="${escapeAttr(x)}" style="flex:1; min-width:0;">`
+      : `<span class="mn-txt">${taxjEsc(x)}</span><button type="button" class="cl-memo-act" data-edit="${i}" title="수정" aria-label="수정">✎</button>`}<button type="button" class="cl-memo-act" data-del="${i}" title="삭제" aria-label="삭제">✕</button></div>`).join('')
+    + `<input type="text" class="mn-add" placeholder="중요사항 입력 후 Enter (추가)">`;
+  const save = () => { menuNotes[k] = items; scheduleGoogleSave(); };
+  band.querySelectorAll('[data-del]').forEach(b => b.onclick = () => { items.splice(Number(b.dataset.del), 1); menuNoteEdit[k] = -1; save(); menuNoteMount(k); });
+  band.querySelectorAll('[data-edit]').forEach(b => b.onclick = () => { menuNoteEdit[k] = Number(b.dataset.edit); menuNoteMount(k); });
+  const ed = band.querySelector('.mn-edit');
+  if(ed){
+    let done = false;
+    const commit = () => { if(done) return; done = true; const t = ed.value.trim(); if(t) items[ei] = t; else items.splice(ei, 1); menuNoteEdit[k] = -1; save(); menuNoteMount(k); };
+    ed.addEventListener('keydown', e => { if(e.key === 'Enter' && !e.isComposing){ e.preventDefault(); commit(); } if(e.key === 'Escape'){ e.preventDefault(); done = true; menuNoteEdit[k] = -1; menuNoteMount(k); } });
+    ed.addEventListener('blur', commit);   // 바깥을 눌러도 고친 내용은 저장
+    ed.focus(); ed.setSelectionRange(ed.value.length, ed.value.length);
+  }
+  const add = band.querySelector('.mn-add');
+  add.addEventListener('keydown', e => {
+    if(e.key !== 'Enter' || e.isComposing) return;
+    e.preventDefault();
+    const t = add.value.trim(); if(!t) return;
+    items.push(t); save(); menuNoteMount(k);
+    const n = document.getElementById(MENU_NOTE_TABS[k]).querySelector(':scope > .mn-band .mn-add'); if(n) n.focus();
+  });
+}
+// 각 화면을 다시 그린 뒤 띠를 맨 위에 붙임(화면 그리는 함수는 그대로 두고 감싸기만)
+[['renderVat','vat'], ['renderPay','pay'], ['renderSubmit','pay'], ['renderClose','close'], ['renderCorp','corp'], ['renderIndiv','indiv']].forEach(([fn, k]) => {
+  const orig = window[fn]; if(typeof orig !== 'function') return;
+  window[fn] = function(){ const r = orig.apply(this, arguments); try{ menuNoteMount(k); }catch(e){ console.warn('중요사항 띠', e); } return r; };
+});
 
 function renderAllNoSave(){
   try{ ensurePayMonths(); ensureTaxRows(); generateRecurringTasks(); }catch(e){ console.warn(e); }
