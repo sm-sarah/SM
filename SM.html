@@ -7098,7 +7098,10 @@ async function loadBichonLog(){
     rows.sort((a, b) => a.at - b.at);
     if(!rows.length) return set(`<div class="empty">${date} 기록이 없어요.</div>`);
     const hm = t => { const d = new Date(t); return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`; };
-    set(`<div class="table-scroll"><table><thead><tr><th>시각</th><th>직원</th><th>기기</th><th style="text-align:left;">멘트</th></tr></thead><tbody>${rows.map(r => `<tr><td>${hm(r.at)}</td><td style="font-weight:700;">${taxjEsc(r.who)}</td><td>${taxjEsc(r.dev)}</td><td style="text-align:left; white-space:normal;">${taxjEsc(r.msg)}</td></tr>`).join('')}</tbody></table></div>`);
+    // [2026.10.27] "비숑 멘트 표가 왼쪽으로 몰려 여백이 많다"(요청) - 위 사용 현황 표와 같은 모양(카드 폭 가득, 같은 글자 크기·칸 여백)
+    const td = 'padding:6px 8px; border-bottom:1px solid var(--line, #f1f1f1); vertical-align:top;';
+    const th = w => `padding:6px 8px; border-bottom:1px solid var(--line, #eee); white-space:nowrap;${w ? ' width:' + w + ';' : ''}`;
+    set(`<div style="overflow-x:auto;"><table style="width:100%; border-collapse:collapse; font-size:12.5px;"><thead><tr><th style="${th('70px')}">시각</th><th style="${th('110px')}">직원</th><th style="${th('110px')}">기기</th><th style="${th('')}">멘트</th></tr></thead><tbody>${rows.map(r => `<tr><td style="${td}">${hm(r.at)}</td><td style="${td} font-weight:700;">${taxjEsc(r.who)}</td><td style="${td}">${taxjEsc(r.dev)}</td><td style="${td} white-space:normal;">${taxjEsc(r.msg)}</td></tr>`).join('')}</tbody></table></div>`);
   }catch(e){
     const denied = e && /permission/i.test(String(e.code || e.message));
     set(`<div class="hint">${denied ? '읽기 권한이 없어요. 회사 Firebase 실시간 데이터베이스 규칙에 bichonLog 읽기 허용이 필요해요.' : '불러오지 못했어요 (' + taxjEsc(e && (e.code || e.message) || e) + ')'}</div>`);
@@ -8911,7 +8914,7 @@ function taxjUsageTableHtml(rep){
     const last = Math.max(0, ...(p.presence||[]).map(x=> Math.max(x.at||0, x.lastAt||0)));
     const nowTxt = online.length ? `<b style="color:var(--ok, #16a34a);">접속 중</b><div class="hint" style="margin:0;">${online.map(x=> taxjEsc((x.device||'기기') + (x.screen ? ' · ' + x.screen : ''))).join('<br>')}</div>` : mute(rep && rep.noLive ? '-' : '접속 안 함');
     const lastTxt = online.length ? '지금' : last ? taxjWhen(last) : mute('-');
-    const devs = (p.devices||[]).map(d=> `${taxjEsc(d.dev || (d.mob ? '휴대폰' : '기기'))} ${mute('등록 ' + taxjWhen(d.at))}`).join('<br>') || mute('없음');
+    const devs = (p.devices||[]).map(d=> `${taxjEsc(d.dev || (d.mob ? '휴대폰' : '기기'))} ${mute('마지막 접속기록 ' + taxjWhen(d.at))}`).join('<br>') || mute('없음');
     const devNotif = (p.devices||[]).length ? (p.devices||[]).map(d=> taxjEsc(notifTxt[d.notif] || '-')).join('<br>') : mute('-');
     const pf = p.prefs || {}, offs = TAXJ_NOTIF_CATS.filter(([k])=> pf[k] === false);
     const cats = !hasPrefs ? '' : offs.length === TAXJ_NOTIF_CATS.length ? mute('모두 끔') : offs.length ? `${TAXJ_NOTIF_CATS.filter(([k])=> pf[k] !== false).map(([,l])=> l).join('·')}<div class="hint" style="margin:0;">끔: ${offs.map(([,l])=> l).join('·')}</div>` : '모두 켬';
