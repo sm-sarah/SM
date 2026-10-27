@@ -7079,6 +7079,31 @@ const TAXJ_KEY_KO = { id:'ID', name:'이름', title:'제목', content:'내용', 
   status:'상태', type:'유형', author:'작성자', createdAt:'작성', updatedAt:'수정', at:'시각', email:'이메일', position:'직급', start:'시작', end:'종료',
   bizNo:'사업자번호', corpRegNo:'법인등록번호', repName:'대표자', fee:'수임료', taxType:'수임구분', entityType:'사업자구분', reason:'사유', category:'구분' };
 
+// [2026.10.26] 비숑 멘트 기록 - 회사웹이 실시간 데이터베이스 bichonLog/<이메일키>/<날짜>/ 에 남긴 {at, slot, msg, dev}를 읽기만 함
+let bichonLogDate = '', bichonLogHtml = '';
+async function loadBichonLog(){
+  const box = document.getElementById('bichonLogBox');
+  const date = bichonLogDate || todayStr();
+  const set = h => { bichonLogHtml = h; if(box) box.innerHTML = h; };
+  set('<div class="hint">불러오는 중…</div>');
+  try{
+    const app = await taxjCompanyApp(), user = app.auth().currentUser;
+    if(!(user && String(user.email || '').toLowerCase().endsWith(TAXJ_COMPANY_DOMAIN))) return set('<div class="hint">회사 계정 실시간 연결이 필요해요. Tax.J 메뉴에서 \'실시간 연결\'을 먼저 해 주세요.</div>');
+    await taxjLoadScript('https://www.gstatic.com/firebasejs/10.13.1/firebase-database-compat.js');
+    const all = (await app.database('https://taxj-a3e01-default-rtdb.asia-southeast1.firebasedatabase.app').ref('bichonLog').once('value')).val() || {};
+    const key = em => String(em || '').toLowerCase().replace(/[^a-z0-9]/g, '_');
+    const names = {}; ((taxjFull && taxjFull.docs && taxjFull.docs.profiles) || []).forEach(p => { if(p && p.email) names[key(p.email)] = p.name || p.email; });
+    const rows = [];
+    Object.keys(all).forEach(k => { Object.values((all[k] || {})[date] || {}).forEach(r => { if(r && r.msg) rows.push({ at: r.at || 0, who: names[k] || k, dev: r.dev || '', msg: r.msg }); }); });
+    rows.sort((a, b) => a.at - b.at);
+    if(!rows.length) return set(`<div class="empty">${date} 기록이 없어요.</div>`);
+    const hm = t => { const d = new Date(t); return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`; };
+    set(`<div class="table-scroll"><table><thead><tr><th>시각</th><th>직원</th><th>기기</th><th style="text-align:left;">멘트</th></tr></thead><tbody>${rows.map(r => `<tr><td>${hm(r.at)}</td><td style="font-weight:700;">${taxjEsc(r.who)}</td><td>${taxjEsc(r.dev)}</td><td style="text-align:left; white-space:normal;">${taxjEsc(r.msg)}</td></tr>`).join('')}</tbody></table></div>`);
+  }catch(e){
+    const denied = e && /permission/i.test(String(e.code || e.message));
+    set(`<div class="hint">${denied ? '읽기 권한이 없어요. 회사 Firebase 실시간 데이터베이스 규칙에 bichonLog 읽기 허용이 필요해요.' : '불러오지 못했어요 (' + taxjEsc(e && (e.code || e.message) || e) + ')'}</div>`);
+  }
+}
 async function taxjCompanyApp(){
   await taxjLoadScript('https://www.gstatic.com/firebasejs/10.13.1/firebase-app-compat.js');
   await taxjLoadScript('https://www.gstatic.com/firebasejs/10.13.1/firebase-auth-compat.js');
@@ -8646,6 +8671,14 @@ function renderTaxjFull(){
         <span class="hint">로그인: 개인계정 (${TAXJ_USAGE_OWNER}) · 한 번 로그인하면 이 기기에 기억돼서 다음부터는 창이 뜨지 않아요. 직원별 접속 기록·기기·알림 허용 상태만 보여요(업무 데이터는 받지 않아요).</span>
       </div>
       <div id="taxjUsageBox" style="margin-top:10px;">${taxjUsageHtml || '<div class="empty">\'불러오기\'를 누르면 직원별 접속 기록과 허용 상태가 나와요.</div>'}</div>
+    </div>
+    <div class="card"><!-- [2026.10.26] "어느 직원에게 무슨 비숑 멘트가 갔는지, 접속기록처럼"(요청) -->
+      <div class="toolbar"><b style="font-size:14px;">비숑 멘트 기록</b><div class="spacer"></div>
+        <input type="date" id="bichonLogDate" value="${bichonLogDate || todayStr()}" onchange="bichonLogDate=this.value; loadBichonLog()">
+        <button type="button" class="btn primary xs" onclick="loadBichonLog()">불러오기</button>
+        <span class="hint">회사웹 대시보드 비숑이 직원 화면에 말한 멘트(바뀔 때마다 기록, 최근 7일) · 회사 계정 실시간 연결이 필요해요</span>
+      </div>
+      <div id="bichonLogBox" style="margin-top:10px;">${bichonLogHtml || '<div class="empty">\'불러오기\'를 누르면 고른 날의 멘트가 시간순으로 나와요.</div>'}</div>
     </div>`;
     return;
   }
