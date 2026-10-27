@@ -1141,6 +1141,10 @@ function smTogglePcView(){ try{ localStorage.setItem('sm_pc_view', window.SM_PC_
   /* [2026.10.14] 결산 날짜 칸·날짜 고르기 창 */
   .cl-dt{ font:inherit; font-size:12.5px; min-width:46px; height:26px; padding:0 6px; border:1px solid transparent; border-radius:6px; background:transparent; color:var(--text); cursor:pointer; white-space:nowrap; }
   .cl-dt:hover{ border-color:var(--border); background:#fff; }
+  .cl-memo-act{ border:none; background:none; color:var(--muted-soft); cursor:pointer; padding:0 3px; font-size:12px; line-height:1.45; opacity:0; transition:opacity .12s; }   /* [2026.10.27] 결산 메모 줄 - 마우스를 올리면 수정·삭제(요청) */
+  .cl-memo-row:hover .cl-memo-act, .cl-memo-act:focus-visible{ opacity:1; }
+  .cl-memo-act:hover{ color:var(--primary-dark); }
+  @media (hover:none){ .cl-memo-act{ opacity:1; } }   /* 휴대폰처럼 마우스가 없으면 늘 보이게 */
   .pay-chk{ color:#059669; font-weight:800; font-size:13px; }   /* [2026.10.23] 신고현황 완료 ✓(요청) */
   .cl-dt:empty::before{ content:'＋'; color:var(--muted-soft); font-size:11px; }
   .cl-dt.txt{ color:var(--muted); }
@@ -4923,12 +4927,12 @@ function closeMemoPop(btn){
   pop.id = 'closeDatePop'; pop.className = 'cl-pop'; pop.style.width = '320px';
   const draw = () => {
     pop.innerHTML = `<div style="font-weight:800; font-size:12.5px;">메모 ${items.length ? `<span class="hint" style="margin:0; display:inline;">${items.length}개</span>` : ''}</div>
-      <div style="max-height:260px; overflow:auto; display:flex; flex-direction:column; gap:4px;">${items.length ? items.map((x, i) => `<div style="display:flex; gap:6px; align-items:flex-start; font-size:12.5px; line-height:1.45;"><span style="color:var(--muted); font-weight:700; min-width:18px;">${i + 1})</span>${editIdx === i
+      <div style="max-height:260px; overflow:auto; display:flex; flex-direction:column; gap:4px;">${items.length ? items.map((x, i) => `<div class="cl-memo-row" style="display:flex; gap:6px; align-items:flex-start; font-size:12.5px; line-height:1.45;"><span style="color:var(--muted); font-weight:700; min-width:18px;">${i + 1})</span>${editIdx === i
         ? `<input type="text" class="cl-memo-edit" value="${escapeAttr(x)}" style="flex:1; min-width:0; font:inherit; font-size:12.5px; border:1px solid var(--primary); border-radius:6px; padding:2px 6px;">`
-        : `<span data-edit="${i}" title="눌러서 고치기" style="flex:1; white-space:pre-wrap; word-break:break-all; cursor:text;">${taxjEsc(x)}</span>`}<button type="button" data-del="${i}" title="이 줄 지우기" style="border:none; background:none; color:var(--muted-soft); cursor:pointer; padding:0 2px;">✕</button></div>`).join('') : '<div class="hint" style="margin:0;">아직 메모가 없어요.</div>'}</div>
+        : `<span style="flex:1; white-space:pre-wrap; word-break:break-all;">${taxjEsc(x)}</span><button type="button" class="cl-memo-act" data-edit="${i}" title="수정" aria-label="수정">✎</button>`}<button type="button" class="cl-memo-act" data-del="${i}" title="삭제" aria-label="삭제">✕</button></div>`).join('') : '<div class="hint" style="margin:0;">아직 메모가 없어요.</div>'}</div>
       <input type="text" class="cl-pop-text cl-memo-add" placeholder="새 메모 입력 후 Enter (추가)" style="font:inherit; font-size:12.5px; border:1px solid var(--border); border-radius:8px; padding:6px 8px;">`;
     pop.querySelectorAll('[data-del]').forEach(b => b.onclick = e => { e.stopPropagation(); items.splice(Number(b.dataset.del), 1); editIdx = -1; save(); draw(); });
-    // [2026.10.27] "메모 수정이 안 된다"(요청) - 줄 글자를 누르면 그 자리에서 고치기(Enter 저장 · Esc 취소 · 비우고 Enter = 지우기)
+    // [2026.10.27] "메모 수정이 안 된다 → 마우스를 올리면 수정·삭제 버튼"(요청) - ✎를 누르면 그 자리에서 고치기(Enter 저장 · Esc 취소 · 비우고 Enter = 지우기)
     pop.querySelectorAll('[data-edit]').forEach(sp => sp.onclick = e => { e.stopPropagation(); editIdx = Number(sp.dataset.edit); draw(); });
     const ed = pop.querySelector('.cl-memo-edit');
     if(ed){
