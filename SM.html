@@ -1134,6 +1134,7 @@ function smTogglePcView(){ try{ localStorage.setItem('sm_pc_view', window.SM_PC_
   .cl-subtab.on span{ background:#fff; color:var(--primary-dark); }
   /* [2026.10.13] 원천세 메뉴 2단(요청 - "메뉴구성 스타일이 이상하다"): 윗줄(총괄·신고현황·일용직·제출)은 큰 탭 + 아래 구분선,
      아랫줄(매월·반기·연간)은 옆 선택칸과 같은 높이의 작은 칸 묶음으로 구분 */
+  .pay-prog .cl-subtab{ cursor:default; }   /* [2026.11.02] 원천세 진행현황 칩(누르는 버튼 아님) */
   .pay-maintabs{ border-bottom:1px solid var(--border); padding-bottom:10px; margin-bottom:14px !important; }
   /* [2026.11.02] works 위 탭(거래처~종소세)·하위메뉴 - 가운데 */
   .page-head .works-tabs, .page-head .works-subtabs{ justify-content:center; }
@@ -2227,7 +2228,7 @@ let worksLast = (() => { try{ const v = localStorage.getItem('sm_works_last'); r
 // 지금 하위메뉴(원천세·부가세·거래처) - 고르면 그 화면으로
 function worksSubCur(id, sub){
   const k = (/'(\w+)'/.exec(sub.js || '') || [])[1];
-  if(id === 'pay') return k === payView || (k === 'status' && payView === 'submit');
+  if(id === 'pay') return k === payView;
   if(id === 'vat') return k === vatView;
   if(id === 'clients') return k === clientsView;
   return false;
@@ -2287,6 +2288,7 @@ const NAV_SUBMENUS = {
   pay: [
     {js:"setPayView('overview')", label:'총괄'},
     {js:"setPayView('status')",   label:'신고현황'},
+    {js:"setPayView('submit')",   label:'지급명세서'},   // [2026.11.02] 신고현황 안의 지급명세서 칩을 하위메뉴로(요청) - 총괄·신고현황·지급명세서·일용직
     {js:"setPayView('daily')",    label:'일용직'},
     // [2026.10.15] 제출(매월·반기·연간)은 신고현황 › 지급명세서 칩으로 합침(요청 - 회사웹과 같게)
   ],
@@ -8088,19 +8090,17 @@ function renderSubmit(){
     <div class="card">
       ${taxjLiveBarHtml()}${payViewTabsHtml()}
       <div class="toolbar" style="display:grid; grid-template-columns:1fr auto 1fr; align-items:center;"><!-- [2026.10.15] 귀속 제목 가운데(요청) -->
-        <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">${payStatusSegHtml()}<div class="sm-seg" id="submitModeSeg">${['월별','반기','연간'].map(m => `<button class="${submitMode === m ? 'on' : ''}" onclick="setSubmitMode('${m}')">${SUBMIT_MODE_LABEL[m]}</button>`).join('')}</div></div>
+        <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;"><div class="sm-seg" id="submitModeSeg">${['월별','반기','연간'].map(m => `<button class="${submitMode === m ? 'on' : ''}" onclick="setSubmitMode('${m}')">${SUBMIT_MODE_LABEL[m]}</button>`).join('')}</div></div>
         <div style="display:flex; align-items:center; gap:10px;"><select onchange="submitYear=this.value; renderSubmit();">${years.map(y => `<option value="${y}" ${y===submitYear?'selected':''}>${y}년${submitMode === '연간' ? ' 귀속' : ''}</option>`).join('')}</select>
         ${sub}${viewSeg}</div>
         <div style="justify-self:end; display:flex; align-items:center; gap:10px;">${prevNote}<button class="sm-tool-ic" onclick="submitSavedBulk()" title="신고서류 저장일 일괄 입력 - 날짜를 고르고 거래처를 체크해서 한 번에 넣어요" aria-label="신고서류 저장일 일괄 입력">${ICON_BULK}</button><label class="hint" style="margin:0; display:inline-flex; align-items:center; gap:4px; cursor:pointer;"><input type="checkbox" ${submitOnlyLeft ? 'checked' : ''} onchange="submitOnlyLeft=this.checked; renderSubmit();"> 남은 것만</label></div>
       </div>
       ${!taxjFull ? '<div class="empty">Tax.J에 연결하면 회사웹 지급명세서 제출현황이 여기에 채워져요.</div>' : `
-      <div class="summary-row">
-        <div class="stat tone-blue"><div class="n">${all.length}</div><div class="label">제출 대상(줄)</div></div>
-        <div class="stat tone-mint"><div class="n">${doneN}</div><div class="label">회사 제출 완료</div></div>
-        <div class="stat"><div class="n">${mineN}</div><div class="label">신고서류 저장</div></div>
-      </div>
-      <div class="progress-bar"><div class="fill tone-mint" style="width:${pct}%"></div></div>
-      ${rows.length ? `<div class="table-scroll" style="margin-top:16px;"><table>
+      <!-- [2026.11.02] 신고현황과 같게 큰 숫자 카드·진행 막대 대신 한 줄 칩(요청) -->
+      <div class="toolbar" style="margin-bottom:8px;"><div class="cl-subtabs pay-prog">
+        <span class="cl-subtab on">제출대상 ${all.length}</span><span class="cl-subtab">회사 제출 완료 ${doneN}</span><span class="cl-subtab">신고서류 저장 ${mineN}</span><span class="cl-subtab" title="회사 제출 완료 ÷ 제출대상">진행률 ${pct}%</span>
+      </div></div>
+      ${rows.length ? `<div class="table-scroll" style="margin-top:8px;"><table>
         <thead><tr><th class="tx-seq" rowspan="2">순번</th><th rowspan="2">상호명</th>${monthly ? '<th rowspan="2">신고</th><th rowspan="2">발생급여</th><th rowspan="2">귀속월</th><th rowspan="2" title="그 귀속월 급여를 지급한 달 - 제출기한 기준">지급월</th>' : ''}${items.map(([it, l]) => { const b = monthly ? SUBMIT_DUE_BASIS[SUBMIT_DUE[it]] : ''; return `<th colspan="2">${l}${b ? `<br><span style="font-size:9.5px; font-weight:600;">${b}</span>` : ''}</th>`; }).join('')}<th rowspan="2">신고서류 저장</th><th rowspan="2">내 메모</th></tr>
         <tr>${items.map(() => '<th>마감</th><th>제출일</th>').join('')}</tr></thead>
         <tbody>${body}</tbody></table></div>`
@@ -8578,7 +8578,7 @@ function renderAttend(){
    회사 값은 읽기만(고치려면 회사웹에서). 내가 만든 항목·값은 payCustomCols·payCustomVals(works)에만 저장.
    예전 내 원천세 표(급여유형·지급일·원천세 신고일·납부서 발송일·비고 = payData)는 지우지 않고 저장된 채로 둠 */
 let payView = 'status', payQuery = '', payMonth = '', dwYear = '', dwClient = '', dwShowLeft = false;
-const PAY_VIEWS = [['overview','총괄'], ['status','신고현황'], ['daily','일용직'], ['submit','제출']];
+const PAY_VIEWS = [['overview','총괄'], ['status','신고현황'], ['submit','지급명세서'], ['daily','일용직']];
 function setPayView(v){ payView = v; if(activeTab !== 'pay') switchTab('pay'); else renderPay(); }
 function payViewTabsHtml(){ return ''; }   // [2026.10.14] 왼쪽 하위메뉴와 같은 가로 메뉴는 없앰(요청) - 이동은 왼쪽 메뉴 원천세 › 총괄·신고현황·일용직·제출
 const PAY_NA = '<span style="color:#d4c6cd;">-</span>';
@@ -8929,20 +8929,18 @@ function payStatusHtml(docs){
   const ch = pos => payCustomCols.filter(col => (col.pos || 'end') === pos).map(col => `<th rowspan="2" data-smdrag="pay" data-smcol="${col.id}" draggable="true" title="끌어서 위치 옮기기"><button class="btn ghost xs" onclick="editPayCustomCol('${col.id}')" title="눌러서 이름·입력 방식 수정 또는 삭제 · 끌어서 위치 옮기기" style="font-weight:800;">${taxjEsc(col.label)} ✎</button></th>`).join('');
   // [2026.10.15] "연월 귀속 제목은 가운데로, 검색은 항목 추가 칩 아래로"(요청)
   return `<div class="toolbar" style="display:grid; grid-template-columns:1fr auto 1fr; align-items:center;">
-      <div>${payStatusSegHtml()}</div>
+      <div></div><!-- [2026.11.02] 신고현황·지급명세서 전환은 위 하위메뉴로(요청) -->
       <div style="display:flex; align-items:center; gap:10px;"><button class="btn ghost xs" onclick="payShiftMonth(-1)" title="이전 달">‹</button><span style="font-weight:800;">${yy}년 ${mm}월 귀속</span><button class="btn ghost xs" onclick="payShiftMonth(1)" title="다음 달">›</button></div>
       <div style="display:flex; flex-direction:column; align-items:flex-end; gap:8px;">
         <div style="display:flex; align-items:center; gap:6px;"><!-- [2026.10.16] 일괄 입력·항목 추가는 아이콘으로, 'N줄 선택' 글자는 없앰(요청) -->
         <button class="sm-tool-ic" onclick="payBulk()" title="날짜 일괄 입력 - 왼쪽 체크박스로 고른 거래처(없으면 보이는 전체)에 날짜·완납·미납을 한 번에 넣어요" aria-label="날짜 일괄 입력">${ICON_BULK}</button><button class="sm-tool-ic" onclick="addPayCustomCol()" title="항목 추가" aria-label="항목 추가">${ICON_PLUS}</button><button class="sm-tool-ic" onclick="payCarryCols()" title="다음 달로 이월 - 항목마다 안 넘김·항목만·항목+내용을 골라 넘겨요" aria-label="다음 달로 이월">${ICON_CARRY}</button></div>
       </div>
     </div>
-    <div class="summary-row">
-      <div class="stat tone-blue"><div class="n">${total}</div><div class="label">신고 대상(줄)</div></div>
-      <div class="stat tone-blue"><div class="n">${cntPayroll}</div><div class="label">급여마감 완료</div></div>
-      <div class="stat"><div class="n">${cntClose} · ${cntFiled}</div><div class="label">신고서 마감 · 신고 완료</div></div>
-    </div>
-    <div class="progress-bar"><div class="fill tone-blue" style="width:${pct}%"></div></div>
-    ${rows.length ? `<div class="table-scroll" style="margin-top:16px;"><table><thead><tr><th class="tx-seq" rowspan="2">순번</th><th rowspan="2" data-smdrag="pay" data-smfix="cycle,cycle">상호명</th>${ch('cycle')}<th rowspan="2" data-smdrag="pay" data-smfix="cycle,payslip">신고</th><th rowspan="2" data-smdrag="pay" data-smfix="payslip,payslip">실 급여일</th>${ch('payslip')}<th rowspan="2" data-smdrag="pay" data-smfix="payslip,payroll">급여명세서 전달</th>${ch('payroll')}<th rowspan="2" data-smdrag="pay" data-smfix="payroll,close">급여마감</th>${ch('close')}<th colspan="2" data-smdrag="pay" data-smfix="close,filed">신고서 마감</th>${ch('filed')}<th colspan="2" data-smdrag="pay" data-smfix="filed,bill">신고일자</th>${ch('bill')}<th rowspan="2" data-smdrag="pay" data-smfix="bill,paid">신고서류</th>${ch('paid')}<th rowspan="2" data-smdrag="pay" data-smfix="paid,memo">납부마감</th>${ch('memo')}<th rowspan="2" data-smdrag="pay" data-smfix="memo,end">메모</th>
+    <!-- [2026.11.02] "원천세 진행현황도 부가세처럼 - 자리 차지가 너무 큼"(요청) - 큰 숫자 카드·진행 막대 대신 부가세 총괄 구분 칩과 같은 모양의 한 줄 -->
+    <div class="toolbar" style="margin-bottom:8px;"><div class="cl-subtabs pay-prog">
+      <span class="cl-subtab on">신고대상 ${total}</span><span class="cl-subtab">급여마감 ${cntPayroll}</span><span class="cl-subtab">신고서 마감 ${cntClose}</span><span class="cl-subtab">신고 완료 ${cntFiled}</span><span class="cl-subtab" title="급여마감 완료 ÷ 신고대상">진행률 ${pct}%</span>
+    </div></div>
+    ${rows.length ? `<div class="table-scroll" style="margin-top:8px;"><table><thead><tr><th class="tx-seq" rowspan="2">순번</th><th rowspan="2" data-smdrag="pay" data-smfix="cycle,cycle">상호명</th>${ch('cycle')}<th rowspan="2" data-smdrag="pay" data-smfix="cycle,payslip">신고</th><th rowspan="2" data-smdrag="pay" data-smfix="payslip,payslip">실 급여일</th>${ch('payslip')}<th rowspan="2" data-smdrag="pay" data-smfix="payslip,payroll">급여명세서 전달</th>${ch('payroll')}<th rowspan="2" data-smdrag="pay" data-smfix="payroll,close">급여마감</th>${ch('close')}<th colspan="2" data-smdrag="pay" data-smfix="close,filed">신고서 마감</th>${ch('filed')}<th colspan="2" data-smdrag="pay" data-smfix="filed,bill">신고일자</th>${ch('bill')}<th rowspan="2" data-smdrag="pay" data-smfix="bill,paid">신고서류</th>${ch('paid')}<th rowspan="2" data-smdrag="pay" data-smfix="paid,memo">납부마감</th>${ch('memo')}<th rowspan="2" data-smdrag="pay" data-smfix="memo,end">메모</th>
       ${ch('end')}</tr><tr><th>국세</th><th>지방세</th><th>국세</th><th>지방세</th></tr></thead><tbody>${rows.join('')}</tbody></table></div>`
       : `<div class="empty">${q ? '검색 결과가 없어요.' : `${yy}년 ${mm}월 귀속 신고대상이 없어요.`}</div>`}`;
 }
