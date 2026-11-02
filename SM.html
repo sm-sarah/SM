@@ -909,7 +909,9 @@ function smTogglePcView(){ try{ localStorage.setItem('sm_pc_view', window.SM_PC_
      홈 화면의 카드를 그대로 옮겨 와서 보여주므로(복사본 아님) 기능·저장은 홈과 같음. 홈에서는 이미 보이니 버튼을 숨김 */
   .sm-pcview-btn{ display:none !important; }
   html.sm-touch .sm-pcview-btn{ display:inline-flex !important; align-items:center; gap:4px; }
-  .sm-fab{ position:fixed; left:0; right:0; margin:0 auto; width:max-content; bottom:20px; z-index:900; display:flex; flex-direction:row; gap:8px; zoom:var(--sm-touch-zoom, 1); }
+  .sm-fab{ position:fixed; left:0; right:0; margin:0 auto; width:max-content; bottom:20px; z-index:900; display:flex; flex-direction:row; gap:8px; zoom:var(--sm-touch-zoom, 1);
+    padding:6px; border-radius:999px; background:#f6d6e3; box-shadow:var(--shadow-md); }   /* [2026.11.02] "한 묶음으로 배경색"(요청) */
+  .sm-fab .sm-fab-btn{ box-shadow:none; }
   /* [2026.10.22] "플로팅 메뉴를 가운데로, 아이콘만 한 줄로 나열, 누르면 오른쪽이 아니라 가운데로, 가로폭 좀 더 길게"(요청) - 아래쪽 가운데 동그란 아이콘 버튼 한 줄, 팝업은 그 위 가운데(480 → 720px) */
   .sm-fab .sm-fab-btn{ min-width:0; width:38px; padding:0; justify-content:center; }
   .sm-fab .sm-fab-x{ display:none; color:var(--muted); }
@@ -924,13 +926,13 @@ function smTogglePcView(){ try{ localStorage.setItem('sm_pc_view', window.SM_PC_
   .sm-fab-btn.on[data-k="check"]{ background:#7cc4ee; border-color:#7cc4ee; color:#fff; }
   .sm-fab-btn.on[data-k="today"]{ background:var(--primary); border-color:var(--primary); color:#fff; }
   .sm-fab-btn.on[data-k="memo"]{ background:#d9bfcd; border-color:#d9bfcd; color:#fff; }
-  .sm-fab-pop{ zoom:var(--sm-touch-zoom, 1); position:fixed; left:0; right:0; margin:0 auto; bottom:68px; z-index:899; width:min(720px, calc(100vw - 40px)); max-height:calc(100vh - 88px); overflow-y:auto; border-radius:var(--radius-lg); box-shadow:0 18px 48px -12px rgba(150,50,90,.35); }
+  .sm-fab-pop{ zoom:var(--sm-touch-zoom, 1); position:fixed; left:0; right:0; margin:0 auto; bottom:76px; z-index:899; width:min(720px, calc(100vw - 40px)); max-height:calc(100vh - 88px); overflow-y:auto; border-radius:var(--radius-lg); box-shadow:0 18px 48px -12px rgba(150,50,90,.35); }
   .sm-fab-pop > div > .card, .sm-fab-pop .notice-card{ margin:0; }
   /* [2026.10.20] "Today가 안 보임"(요청) - 큰 화면에서 홈 카드는 화면 높이를 나눠 쓰도록(flex:1 1 0) 되어 있어 팝업 안에서는 높이가 0으로 접혔음 → 팝업 안에서는 내용만큼 */
   .sm-fab-pop .wl-side .notice-card{ position:static; height:auto !important; max-height:none; overflow:visible; }
   .sm-fab-pop .wl-col2 > .card{ flex:none !important; height:auto !important; min-height:0; }
   .sm-fab-pop .wl-today-card .wl-agenda{ flex:none !important; min-height:0; max-height:46vh; overflow-y:auto; }
-  @media (max-width:600px){ .sm-fab{ bottom:12px; } .sm-fab-pop{ left:8px; right:8px; bottom:60px; width:auto; max-height:calc(100vh - 76px); } }
+  @media (max-width:600px){ .sm-fab{ bottom:12px; } .sm-fab-pop{ left:8px; right:8px; bottom:68px; width:auto; max-height:calc(100vh - 76px); } }
   .wl-hist-agenda{ max-height:340px; }
   /* [2026.10.15] 홈 빠른 메모 */
   .wl-memo-new{ display:flex; gap:8px; align-items:flex-end; margin-top:8px; }
@@ -1120,6 +1122,10 @@ function smTogglePcView(){ try{ localStorage.setItem('sm_pc_view', window.SM_PC_
   /* [2026.10.13] 원천세 메뉴 2단(요청 - "메뉴구성 스타일이 이상하다"): 윗줄(총괄·신고현황·일용직·제출)은 큰 탭 + 아래 구분선,
      아랫줄(매월·반기·연간)은 옆 선택칸과 같은 높이의 작은 칸 묶음으로 구분 */
   .pay-maintabs{ border-bottom:1px solid var(--border); padding-bottom:10px; margin-bottom:14px !important; }
+  /* [2026.11.02] works 위 탭(거래처~종소세)·하위메뉴 - 가운데 */
+  .page-head .works-tabs, .page-head .works-subtabs{ justify-content:center; }
+  .page-head .works-subtabs{ margin-bottom:16px; }
+  .page-head .works-subtabs .cl-subtab{ font-size:13px; padding:5px 11px; }
   /* [2026.10.14] 체크리스트 중요 표시(별) */
   .notice-star{ flex:none; border:none; background:transparent; padding:0 1px; margin-top:-1px; font-size:15px; line-height:1.2; color:var(--muted-soft); cursor:pointer; opacity:.55; }
   .notice-star:hover{ opacity:1; color:#f5b544; }
@@ -1167,6 +1173,8 @@ function smTogglePcView(){ try{ localStorage.setItem('sm_pc_view', window.SM_PC_
   .cl-dt.vp-memo.has{ color:var(--primary-dark); }
   .cl-dt.vp-memo svg{ vertical-align:middle; }
   .cl-pop-row{ display:flex; gap:4px; flex-wrap:wrap; }
+  .cl-pop.sm-quick{ width:auto; padding:6px; }   /* [2026.11.02] 오른쪽 클릭 빠른 입력(- / 미해당) - 내용 폭만큼 */
+  .cl-pop.sm-quick .cl-pop-row button{ min-width:32px; }
   .cl-pop-row button{ font:inherit; font-size:12px; border:1px solid var(--border); background:var(--bg); color:var(--text); border-radius:7px; padding:4px 8px; cursor:pointer; }
   .cl-pop-row button:hover{ border-color:var(--primary); color:var(--primary-dark); }
   .cl-pop-row button.del{ color:var(--rose); }
@@ -1874,25 +1882,96 @@ smDefCols('vatProgCols', () => vatProgColsBy, () => vatProgKey());
 smDefCols('closeCols', () => closeColsBy, () => closeKey());
 function smColsPrune(map){ const o = {}; Object.keys(map || {}).forEach(k => { if(k && Array.isArray(map[k]) && map[k].length) o[k] = map[k]; }); return o; }
 function smColsCopy(cols){ return JSON.parse(JSON.stringify(cols || [])); }
+// [2026.11.02] "해당없음 말고 다 미해당으로 통일"(요청) - 고르는 버튼·오른쪽 클릭은 '미해당'. 예전에 넣은 '해당없음'도 불러올 때 '미해당'으로 바꿈(값 판단은 둘 다 미해당으로)
+function smIsNA(v){ return v === '미해당' || v === '해당없음'; }
+function smNaUnify(){
+  let n = 0;
+  const walk = o => { if(!o || typeof o !== 'object') return; Object.keys(o).forEach(k => { const v = o[k]; if(v === '해당없음'){ o[k] = '미해당'; n++; } else if(v && typeof v === 'object') walk(v); }); };
+  [payCustomVals, vatProg, closeData, taxColVals, submitMine].forEach(walk);
+  return n > 0;
+}
 // [2026.11.02] 머리글 끌어서 항목 옮기기(신고현황·결산·법인세·종소세 공통) - 내 항목 th: data-smdrag="종류" data-smcol="항목id" draggable,
 //   고정 칸 th: data-smdrag="종류" data-smfix="왼쪽에 놓을 때 pos,오른쪽에 놓을 때 pos"(놓는 자리로만 씀). 놓으면 SM_COL_MOVERS[종류](id, {col}|{fix}, 오른쪽?)
 let smDragCol = null;
 const SM_COL_MOVERS = {};
 function smColDragClear(){ document.querySelectorAll('.sm-drop-l, .sm-drop-r, .sm-col-dragging').forEach(x => x.classList.remove('sm-drop-l', 'sm-drop-r', 'sm-col-dragging')); }
-document.addEventListener('dragstart', e => { const th = e.target && e.target.closest && e.target.closest('th[data-smcol]'); if(!th) return; smDragCol = { kind: th.dataset.smdrag, id: th.dataset.smcol }; th.classList.add('sm-col-dragging'); e.dataTransfer.effectAllowed = 'move'; try{ e.dataTransfer.setData('text/plain', smDragCol.id); }catch(_){} });
+// [2026.11.02] 끌기는 아래 표 칸 순서(smOrd)가 맡음 - 모든 칸(회사웹 칸 포함)을 끌어서 옮김
+// [2026.11.02] "works 메뉴들은 다 항목 끌어서 위치 조정(배열) - 모든 칸"(요청)
+//   works 화면(거래처·결산·원천세·부가세·법인세·종소세)의 표는 머리글(맨 위 줄 칸)을 끌어 다른 칸 왼쪽/오른쪽에 놓으면 그 칸(묶음 머리글이면 묶음 전체)이 옮겨짐.
+//   표마다 순서를 smColOrders['화면:보기:표번호'] = [칸 키...]로 저장(works에만). 그린 뒤 DOM에서 칸을 다시 배열(smOrdApply) - 회사웹 값·계산은 그대로.
+//   칸 키: 내 항목 = 'c:항목id', 묶음 머리글 = 'g:이름', 나머지 = 't:머리글 글자'. 순번·체크박스·왼쪽 고정(상호) 칸은 그 자리에 고정
+let smColOrders = {};
+const SM_ORD_VIEW = { pay: () => payView, vat: () => vatView, clients: () => clientsView, close: () => '', corp: () => '', indiv: () => '' };
+function smOrdKeyOf(th){
+  if(th.dataset.ordk) return th.dataset.ordk;
+  if(th.dataset.smcol) return 'c:' + th.dataset.smcol;
+  const m = /EditCol\((?:'[a-z]+',)?'([^']+)'/.exec(th.innerHTML); if(m) return 'c:' + m[1];
+  return (th.colSpan > 1 ? 'g:' : 't:') + th.textContent.replace(/[\s✎]+/g, '');
+}
+function smOrdFixed(th){ return th.classList.contains('tx-seq') || th.classList.contains('vp-sticky') || !!th.querySelector('input[type=checkbox]') || !th.textContent.trim(); }
+// 칸마다 시작 열 번호(rowspan·colspan 반영)
+function smOrdGrid(table){
+  const occ = [], st = new Map();
+  [...table.rows].forEach((r, ri) => {
+    occ[ri] = occ[ri] || []; let col = 0;
+    [...r.cells].forEach(c => {
+      while(occ[ri][col]) col++;
+      st.set(c, col);
+      for(let dr = 0; dr < Math.max(1, c.rowSpan); dr++){ const o = occ[ri + dr] = occ[ri + dr] || []; for(let dc = 0; dc < c.colSpan; dc++) o[col + dc] = 1; }
+      col += c.colSpan;
+    });
+  });
+  return st;
+}
+function smOrdApply(table, key){
+  const head = table.tHead; if(!head || !head.rows.length) return;
+  const st = smOrdGrid(table);
+  const blocks = [...head.rows[0].cells].map(th => ({ th, key: smOrdKeyOf(th), s: st.get(th), e: st.get(th) + th.colSpan, fixed: smOrdFixed(th) }));
+  const seen = {}; blocks.forEach(b => { const n = seen[b.key] = (seen[b.key] || 0) + 1; if(n > 1) b.key += '#' + n; });
+  table.dataset.smord = key;
+  blocks.forEach(b => { if(b.fixed){ b.th.removeAttribute('draggable'); delete b.th.dataset.smordKey; } else { b.th.draggable = true; b.th.dataset.smordKey = b.key; } });
+  const saved = smColOrders[key]; if(!saved || !saved.length) return;
+  // 저장된 칸끼리만 저장 순서대로 자리를 바꿈(새로 생긴 칸·고정 칸은 그린 자리 그대로)
+  const slots = blocks.map((b, i) => i).filter(i => !blocks[i].fixed && saved.includes(blocks[i].key));
+  const sorted = slots.map(i => blocks[i]).sort((a, b) => saved.indexOf(a.key) - saved.indexOf(b.key));
+  const order = blocks.slice(); slots.forEach((slot, j) => { order[slot] = sorted[j]; });
+  if(order.every((b, i) => b === blocks[i])) return;
+  const blockOf = col => blocks.findIndex(b => col >= b.s && col < b.e);
+  [...table.rows].forEach(r => {
+    const groups = new Map(); let bad = false;
+    [...r.cells].forEach(c => { const s0 = st.get(c), bi = blockOf(s0); if(bi < 0 || s0 + c.colSpan > blocks[bi].e){ bad = true; return; } if(!groups.has(bi)) groups.set(bi, []); groups.get(bi).push(c); });
+    if(bad) return;   // 여러 칸을 합친 줄(안내 문구 등)은 그대로
+    order.forEach(b => (groups.get(blocks.indexOf(b)) || []).forEach(c => r.appendChild(c)));
+  });
+}
+function smOrdApplyTab(tab){
+  const el = document.getElementById('tab-' + tab); if(!el || !SM_ORD_VIEW[tab]) return;
+  const v = SM_ORD_VIEW[tab]();
+  el.querySelectorAll('table').forEach((t, i) => { if(t.closest('.vp-ordering')) return; try{ smOrdApply(t, `${tab}:${v}:${i}`); }catch(e){ console.warn('칸 순서', e); } });
+}
+let smOrdDrag = null;
+const smOrdTh = (e, table) => { const th = e.target && e.target.closest && e.target.closest('th[data-smord-key]'); return th && th.parentElement === th.closest('table').tHead.rows[0] && (!table || th.closest('table') === table) && !th.closest('.vp-ordering') ? th : null; };
+function smOrdClear(){ document.querySelectorAll('.sm-drop-l, .sm-drop-r, .sm-col-dragging').forEach(x => x.classList.remove('sm-drop-l', 'sm-drop-r', 'sm-col-dragging')); }
+document.addEventListener('dragstart', e => { const th = smOrdTh(e); if(!th) return; smOrdDrag = { table: th.closest('table'), key: th.dataset.smordKey }; th.classList.add('sm-col-dragging'); e.dataTransfer.effectAllowed = 'move'; try{ e.dataTransfer.setData('text/plain', smOrdDrag.key); }catch(_){} });
 document.addEventListener('dragover', e => {
-  if(!smDragCol) return; const th = e.target && e.target.closest && e.target.closest(`th[data-smdrag="${smDragCol.kind}"]`);
+  if(!smOrdDrag) return; const th = smOrdTh(e, smOrdDrag.table);
   document.querySelectorAll('.sm-drop-l, .sm-drop-r').forEach(x => x.classList.remove('sm-drop-l', 'sm-drop-r'));
-  if(!th || th.dataset.smcol === smDragCol.id) return;
+  if(!th || th.dataset.smordKey === smOrdDrag.key) return;
   e.preventDefault(); const r = th.getBoundingClientRect(); th.classList.add(e.clientX < r.left + r.width / 2 ? 'sm-drop-l' : 'sm-drop-r');
 });
 document.addEventListener('drop', e => {
-  if(!smDragCol) return; const th = e.target && e.target.closest && e.target.closest(`th[data-smdrag="${smDragCol.kind}"]`), d = smDragCol; smDragCol = null;
-  if(!th || th.dataset.smcol === d.id){ smColDragClear(); return; }
-  e.preventDefault(); const after = th.classList.contains('sm-drop-r'); smColDragClear();
-  const mv = SM_COL_MOVERS[d.kind]; if(mv) mv(d.id, th.dataset.smcol ? { col: th.dataset.smcol } : { fix: th.dataset.smfix || '' }, after);
+  if(!smOrdDrag) return; const d = smOrdDrag; smOrdDrag = null; const th = smOrdTh(e, d.table);
+  if(!th || th.dataset.smordKey === d.key){ smOrdClear(); return; }
+  e.preventDefault(); const after = th.classList.contains('sm-drop-r'); smOrdClear();
+  const keys = [...d.table.tHead.rows[0].cells].map(x => x.dataset.smordKey).filter(Boolean).filter(k => k !== d.key);
+  let at = keys.indexOf(th.dataset.smordKey); if(at < 0) return; if(after) at++;
+  keys.splice(at, 0, d.key);
+  smColOrders[d.table.dataset.smord] = keys;
+  smOrdApply(d.table, d.table.dataset.smord);
+  if(d.table.closest('#tab-vat .vat-prog')) try{ vatProgApplyFreeze(); }catch(_){}
+  scheduleGoogleSave();
 });
-document.addEventListener('dragend', () => { if(smDragCol){ smDragCol = null; smColDragClear(); } });
+document.addEventListener('dragend', () => { if(smOrdDrag){ smOrdDrag = null; smOrdClear(); } });
 // '어느 칸 앞(pos)' 묶음이 있는 표(신고현황·법인세·종소세): 내 항목 앞/뒤면 그 항목 자리로, 고정 칸이면 왼쪽 = 그 칸 앞 묶음의 끝, 오른쪽 = 다음 묶음의 처음
 function smMovePosCol(cols, id, tgt, after){
   const col = cols.find(c => c.id === id); if(!col) return null;
@@ -2071,6 +2150,7 @@ const ICONS = {
   corp: '<rect x="4" y="3" width="12" height="18" rx="1"/><path d="M16 21V8l4 2v11z"/><path d="M7.5 7h1.6M11 7h1.6M7.5 11h1.6M11 11h1.6M7.5 15h1.6M11 15h1.6"/>',
   indiv: '<circle cx="12" cy="8" r="4"/><path d="M4.2 20c0-4.3 3.6-6.8 7.8-6.8s7.8 2.5 7.8 6.8"/>',
   clients: '<circle cx="9" cy="8" r="3.2"/><path d="M2.8 19.5c0-3.6 2.8-5.8 6.2-5.8s6.2 2.2 6.2 5.8"/><circle cx="17" cy="8.6" r="2.4"/><path d="M15 13.9c2.9.2 4.7 2.2 4.9 5.3"/>',
+  works: '<rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M3 12.5h18"/><path d="M11 12.5v1.5h2v-1.5"/>',
   review: '<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 3.5h6v3H9z"/><path d="M8.5 11l1.5 1.5 3-3"/><path d="M8.5 16.5h7"/>',
   inner: '<path d="M3 21h18"/><path d="M5 21V7l7-4 7 4v14"/><path d="M9 21v-5h6v5"/><path d="M9 10h.01M15 10h.01"/>',
   attend: '<circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2"/><path d="M9 2h6"/>',
@@ -2089,16 +2169,29 @@ const TABS = [
   {id:'laws',     label:'법령'},
   {id:'inner',    label:'내부'},
   {id:'attend',   label:'근태경비'},
-  {id:'pay',      label:'원천세'},   // [2026.10.14] 메뉴 순서 원천세 → 부가세(요청)
-  {id:'vat',      label:'부가세'},
-  {id:'close',    label:'결산'},   // [2026.10.14] 법인세 위에 결산(요청)
-  {id:'corp',     label:'법인세'},
-  {id:'indiv',    label:'종소세'},
-  {id:'clients',  label:'거래처'},
-  {id:'review',   label:'검토표'},
-  {id:'taxj',     label:'Tax.J'},
-  {id:'settings', label:'설정'},
+  // [2026.11.02] "원천세·부가세·결산·법인세·종소세·거래처를 works 메뉴로 통합 - 그 안에서 상단에 거래처·결산·원천세·부가세·법인세·종소세 + 각 하위메뉴"(요청)
+  //   왼쪽 메뉴에는 works 하나만, 화면 위에 WORKS_TABS 탭과 하위메뉴(worksHeadHtml). 각 화면(tab-pay 등)은 그대로 씀
+  {id:'works',    label:'works', c:2},
+  {id:'review',   label:'검토표', c:2},   // c = 아이콘 색(메뉴를 합치기 전 자리 색 그대로)
+  {id:'taxj',     label:'Tax.J', c:3},
+  {id:'settings', label:'설정', c:4},
 ];
+const WORKS_TABS = [['clients','거래처'], ['close','결산'], ['pay','원천세'], ['vat','부가세'], ['corp','법인세'], ['indiv','종소세']];
+function isWorksTab(id){ return WORKS_TABS.some(x => x[0] === id); }
+let worksLast = (() => { try{ const v = localStorage.getItem('sm_works_last'); return isWorksTab(v) ? v : 'clients'; }catch(e){ return 'clients'; } })();
+// 지금 하위메뉴(원천세·부가세·거래처) - 고르면 그 화면으로
+function worksSubCur(id, sub){
+  const k = (/'(\w+)'/.exec(sub.js || '') || [])[1];
+  if(id === 'pay') return k === payView || (k === 'status' && payView === 'submit');
+  if(id === 'vat') return k === vatView;
+  if(id === 'clients') return k === clientsView;
+  return false;
+}
+function worksHeadHtml(){
+  const subs = NAV_SUBMENUS[activeTab] || [];
+  return `<div class="cl-subtabs pay-maintabs works-tabs">${WORKS_TABS.map(([k, l]) => `<button class="cl-subtab ${k === activeTab ? 'on' : ''}" onclick="switchTab('${k}')">${l}</button>`).join('')}</div>`
+    + (subs.length ? `<div class="cl-subtabs works-subtabs">${subs.map(x => `<button class="cl-subtab ${worksSubCur(activeTab, x) ? 'on' : ''}" onclick="${x.js}">${x.label}</button>`).join('')}</div>` : '');
+}
 const TAB_TITLES = {
   home:['홈','오늘 기준으로 챙겨야 할 신고 기한과 현황을 한눈에 봅니다.'],
   worklist:['To do',''],
@@ -2189,13 +2282,14 @@ function goToSettingsSection(anchor){
 let activeTab = 'home';
 
 // [2026.10.22] "매뉴얼 하위메뉴 누르면 변화가 없어"(요청) - 지금 보고 있는 분야를 하위메뉴에서 표시(매뉴얼·서식·법령)
-function subCur(id){ try{ return id === 'manuals' ? (manualCat || '전체') : (id === 'forms' || id === 'laws') ? (LIB[id].sel || '전체') : null; }catch(e){ return null; } }
+function subCur(id){ try{ return id === 'works' ? ((WORKS_TABS.find(x => x[0] === activeTab) || [])[1] || null) : id === 'manuals' ? (manualCat || '전체') : (id === 'forms' || id === 'laws') ? (LIB[id].sel || '전체') : null; }catch(e){ return null; } }
 function renderNav(){
   const sb = document.getElementById('sidebarNav');
   sb.innerHTML = TABS.map((t, i) => {
-    const sub = NAV_SUBMENUS[t.id];
+    const sub = t.id === 'works' ? WORKS_TABS.map(([k, l]) => ({ js:`switchTab('${k}')`, label:l })) : NAV_SUBMENUS[t.id];
+    const on = t.id === activeTab || (t.id === 'works' && isWorksTab(activeTab));
     const btn = `
-      <button class="nav-item ${t.id===activeTab?'active':''}" data-c="${i % 6}"
+      <button class="nav-item ${on?'active':''}" data-c="${t.c != null ? t.c : i % 6}"
               title="${t.label}" onclick="switchTab('${t.id}')">
         <span class="nav-ic"><svg viewBox="0 0 24 24">${ICONS[t.id]}</svg></span>
         <span class="tiny">${t.label}</span>
@@ -2205,7 +2299,7 @@ function renderNav(){
     return `
       <div class="nav-wrap has-sub">
         ${btn}
-        <div class="nav-flyout ${t.id===activeTab?'open':''}">
+        <div class="nav-flyout ${on?'open':''}">
           ${sub.map(s => `<button class="nav-flyout-item${subCur(t.id) === s.label ? ' on' : ''}" onclick="${s.js || `goToSettingsSection('${s.anchor}')`}">${s.label}</button>`).join('')}
         </div>
       </div>
@@ -2234,9 +2328,10 @@ function pageSubtitle(){
 }
 function updatePageHead(){
   const el = document.getElementById('pageHead'); if(!el) return;
-  const title = (TABS.find(t => t.id === activeTab) || {}).label || (TAB_TITLES[activeTab] || [''])[0];
+  const wt = WORKS_TABS.find(x => x[0] === activeTab);
+  const title = wt ? wt[1] : (TABS.find(t => t.id === activeTab) || {}).label || (TAB_TITLES[activeTab] || [''])[0];
   const sub = pageSubtitle();
-  const html = `<div class="underline-bar"></div><h1>${title}</h1>${sub ? `<div class="page-sub">${taxjEsc(sub)}</div>` : ''}`;
+  const html = (wt ? worksHeadHtml() : '') + `<div class="underline-bar"></div><h1>${title}</h1>${sub ? `<div class="page-sub">${taxjEsc(sub)}</div>` : ''}`;   // [2026.11.02] works 화면은 위에 탭·하위메뉴
   if(el._html === html) return;   // [2026.10.16] 깜빡임(요청) - 같은 제목이면 다시 그리지 않음
   el._html = html; el.innerHTML = html;
 }
@@ -2244,6 +2339,8 @@ function updatePageHead(){
 let prevTab = null;
 function switchTab(id){
   if(id === 'worklist') id = 'home';   // [2026.10.15] To do 메뉴를 홈으로 합침(요청) - 예전 'To do로 가기'도 홈으로
+  if(id === 'works') id = worksLast;   // [2026.11.02] works = 마지막으로 본 works 화면(처음엔 거래처)
+  if(isWorksTab(id)){ worksLast = id; try{ localStorage.setItem('sm_works_last', id); }catch(e){} }
   if(id !== activeTab) prevTab = activeTab;
   activeTab = id;
   try{ localStorage.setItem('sm_last_tab', id); }catch(e){}
@@ -3113,6 +3210,47 @@ function smFabSync(){
   if(onHome && smFabOpenK) smFabClose();
   else if(smFabOpenK) smFabShow(smFabOpenK);   // 홈 카드가 새로 그려졌으면 새 카드로 바꿔 끼움
 }
+// [2026.11.02] "입력하는 곳에서 오른쪽 마우스 클릭하면 - 이나 해당없음이 뜨게, 적용 가능한 모든 곳"(요청)
+//   날짜·기간 칸(+ 버튼: 신고현황·결산·부가세 진행·법인세·종소세·제출)과 표 안의 글자 입력칸에서 오른쪽 클릭 → 작은 창에서 '-' / '미해당'을 고르면 그 값으로 저장.
+//   이미 오른쪽 클릭을 쓰는 칸(부가세 진행 체크 칸 = 미해당)은 그대로. 체크박스·드롭다운·검색칸·비밀번호칸은 값 형식이 달라 빼고, 글자 입력칸은 표 안(td)만
+const SM_QUICK_SETTERS = {
+  payDatePop: (b, v) => setPayCustomVal(b.dataset.key, b.dataset.col, v),
+  closeDatePop: (b, v) => { closeSetVal(b.dataset.cid, b.dataset.col, v); renderClose(); },
+  closeRangePop: (b, v) => { closeSetVal(b.dataset.cid, b.dataset.col, v); renderClose(); },
+  vatProgDatePop: (b, v) => vatProgSet(b.dataset.cid, b.dataset.col, v, true),
+  taxDatePop: (b, v) => taxSetVal(b.dataset.kind, b.dataset.cid, b.dataset.col, v),
+  submitDatePop: (b, v) => setSubmitClose(b.dataset.key, b.dataset.item, v, b.dataset.pk),
+  submitSavedPop: (b, v) => updateSubmitMine(b.dataset.key, 'done', v, b.dataset.pk),
+};
+function smQuickTarget(t){
+  if(!t || !t.closest) return null;
+  const b = t.closest('button.cl-dt');
+  if(b){ const fn = (/^(\w+)\(/.exec(b.getAttribute('onclick') || '') || [])[1]; if(SM_QUICK_SETTERS[fn]) return { set: v => SM_QUICK_SETTERS[fn](b, v) }; }
+  const inp = t.closest('td input[type=text], td textarea');
+  if(inp && !inp.readOnly && !inp.disabled && !inp.classList.contains('search-input') && !inp.classList.contains('sm-sx'))
+    return { set: v => { inp.value = v; inp.dispatchEvent(new Event('input', { bubbles:true })); inp.dispatchEvent(new Event('change', { bubbles:true })); } };
+  return null;
+}
+document.addEventListener('contextmenu', e => {
+  if(e.defaultPrevented) return;
+  const tg = smQuickTarget(e.target); if(!tg) return;
+  e.preventDefault();
+  closeDatePopClose();
+  const pop = document.createElement('div');
+  pop.id = 'closeDatePop'; pop.className = 'cl-pop sm-quick';
+  pop.innerHTML = `<div class="cl-pop-row"><button type="button" data-q="-">-</button><button type="button" data-q="미해당">미해당</button></div>`;
+  document.body.appendChild(pop);
+  const pw = pop.offsetWidth, ph = pop.offsetHeight;
+  pop.style.left = Math.max(8, Math.min(window.innerWidth - pw - 8, e.clientX)) + 'px';
+  pop.style.top = (e.clientY + ph + 8 > window.innerHeight ? e.clientY - ph - 4 : e.clientY + 4) + 'px';
+  pop.querySelectorAll('[data-q]').forEach(x => x.onclick = () => { closeDatePopClose(); try{ tg.set(x.dataset.q); }catch(err){ console.warn(err); } });
+  setTimeout(() => document.addEventListener('mousedown', closeDatePopOutside, true), 0);
+});
+// [2026.11.02] works 화면을 그린 뒤 표 칸 순서(smOrd)를 적용하고 위 탭·하위메뉴 표시도 맞춤
+[['renderPay','pay'], ['renderSubmit','pay'], ['renderClose','close'], ['renderCorp','corp'], ['renderIndiv','indiv'], ['renderClients','clients']].forEach(([fn, tab]) => {
+  const f = window[fn]; if(typeof f !== 'function') return;
+  window[fn] = function(){ const r = f.apply(this, arguments); try{ smOrdApplyTab(tab); if(activeTab === tab) updatePageHead(); }catch(e){ console.warn(e); } return r; };
+});
 { const _rm = renderWlMemo; renderWlMemo = function(){ const r = _rm.apply(this, arguments); try{ smFabAddX(); }catch(e){} return r; }; }
 { const _rw = renderWorklist; renderWorklist = function(){ if(smFabHome){ smFabHome.mark.remove(); smFabHome = null; } const r = _rw.apply(this, arguments); try{ smFabSync(); }catch(e){ console.warn(e); } return r; }; }
 { const _st = switchTab; switchTab = function(){ const r = _st.apply(this, arguments); try{ smFabSync(); }catch(e){} return r; }; }
@@ -4319,7 +4457,14 @@ async function vatProgHideCols(){
 // 순서 편집: 머리글(항목 한 칸, 또는 묶음 머리글 = 그 묶음 전체)을 끌어 놓으면 바로 그 자리로(아직 저장 안 함). 저장 = 그대로 저장, 취소 = 처음 순서로
 let vatProgOrdering = false, vatProgOrderSnap = null, vpDragIds = null;
 function vpDragAttr(ids){ return vatProgOrdering ? ` draggable="true" data-vpids="${ids.join(',')}" title="끌어서 옮기기"` : ''; }
-function vatProgOrderStart(){ vatProgOrdering = true; vatProgOrderSnap = vatProgCols.slice(); renderVat(); }
+function vatProgOrderStart(){ vatProgSyncOrd(); vatProgOrdering = true; vatProgOrderSnap = vatProgCols.slice(); renderVat(); }
+// [2026.11.02] 머리글을 끌어 옮긴 내 항목 순서(smColOrders)를 항목 목록 순서로 옮기고, 저장 순서에서는 내 항목·묶음을 뺌(순서 편집·배치가 정한 순서가 그대로 보이게)
+function vatProgSyncOrd(){
+  const tb = document.querySelector('#tab-vat .vat-prog table'), k = (tb && tb.dataset.smord) || 'vat:prog:0', sv = smColOrders[k]; if(!sv || !sv.length) return;
+  const ids = [...document.querySelectorAll('#tab-vat .vat-prog thead th')].map(h => smOrdKeyOf(h)).filter(x => x.startsWith('c:')).map(x => x.slice(2));
+  if(ids.length){ const cols = vatProgCols.slice(), pos = c => { const i = ids.indexOf(c.id); return i < 0 ? 1e6 + cols.indexOf(c) : i; }; vatProgCols = cols.sort((a, b) => pos(a) - pos(b)); }
+  smColOrders[k] = sv.filter(x => !/^(c|g):/.test(x));
+}
 function vatProgOrderEnd(save){
   if(!save && vatProgOrderSnap) vatProgCols = vatProgOrderSnap;
   vatProgOrdering = false; vatProgOrderSnap = null; renderVat();
@@ -4404,6 +4549,7 @@ async function vatProgArrange(){
   });
   if(!(await p)) return;
   tmp.forEach(x => { x.c.label = x.label; if(x.group) x.c.group = x.group; else delete x.c.group; });
+  { const tb = document.querySelector('#tab-vat .vat-prog table'), k = (tb && tb.dataset.smord) || 'vat:prog:0'; if(smColOrders[k]) smColOrders[k] = smColOrders[k].filter(x => !/^(c|g):/.test(x)); }   // [2026.11.02] 배치 창 순서가 그대로 보이게
   vatProgCols = vatProgCols.filter(c => c.fa).concat(tmp.map(x => x.c), vatProgCols.filter(c => !c.fa && !vatProgColLive(c)));   // 이 기수부터 뺀 항목은 뒤에 그대로
   renderVat(); scheduleGoogleSave();
 }
@@ -4513,6 +4659,7 @@ function vatProgRangeInput(el, cid, colId){
 // 고정할 칸 수만큼 왼쪽에 붙임(칸 폭은 그린 뒤에 재서 맞춤)
 function vatProgApplyFreeze(){
   const t = document.querySelector('#tab-vat .vat-prog table'); if(!t || !t.tHead) return;
+  t.querySelectorAll('.vp-frz').forEach(c => { c.classList.remove('vp-frz', 'vp-frz-last'); c.style.left = ''; });   // [2026.11.02] 칸을 옮긴 뒤 다시 잴 때
   const fk = vatProgViewObj().freeze;
   const vk = vatProgVisibleKeys(), fi = fk ? vk.indexOf(fk) : -1, nLink = vk.filter(k => VAT_PROG_LINK.some(x => x[0] === k) || vatProgCols.some(c => c.fa && c.id === k)).length;
   const n = fk ? fi + 2 + (t.dataset.prev === '1' && fi >= nLink ? 1 : 0) : 1;   // 순번 + 고른 칸까지 (없음이면 순번만). [2026.10.16] 내 항목까지 고르면 사이의 전기 칸도
@@ -4522,6 +4669,8 @@ function vatProgApplyFreeze(){
   const ref = [...(t.tBodies[0] ? t.tBodies[0].rows : [])].find(r => r.cells.length >= n) || (hr.length === 1 ? hr[0] : null);
   if(!ref || !ref.cells.length) return;
   const base = ref.cells[0].getBoundingClientRect().left; let edge = ref.cells[Math.min(n, ref.cells.length) - 1].getBoundingClientRect().right - base;   // 머리글(sticky)은 offsetLeft 기준이 달라 화면 위치로 잼
+  // [2026.11.02] 칸 순서를 바꿨으면 고른 칸(머리글)의 오른쪽 끝까지 고정
+  if(fk && fk !== 'name' && (smColOrders[t.dataset.smord] || []).length){ const fth = [...t.tHead.querySelectorAll('th')].find(h => h.dataset.ordk === fk || smOrdKeyOf(h) === 'c:' + fk); if(fth) edge = fth.getBoundingClientRect().right - base; }
   let edge2 = edge;   // 묶음 머리글 중간까지 고정하면 그 묶음 끝까지 고정(위 머리글이 반만 붙어 겹치지 않게)
   for(const c of t.tHead.rows[0].cells){ const b = c.getBoundingClientRect(); if(b.left - base < edge - 1 && b.right - base > edge + 1) edge2 = Math.max(edge2, b.right - base); }
   edge = edge2;
@@ -4573,7 +4722,7 @@ function vatProgHtml(docs){
   const faCol = vatProgLiveCols().find(c => c.fa), faOn = !!faCol && shown(faCol.id);   // [2026.10.20] 고정 '등록' 칸 - 회사웹 칸(Tip·메모·고정자산) 바로 뒤, 끌어서 옮기기·배치 대상 아님
   const lastLink = faOn ? '__fa' : VAT_PROG_LINK.map(x => x[0]).filter(shown).pop();
   const linkHead = ['상호','개업일','사업자번호','예정고지<br>대상','예정고지(부과)<br>제외사유','신고의무<br>여부','직전 과세기간<br>공급가액 합계액','예정','관할 세무서','담당자<br>전화번호','Tip','메모','검증','고정자산']
-    .map((l, i) => shown(VAT_PROG_LINK[i][0]) ? `<th class="vp-link${VAT_PROG_LINK[i][0] === lastLink ? ' vp-div' : ''}" title="회사웹 값(조회만)">${l}</th>` : '').join('')
+    .map((l, i) => shown(VAT_PROG_LINK[i][0]) ? `<th class="vp-link${VAT_PROG_LINK[i][0] === lastLink ? ' vp-div' : ''}" data-ordk="${VAT_PROG_LINK[i][0]}" title="회사웹 값(조회만)">${l}</th>` : '').join('')
     + (faOn ? `<th class="vp-link vp-div" style="text-align:center;" title="고정 항목 · 회사웹 고정자산이 유일 때 체크해요">${taxjEsc(String(faCol.label))}</th>` : '');
   // [2026.10.16] 전기 보기 칸 - 전 기수에 이 거래처 값이 있을 때만 아이콘
   const prevOn = !!pk && Object.keys(vatProg[pk] || {}).some(id => vatProgPrevVals(pk, id).length);
@@ -4669,6 +4818,7 @@ function renderVat(){
   const sig = `${vatView}|${vatYear}|${vatHalf}|${vatKind}`;   // 같은 화면·기수를 다시 그릴 때만 위치 유지(기수·탭을 바꾸면 처음부터)
   const keep = el && el._vatSig === sig ? [...el.querySelectorAll('.table-scroll')].map(x => [x.scrollLeft, x.scrollTop]) : [];
   renderVatInner();
+  try{ smOrdApplyTab('vat'); if(activeTab === 'vat') updatePageHead(); }catch(e){ console.warn(e); }   // [2026.11.02] 칸 순서(끌어서 옮긴 대로)
   if(vatView === 'prog') try{ vatProgApplyFreeze(); }catch(e){ console.warn(e); }   // [2026.10.16] 열 고정
   if(el){ el._vatSig = sig; el.classList.toggle('vat-wide', vatView === 'prog'); }
   if(el && keep.length) [...el.querySelectorAll('.table-scroll')].forEach((x, i) => { if(keep[i]){ x.scrollLeft = keep[i][0]; x.scrollTop = keep[i][1]; } });
@@ -5276,7 +5426,7 @@ function taxDatePop(btn){
   const pop = document.createElement('div');
   pop.id = 'closeDatePop'; pop.className = 'cl-pop';
   pop.innerHTML = `<input type="date" class="cl-pop-date" value="${/^\d{4}-\d{2}-\d{2}$/.test(cur) ? cur : ''}">
-    <div class="cl-pop-row"><button type="button" data-v="__today">오늘</button><button type="button" data-v="해당없음">해당없음</button><button type="button" data-v="__clear" class="del">지우기</button></div>`;
+    <div class="cl-pop-row"><button type="button" data-v="__today">오늘</button><button type="button" data-v="미해당">미해당</button><button type="button" data-v="__clear" class="del">지우기</button></div>`;
   document.body.appendChild(pop);
   const r = btn.getBoundingClientRect(), pw = pop.offsetWidth, ph = pop.offsetHeight;
   pop.style.left = Math.max(8, Math.min(window.innerWidth - pw - 8, r.left)) + 'px';
@@ -5336,6 +5486,7 @@ function toggleCorpStep(id, step){
 function updateCorpNote(id, value){ ensureTaxRows(); corpData[currentCorpYear][id].note = value; scheduleGoogleSave(); }
 
 function renderCorp(){
+  if(!taxjFull && !taxjFullRestoreTried) taxjRestoreFull();   // [2026.11.02] "연동이 풀려도 '회사 진행' 칸이 보이게"(요청) - 처음 연 메뉴여도 저장해 둔 회사웹 자료를 불러옴(실시간 연결 중이면 바뀔 때마다 taxjLiveRerender로 다시 그림)
   const el = document.getElementById('tab-corp');
   if(!corpData[currentCorpYear]){
     corpData[currentCorpYear] = {};
@@ -5406,6 +5557,7 @@ function toggleIndivHonest(id){ ensureTaxRows(); indivData[currentIndivYear][id]
 function updateIndivNote(id, value){ ensureTaxRows(); indivData[currentIndivYear][id].note = value; scheduleGoogleSave(); }
 
 function renderIndiv(){
+  if(!taxjFull && !taxjFullRestoreTried) taxjRestoreFull();   // [2026.11.02] "연동이 풀려도 '회사 진행' 칸이 보이게"(요청) - 처음 연 메뉴여도 저장해 둔 회사웹 자료를 불러옴(실시간 연결 중이면 바뀔 때마다 taxjLiveRerender로 다시 그림)
   const el = document.getElementById('tab-indiv');
   if(!indivData[currentIndivYear]){
     indivData[currentIndivYear] = {};
@@ -6055,6 +6207,7 @@ const GOOGLE_DATA_KEYS = [
   'vatProgColsBy','vatProg','vatProgView',   // [2026.10.14] 부가세 진행표 ([2026.11.02] 항목은 기수마다 따로 - 예전 'vatProgCols')
   'closeColsBy','closeData',   // [2026.10.14] 결산 ([2026.11.02] 항목은 회차마다 따로 - 예전 'closeCols')
   'taxColsBy','taxColVals',   // [2026.11.02] 법인세·종소세 내 항목
+  'smColOrders',   // [2026.11.02] works 표 칸 순서(끌어서 옮긴 대로)
   'quickMemos','nextMemoId',   // [2026.10.15] 홈 빠른 메모
   'menuNotes',   // [2026.10.27] 신고 메뉴별 중요사항
   'accountVault',   // [2026.10.08] 계정 보관함이 Google 시트에 저장되지 않아 다시 열면 "보관함 만들기"가 다시 뜨던 문제 수정(요청)
@@ -6073,7 +6226,7 @@ function collectGoogleSnapshot(){
     links, nextLinkId, linkCats, forms, nextFormId, formCats, laws, nextLawId, lawCats,
     manuals, nextManualId, manualCats,
     accountVault, submitMine, attendMine, payColsBy: smColsPrune(payColsBy), payCustomVals, vatCustomCols, vatCustomVals, vatProgColsBy: smColsPrune(vatProgColsBy), vatProg, vatProgView, closeColsBy: smColsPrune(closeColsBy), closeData,
-    taxColsBy: { corp: smColsPrune(taxColsBy.corp), indiv: smColsPrune(taxColsBy.indiv) }, taxColVals, quickMemos, nextMemoId, menuNotes,
+    taxColsBy: { corp: smColsPrune(taxColsBy.corp), indiv: smColsPrune(taxColsBy.indiv) }, taxColVals, smColOrders, quickMemos, nextMemoId, menuNotes,
   };
 }
 
@@ -6150,7 +6303,9 @@ async function loadFromGoogleSheet(){
     if(map.closeData) closeData = JSON.parse(map.closeData);
     if(map.taxColsBy) taxColsBy = Object.assign({ corp:{}, indiv:{} }, JSON.parse(map.taxColsBy));
     if(map.taxColVals) taxColVals = Object.assign({ corp:{}, indiv:{} }, JSON.parse(map.taxColVals));
-    if(smMigrateCols()) needsResaveAfterLoad = true;   // [2026.11.02] 예전 공통 항목 → 모든 회차에 복사하고 새 형식으로 다시 저장
+    if(map.smColOrders) smColOrders = JSON.parse(map.smColOrders) || {};
+    if(smMigrateCols()) needsResaveAfterLoad = true;
+    if(smNaUnify()) needsResaveAfterLoad = true;   // [2026.11.02] 예전 공통 항목 → 모든 회차에 복사하고 새 형식으로 다시 저장
     if(map.links)         links        = JSON.parse(map.links);
     if(map.nextLinkId)    nextLinkId   = JSON.parse(map.nextLinkId);
     if(map.linkCats)      linkCats     = JSON.parse(map.linkCats);
@@ -6412,7 +6567,8 @@ function applySnapshot(o){
   if(o.closeData) closeData = o.closeData;
   if(o.taxColsBy) taxColsBy = Object.assign({ corp:{}, indiv:{} }, o.taxColsBy);
   if(o.taxColVals) taxColVals = Object.assign({ corp:{}, indiv:{} }, o.taxColVals);
-  smMigrateCols();
+  if(o.smColOrders) smColOrders = o.smColOrders;
+  smMigrateCols(); smNaUnify();
   if(o.links) links = o.links;
   if(o.nextLinkId) nextLinkId = o.nextLinkId;
   if(o.linkCats) linkCats = o.linkCats;
@@ -7043,7 +7199,7 @@ async function resetAllData(){
   clients = [];
   tasks = [];
   vatData = {}; payData = {}; corpData = {}; indivData = {};
-  submitMine = {}; attendMine = {}; payColsBy = {}; payCustomVals = {}; quickMemos = []; nextMemoId = 1; vatCustomCols = []; vatCustomVals = {}; vatProgColsBy = {}; vatProg = {}; closeColsBy = {}; closeData = {}; taxColsBy = { corp:{}, indiv:{} }; taxColVals = { corp:{}, indiv:{} }; menuNotes = {};
+  submitMine = {}; attendMine = {}; payColsBy = {}; payCustomVals = {}; quickMemos = []; nextMemoId = 1; vatCustomCols = []; vatCustomVals = {}; vatProgColsBy = {}; vatProg = {}; closeColsBy = {}; closeData = {}; taxColsBy = { corp:{}, indiv:{} }; taxColVals = { corp:{}, indiv:{} }; smColOrders = {}; menuNotes = {};
   worklistChecklist = {}; worklistSchedule = {};
   events = [];
   clientsOther = []; clientsTerminated = [];
@@ -7348,7 +7504,8 @@ async function taxjRestoreFull(){
       if(fromSheet && (!best || fromSheet.at > best.at)){ best = fromSheet; try{ await taxjIdbSet(best); }catch(e){} }
     }catch(e){ /* 탭이 아직 없으면 그냥 넘어감 */ }
   }else taxjFullRestoreTried = false;   // Google 연결 뒤 다시 시도
-  if(best && (!taxjFull || best.at > taxjFull.at)){ taxjFull = best; taxjFullSaveMsg = '저장해 둔 자료예요. 최신으로 받으려면 새로고침'; if(activeTab === 'taxj') renderTaxjFull(); if(activeTab === 'home') renderHome(); if(activeTab === 'home') renderWlMonthCal(); }
+  if(best && (!taxjFull || best.at > taxjFull.at)){ taxjFull = best; taxjMatchCache = null; taxjFullSaveMsg = '저장해 둔 자료예요. 최신으로 받으려면 새로고침'; if(activeTab === 'taxj') renderTaxjFull(); else taxjLiveRerender();   // [2026.11.02] 저장 자료를 불러오면 지금 보는 회사웹 연동 화면(원천세·부가세·법인세·종소세 등)도 바로 다시 그림
+ if(activeTab === 'home') renderHome(); if(activeTab === 'home') renderWlMonthCal(); }
 }
 const TAXJ_FULL_GROUPS = [
   { id:'filing', label:'신고 진행 현황', keys:[
@@ -7876,7 +8033,7 @@ function submitSavedPop(btn){
   const { key, pk } = btn.dataset, cur = ((submitMine[pk] || {})[key] || {}).done || '';
   const pop = document.createElement('div');
   pop.id = 'closeDatePop'; pop.className = 'cl-pop';
-  pop.innerHTML = `<input type="date" class="cl-pop-date" value="${/^\d{4}-\d{2}-\d{2}$/.test(cur) ? cur : ''}"><div class="cl-pop-row"><button type="button" data-v="__today">오늘</button><button type="button" data-v="해당없음">해당없음</button><button type="button" data-v="노무사">노무사</button><button type="button" data-v="__clear" class="del">지우기</button></div>`; // [2026.10.23] "해당없음·노무사도 고르게(회사웹처럼)"(요청)
+  pop.innerHTML = `<input type="date" class="cl-pop-date" value="${/^\d{4}-\d{2}-\d{2}$/.test(cur) ? cur : ''}"><div class="cl-pop-row"><button type="button" data-v="__today">오늘</button><button type="button" data-v="미해당">미해당</button><button type="button" data-v="노무사">노무사</button><button type="button" data-v="__clear" class="del">지우기</button></div>`; // [2026.10.23] "해당없음·노무사도 고르게(회사웹처럼)"(요청)
   document.body.appendChild(pop);
   const r = btn.getBoundingClientRect(), pw = pop.offsetWidth, ph = pop.offsetHeight;
   pop.style.left = Math.max(8, Math.min(window.innerWidth - pw - 8, r.left)) + 'px';
@@ -7938,7 +8095,7 @@ function submitDatePop(btn){
   const { key, item, pk } = btn.dataset, cur = ((((submitMine[pk] || {})[key] || {}).close) || {})[item] || '';
   const pop = document.createElement('div');
   pop.id = 'closeDatePop'; pop.className = 'cl-pop';
-  pop.innerHTML = `<input type="date" class="cl-pop-date" value="${/^\d{4}-\d{2}-\d{2}$/.test(cur) ? cur : ''}"><div class="cl-pop-row"><button type="button" data-v="__today">오늘</button><button type="button" data-v="해당없음">해당없음</button><button type="button" data-v="노무사">노무사</button><button type="button" data-v="__clear" class="del">지우기</button></div>`; // [2026.10.23] "해당없음·노무사도 고르게(회사웹처럼)"(요청)
+  pop.innerHTML = `<input type="date" class="cl-pop-date" value="${/^\d{4}-\d{2}-\d{2}$/.test(cur) ? cur : ''}"><div class="cl-pop-row"><button type="button" data-v="__today">오늘</button><button type="button" data-v="미해당">미해당</button><button type="button" data-v="노무사">노무사</button><button type="button" data-v="__clear" class="del">지우기</button></div>`; // [2026.10.23] "해당없음·노무사도 고르게(회사웹처럼)"(요청)
   document.body.appendChild(pop);
   const r = btn.getBoundingClientRect(), pw = pop.offsetWidth, ph = pop.offsetHeight;
   pop.style.left = Math.max(8, Math.min(window.innerWidth - pw - 8, r.left)) + 'px';
@@ -8479,7 +8636,7 @@ function payCustomCellHtml(key, col){
   const v = ((payCustomVals[payMonth] || {})[key] || {})[col.id];
   const k = escapeAttr(key);
   // [2026.10.23] "신고서류가 해당없음이면 납부마감·신고서 저장 둘 다 비활성화"(요청) - '신고서 저장' 내 항목도 "-"만
-  if(/신고서\s*저장/.test(col.label || '') && ((payCustomVals[payMonth] || {})[key] || {})._billSent === '해당없음') return `<td><span style="color:#d4c6cd;" title="신고서류 해당없음 - 신고서 저장 없음">-</span></td>`;
+  if(/신고서\s*저장/.test(col.label || '') && smIsNA(((payCustomVals[payMonth] || {})[key] || {})._billSent)) return `<td><span style="color:#d4c6cd;" title="신고서류 미해당 - 신고서 저장 없음">-</span></td>`;
   if(col.type === 'check') return `<td><input type="checkbox" ${v ? 'checked' : ''} onchange="setPayCustomVal('${k}','${col.id}',this.checked)"></td>`;
   if(col.type === 'text') return `<td class="note-cell"><input type="text" value="${escapeAttr(v || '')}" onchange="setPayCustomVal('${k}','${col.id}',this.value)" style="width:100%"></td>`;
   return `<td><div class="date-cell">${payDateBtnHtml(key, col.id, v)}</div></td>`;   // [2026.10.23] ✓로 바꿔서 '완료' 칩은 뺌(요청)
@@ -8505,7 +8662,7 @@ function payDatePop(btn){
   const pop = document.createElement('div');
   pop.id = 'closeDatePop'; pop.className = 'cl-pop';   // 결산 날짜 창과 같은 모양·닫기 동작
   pop.innerHTML = `<input type="date" class="cl-pop-date" value="${/^\d{4}-\d{2}-\d{2}$/.test(cur) ? cur : ''}">
-    <div class="cl-pop-row"><button type="button" data-v="__today">오늘</button><button type="button" data-v="해당없음">해당없음</button><button type="button" data-v="__clear" class="del">지우기</button></div>`; // [2026.10.23] 반기는 신고서류가 없어서 해당없음(요청)
+    <div class="cl-pop-row"><button type="button" data-v="__today">오늘</button><button type="button" data-v="미해당">미해당</button><button type="button" data-v="__clear" class="del">지우기</button></div>`; // [2026.10.23] 반기는 신고서류가 없어서 해당없음(요청)
   document.body.appendChild(pop);
   const r = btn.getBoundingClientRect(), pw = pop.offsetWidth, ph = pop.offsetHeight;
   pop.style.left = Math.max(8, Math.min(window.innerWidth - pw - 8, r.left)) + 'px';
@@ -8564,7 +8721,7 @@ function payBulk(){
     const item = itemSel.value, usePicked = payRowsShown.some(r => payPicked.has(r.key));
     // [2026.10.15] "멘트 발송도 일괄적용"(요청) - 멘트 발송은 미납인 줄에만 있는 칸이라 미납 줄만 보여줌
     const isUnpaid = r => ((payCustomVals[payMonth] || {})[r.key] || {})._payState === '미납';
-    const billNA = r => ((payCustomVals[payMonth] || {})[r.key] || {})._billSent === '해당없음';   // [2026.10.23] 신고서류 해당없음 줄은 납부마감 일괄 입력에서 뺌
+    const billNA = r => smIsNA(((payCustomVals[payMonth] || {})[r.key] || {})._billSent);   // [2026.10.23] 신고서류 해당없음 줄은 납부마감 일괄 입력에서 뺌
     list.innerHTML = payRowsShown.map((r, i) => (item === '_payMsg' && !isUnpaid(r)) || (['__paid','__unpaid','_payMsg'].includes(item) && billNA(r)) ? '' : (() => { const cur = payBulkCur(r.key, item), on = usePicked ? payPicked.has(r.key) : !cur;
       return `<label style="display:flex; align-items:center; gap:8px; padding:7px 0; border-bottom:1px dashed var(--border); font-size:12.5px; cursor:pointer;">
         <input type="checkbox" class="pb-chk" data-i="${i}" ${on ? 'checked' : ''} style="width:auto; margin:0;">
@@ -8614,7 +8771,7 @@ function payBillCellsHtml(key){
   // [2026.10.15] "납부마감 쪽 스타일이 뒤죽박죽"(요청) - 완납/미납은 작은 둥근 칩 모양 선택칸(색으로 구분), 확인일·멘트 발송일은 같은 열에 맞춰
   //   [상태 | 확인일] / [멘트 | 발송일] 두 줄 격자로. 멘트 줄의 '발송' 표시는 날짜와 겹쳐서 뺌
   // [2026.10.23] "신고서류가 해당없음이면 납부마감도 비활성화"(요청) - 납부할 서류가 없으니 납부마감 칸은 "-"만
-  if(v._billSent === '해당없음') return [sent, `<td><span style="color:#d4c6cd;" title="신고서류 해당없음 - 납부마감 없음">-</span></td>`];
+  if(smIsNA(v._billSent)) return [sent, `<td><span style="color:#d4c6cd;" title="신고서류 미해당 - 납부마감 없음">-</span></td>`];
   const sel = `<select class="pay-st ${st === '완납' ? 'ok' : st === '미납' ? 'no' : ''}" onchange="setPayState('${k}', this.value)" title="납부 확인">${['', '완납', '미납'].map(o => `<option value="${o}" ${o === st ? 'selected' : ''}>${o || '-'}</option>`).join('')}</select>`;
   const pay = `<td><div class="pay-grid">${sel}<span>${st ? payDateBtnHtml(key, '_payCheck', v._payCheck, '확인일') : ''}</span>
       ${st === '미납' ? `<span class="pay-lab">멘트</span><span>${payDateBtnHtml(key, '_payMsg', v._payMsg, '멘트 발송일')}</span>` : ''}</div></td>`;
@@ -8664,7 +8821,7 @@ function payStatusHtml(docs){
       const ho = halfOff(c.id);
       if(!ho && v.returnClose && v.returnCloseLocal) cntClose++;
       if(!ho && v.national && v.local) cntFiled++;
-      const slip = skipAll || v.payslipNA ? '<span class="hint" style="margin:0;">해당 없음</span>' : taxjChk(v.payslip);
+      const slip = skipAll || v.payslipNA ? '<span class="hint" style="margin:0;">미해당</span>' : taxjChk(v.payslip);   // [2026.11.02] 미해당으로 통일(요청)
       // [2026.10.13] "신고서 마감을 국세·지방세 나눠서, 그리고 신고일자"(요청) - 신고서 마감(returnClose·returnCloseLocal)·신고일자(national·local)를 각각 국세·지방세 칸으로.
       // 반기 거래처의 6·12월 외 달은 신고서 마감·신고가 없어서 두 칸을 합쳐 '반기'
       const halfTd = what => `<td colspan="2"><span class="hint" style="margin:0;" title="반기 신고 - 6·12월에 ${what}">반기</span></td>`;
@@ -10829,7 +10986,7 @@ function startAppAfterAuth(){
   try{ ensurePayMonths(); const cm = `${new Date().getMonth() + 1}월`; if(payMonths.includes(cm)) currentPayMonth = cm; }catch(e){}
   let last = 'home';
   try{ last = localStorage.getItem('sm_last_tab') || 'home'; }catch(e){}
-  switchTab(TABS.some(t => t.id === last) ? last : 'home');
+  switchTab(TABS.some(t => t.id === last) || isWorksTab(last) ? last : 'home');
   setTimeout(() => { taxjLiveAutoReady = true; taxjLiveAutoStart(); }, 1200);   // [2026.10.12] 전에 연결했으면 회사웹 실시간 연결 다시 켜기
 }
 
@@ -10882,16 +11039,12 @@ if('serviceWorker' in navigator && location.protocol === 'https:') navigator.ser
   if(location.protocol !== 'https:') return;
   let base = null, shown = false, snoozeUntil = 0;
   const sig = async ()=>{ const r = await fetch(location.pathname + '?_v=' + Date.now(), { method:'HEAD', cache:'no-store' }); if(!r.ok) return null; return r.headers.get('etag') || r.headers.get('last-modified') || null; };
-  function banner(){
+  // [2026.11.02] "새로고침 팝업도 화면 정중앙에 눈에 띄게"(요청) - 왼쪽 위 작은 띠 대신 다른 확인 창과 같은 가운데 창(뒤 화면 어둡게)
+  async function banner(){
     if(shown || Date.now() < snoozeUntil) return; shown = true;
-    const b = document.createElement('div');
-    // [2026.10.23] "새로고침 안내는 왼쪽 위 빈자리에"(요청) - 머리줄(header) 왼쪽 빈 칸 안에 넣음(없으면 화면 왼쪽 위 모서리)
-    const slot = document.querySelector('header > span:first-child');
-    b.style.cssText = (slot ? 'position:relative; width:max-content;' : 'position:fixed; top:14px; left:16px; z-index:99999;') + ' display:inline-flex; align-items:center; gap:10px; background:var(--primary); color:#fff; border-radius:999px; padding:7px 10px 7px 16px; font-size:13px; font-weight:700; box-shadow:var(--shadow-md); white-space:nowrap;';
-    b.innerHTML = '<span>새 버전이 올라왔어요</span><button type="button" data-a="go" style="border:none; border-radius:999px; padding:4px 12px; font-size:12px; font-weight:800; background:#fff; color:var(--primary); cursor:pointer;">새로고침</button><button type="button" data-a="later" style="border:none; background:transparent; color:#fff; opacity:.85; font-size:12px; font-weight:700; cursor:pointer;">나중에</button>';
-    b.querySelector('[data-a="go"]').onclick = ()=> location.reload();
-    b.querySelector('[data-a="later"]').onclick = ()=>{ b.remove(); shown = false; snoozeUntil = Date.now() + 30*60*1000; };
-    (slot || document.body).appendChild(b);
+    const ok = await smDialog({ title:'새 버전이 올라왔어요', message:'새로고침하면 바로 적용돼요.\n입력 중인 내용이 있으면 마치고 눌러 주세요.', icon:'↻', okText:'새로고침', cancelText:'나중에' });
+    if(ok) return location.reload();
+    shown = false; snoozeUntil = Date.now() + 30*60*1000;   // 나중에 = 30분 뒤 다시
   }
   async function check(){
     try{ const v = await sig(); if(!v) return; if(base === null){ base = v; return; } if(v !== base) banner(); }catch(e){}
