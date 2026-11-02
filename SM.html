@@ -1448,6 +1448,17 @@ function smTogglePcView(){ try{ localStorage.setItem('sm_pc_view', window.SM_PC_
   .vat-prog.vp-ordering th[data-vpids] .vp-th{ pointer-events:none; }
   .vat-prog.vp-ordering th[data-vpids] .vp-th::before{ content:'⠿ '; color:var(--primary); }
   .vat-prog th.vp-dragging{ opacity:.4; }
+  /* [2026.11.02] 머리글 끌어서 항목 옮기기(신고현황·결산·법인세·종소세) · 다음 회차로 이월 창 */
+  th[data-smcol]{ cursor:grab; }
+  th.sm-col-dragging{ opacity:.4; }
+  th.sm-drop-l{ box-shadow:inset 3px 0 0 var(--primary); }
+  th.sm-drop-r{ box-shadow:inset -3px 0 0 var(--primary); }
+  .sm-carry-note{ font-size:12.5px; color:var(--muted); line-height:1.55; }
+  .sm-carry-all{ display:flex; gap:6px; justify-content:center; margin:12px 0 8px; }
+  .sm-carry-list{ display:flex; flex-direction:column; gap:6px; max-height:46vh; overflow:auto; text-align:left; padding-right:2px; }
+  .sm-carry-row{ display:flex; align-items:center; gap:10px; font-size:13.5px; color:var(--text); }
+  .sm-carry-row span{ flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:700; }
+  .sm-carry-row select{ width:130px; flex:none; border-radius:12px; padding:8px 10px; }
   .vat-prog th.vp-drop-l{ box-shadow:inset 3px 0 0 var(--primary); }
   .vat-prog th.vp-drop-r{ box-shadow:inset -3px 0 0 var(--primary); }
   .vp-view{ display:inline-flex; align-items:center; gap:6px; font-size:12.5px; color:var(--muted); font-weight:700; }
@@ -1848,12 +1859,114 @@ let manuals = [], nextManualId = 1, manualCats = ['개인','회사','신고'];  
 let forms = [], nextFormId = 1, formCats = [], laws = [], nextLawId = 1, lawCats = [];   // [2026.10.16] 서식·법령 [{id, cat, title, ..., versions:[{v, at, note, files}]}]
 function libSetVar(k, v){ switch(k){ case 'forms': forms = v; break; case 'nextFormId': nextFormId = v; break; case 'formCats': formCats = v; break; case 'laws': laws = v; break; case 'nextLawId': nextLawId = v; break; case 'lawCats': lawCats = v; break; } }
 let links = [], nextLinkId = 1, linkCats = [];   // [2026.10.16] linkCats: 내가 추가한 링크 분야(순서대로, 비어 있어도 칩으로 보임) // [2026.10.08] 링크 메뉴: 자주 쓰는 사이트 [{id, name, url, group, memo, at}]
-let payCustomCols = [];   // [2026.10.13] 원천세 신고현황 [{ id, label, type:'date'|'check'|'text' }] - 내가 만든 항목(works에만 저장)
+// [2026.11.02] "모든 항목을 다음으로 이월(항목만/항목+내용 항목마다 선택), 이월 후 수정·삭제는 다른 회차에 영향 없게"(요청)
+//   내가 만든 항목을 회차마다 따로 둠: payColsBy['YYYY-MM'], vatProgColsBy['연도-기수'], closeColsBy['연도-회차'], taxColsBy.corp/indiv['연도'] = [항목...]
+//   payCustomCols·vatProgCols·closeCols는 '지금 보는 회차의 항목'을 가리키는 이름으로 그대로 씀(아래 smDefCols). 예전(모든 회차 공통) 저장분은 불러올 때 모든 회차에 복사(smMigrateCols)
+let payColsBy = {}, vatProgColsBy = {}, closeColsBy = {};
+let taxColsBy = { corp:{}, indiv:{} }, taxColVals = { corp:{}, indiv:{} };   // [2026.11.02] 법인세·종소세 내 항목 { corp:{ '2025':[항목] } } · 값 { corp:{ '2025':{ 거래처id:{ 항목id: 값 } } } }
+let smColsLegacy = null;   // 예전 형식(모든 회차 공통 항목)을 불러왔을 때 잠깐 담아 둠 → smMigrateCols
+function smColsAt(map, k){ k = k || ''; return Array.isArray(map[k]) ? map[k] : (map[k] = []); }
+function smDefCols(name, getMap, getKey){ Object.defineProperty(globalThis, name, { configurable:true, get(){ return smColsAt(getMap(), getKey()); }, set(v){ getMap()[getKey() || ''] = v; } }); }
+smDefCols('payCustomCols', () => payColsBy, () => payMonth);   // [2026.10.13] 원천세 신고현황 [{ id, label, type:'date'|'check'|'text', pos }] - 내가 만든 항목(works에만 저장)
+smDefCols('vatProgCols', () => vatProgColsBy, () => vatProgKey());
+smDefCols('closeCols', () => closeColsBy, () => closeKey());
+function smColsPrune(map){ const o = {}; Object.keys(map || {}).forEach(k => { if(k && Array.isArray(map[k]) && map[k].length) o[k] = map[k]; }); return o; }
+function smColsCopy(cols){ return JSON.parse(JSON.stringify(cols || [])); }
+// [2026.11.02] 머리글 끌어서 항목 옮기기(신고현황·결산·법인세·종소세 공통) - 내 항목 th: data-smdrag="종류" data-smcol="항목id" draggable,
+//   고정 칸 th: data-smdrag="종류" data-smfix="왼쪽에 놓을 때 pos,오른쪽에 놓을 때 pos"(놓는 자리로만 씀). 놓으면 SM_COL_MOVERS[종류](id, {col}|{fix}, 오른쪽?)
+let smDragCol = null;
+const SM_COL_MOVERS = {};
+function smColDragClear(){ document.querySelectorAll('.sm-drop-l, .sm-drop-r, .sm-col-dragging').forEach(x => x.classList.remove('sm-drop-l', 'sm-drop-r', 'sm-col-dragging')); }
+document.addEventListener('dragstart', e => { const th = e.target && e.target.closest && e.target.closest('th[data-smcol]'); if(!th) return; smDragCol = { kind: th.dataset.smdrag, id: th.dataset.smcol }; th.classList.add('sm-col-dragging'); e.dataTransfer.effectAllowed = 'move'; try{ e.dataTransfer.setData('text/plain', smDragCol.id); }catch(_){} });
+document.addEventListener('dragover', e => {
+  if(!smDragCol) return; const th = e.target && e.target.closest && e.target.closest(`th[data-smdrag="${smDragCol.kind}"]`);
+  document.querySelectorAll('.sm-drop-l, .sm-drop-r').forEach(x => x.classList.remove('sm-drop-l', 'sm-drop-r'));
+  if(!th || th.dataset.smcol === smDragCol.id) return;
+  e.preventDefault(); const r = th.getBoundingClientRect(); th.classList.add(e.clientX < r.left + r.width / 2 ? 'sm-drop-l' : 'sm-drop-r');
+});
+document.addEventListener('drop', e => {
+  if(!smDragCol) return; const th = e.target && e.target.closest && e.target.closest(`th[data-smdrag="${smDragCol.kind}"]`), d = smDragCol; smDragCol = null;
+  if(!th || th.dataset.smcol === d.id){ smColDragClear(); return; }
+  e.preventDefault(); const after = th.classList.contains('sm-drop-r'); smColDragClear();
+  const mv = SM_COL_MOVERS[d.kind]; if(mv) mv(d.id, th.dataset.smcol ? { col: th.dataset.smcol } : { fix: th.dataset.smfix || '' }, after);
+});
+document.addEventListener('dragend', () => { if(smDragCol){ smDragCol = null; smColDragClear(); } });
+// '어느 칸 앞(pos)' 묶음이 있는 표(신고현황·법인세·종소세): 내 항목 앞/뒤면 그 항목 자리로, 고정 칸이면 왼쪽 = 그 칸 앞 묶음의 끝, 오른쪽 = 다음 묶음의 처음
+function smMovePosCol(cols, id, tgt, after){
+  const col = cols.find(c => c.id === id); if(!col) return null;
+  const rest = cols.filter(c => c !== col);
+  if(tgt.col){
+    const t = rest.find(c => c.id === tgt.col); if(!t) return null;
+    col.pos = t.pos || 'end'; rest.splice(rest.indexOf(t) + (after ? 1 : 0), 0, col); return rest;
+  }
+  const [L, R] = String(tgt.fix || '').split(','), pos = (after ? R : L) || 'end', same = rest.filter(c => (c.pos || 'end') === pos);
+  col.pos = pos;
+  if(!same.length) rest.push(col);
+  else if(after) rest.splice(rest.indexOf(same[0]), 0, col);
+  else rest.splice(rest.indexOf(same[same.length - 1]) + 1, 0, col);
+  return rest;
+}
+// pos 없이 내 항목끼리만 순서(결산)
+function smMoveCol(cols, id, tgtId, after){
+  const col = cols.find(c => c.id === id); if(!col || !tgtId) return null;
+  const rest = cols.filter(c => c !== col), t = rest.find(c => c.id === tgtId); if(!t) return null;
+  rest.splice(rest.indexOf(t) + (after ? 1 : 0), 0, col); return rest;
+}
+// [2026.11.02] 다음 회차로 이월 - 항목마다 안 넘김 / 항목만 / 항목+내용. 결과 { 항목id: 'none'|'cols'|'vals' } 또는 null(취소)
+const SM_CARRY_MODES = [['none','안 넘김'], ['cols','항목만'], ['vals','항목+내용']];
+async function smCarryPick(title, cols, defOf, sub){
+  const esc = v => String(v == null ? '' : v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
+  const html = `<div class="sm-carry-note">${esc(sub || '')}${sub ? '<br>' : ''}넘긴 뒤 고치거나 지워도 다른 회차에는 영향이 없어요. 다음 회차에 이미 있는 항목은 그대로 두고, 항목+내용이면 빈 칸만 채워요.</div>
+    <div class="sm-carry-all">${SM_CARRY_MODES.map(([k, l]) => `<button type="button" class="btn ghost xs" data-carry-all="${k}">모두 ${l}</button>`).join('')}</div>
+    <div class="sm-carry-list">${cols.map(c => `<label class="sm-carry-row"><span title="${esc(String(c.label))}">${esc(String(c.label).replace(/\s+/g, ' '))}</span><select class="sm-carry-sel" data-id="${esc(c.id)}">${SM_CARRY_MODES.map(([k, l]) => `<option value="${k}" ${defOf(c) === k ? 'selected' : ''}>${l}</option>`).join('')}</select></label>`).join('')}</div>`;
+  const p = smDialog({ title, html, icon:'→', okText:'이월', wide:true });
+  document.querySelectorAll('[data-carry-all]').forEach(b => b.onclick = () => document.querySelectorAll('.sm-carry-sel').forEach(x => { x.value = b.dataset.carryAll; }));
+  if(!(await p)) return null;
+  const out = {}; document.querySelectorAll('.sm-carry-sel').forEach(x => { out[x.dataset.id] = x.value; });
+  return out;
+}
+// 고른 대로 항목(복사본)을 dst에 넣고, 항목+내용이면 copyVal(항목id)로 값도 복사. 넘긴 항목 수
+function smCarryApply(src, dst, picks, copyVal){
+  let n = 0;
+  src.forEach(c => {
+    const m = picks[c.id]; if(!m || m === 'none') return;
+    if(!dst.some(d => d.id === c.id)) dst.push(smColsCopy([c])[0]);
+    if(m === 'vals') copyVal(c.id);
+    n++;
+  });
+  return n;
+}
+// 값 복사 - 넘길 회차 칸이 비어 있을 때만
+function smCarryVal(srcRows, dstRows, id, keep){ Object.entries(srcRows || {}).forEach(([rk, r]) => { if(!r || r[id] == null || r[id] === '' || (keep && !keep(rk))) return; const t = dstRows[rk] = dstRows[rk] || {}; if(t[id] == null || t[id] === '') t[id] = JSON.parse(JSON.stringify(r[id])); }); }
+const ICON_CARRY = '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5v14"/><path d="M8 12h12"/><path d="M15 7l5 5-5 5"/></svg>';
+// 예전 형식(모든 회차 공통 항목) → 회차마다 복사. 고른 회차: 값이 있는 회차 + 그 사이 + 이번 달·올해까지(예전엔 어느 회차에서나 보였으니)
+function smMigrateCols(){
+  const L = smColsLegacy; if(!L) return false;
+  smColsLegacy = null;
+  const fill = (map, keys, colsOf) => keys.forEach(k => { if(!(map[k] || []).length){ const c = colsOf(k); if(c.length) map[k] = c; } });
+  if(L.pay && L.pay.length){
+    const now = todayStr().slice(0, 7), ks = Object.keys(payCustomVals || {}).filter(k => /^\d{4}-\d{2}$/.test(k)).concat(now, payMonth || []).sort();
+    const keys = [], end = ks[ks.length - 1] > now ? ks[ks.length - 1] : now;
+    let [y, m] = ks[0].split('-').map(Number);
+    for(let i = 0; i < 600; i++){ const k = `${y}-${pad2(m)}`; keys.push(k); if(k >= end) break; m++; if(m > 12){ m = 1; y++; } }
+    const nx = new Date(y, m, 1); keys.push(`${nx.getFullYear()}-${pad2(nx.getMonth() + 1)}`);   // 다음 달까지
+    fill(payColsBy, keys, () => smColsCopy(L.pay));
+  }
+  if(L.vat && L.vat.length){
+    const ord = k => vatProgKeyOrder(k), ks = Object.keys(vatProg || {}).filter(k => /^\d{4}-/.test(k));
+    const y0 = Number(todayStr().slice(0, 4)), lo = Math.min(...ks.map(ord), y0 * 4), hi = Math.max(...ks.map(ord), y0 * 4 + 3);
+    const keys = []; for(let o = lo; o <= hi; o++) keys.push(`${Math.floor(o / 4)}-${VAT_T_PERIODS[o % 4]}`);
+    // 그 기수부터 뺀 항목(endKey)은 그 전 기수에만
+    fill(vatProgColsBy, keys, k => smColsCopy(L.vat.filter(c => !c.endKey || ord(k) < ord(c.endKey))).map(c => { delete c.endKey; return c; }));
+  }
+  if(L.close && L.close.length) fill(closeColsBy, Object.keys(closeData || {}), () => smColsCopy(L.close));
+  return true;
+}
 let vatCustomCols = [];   // [2026.10.13] 부가세 내가 만든 항목 [{ id, label, type }] - works에만 저장
 let vatProgView = { freeze:'name', hidden:[] };   // [2026.10.16] 진행표 보기: 열 고정(이 칸까지), 숨긴 칸
-let vatProgCols = [];   // [2026.10.14] 부가세 진행 항목 [{ id, label, type, carry }] - works에만 저장
+// vatProgCols - [2026.10.14] 부가세 진행 항목 [{ id, label, type, carry }] - works에만 저장 (위 smDefCols: 기수마다 따로)
 let vatProg = {};       // { '연도-기수': { 회사웹 거래처id: { 항목id: 값 } } }
-let closeCols = [];     // [2026.10.14] 결산 항목 [{ id, label, type, carry }] - works에만 저장
+// closeCols - [2026.10.14] 결산 항목 [{ id, label, type, carry }] - works에만 저장 (위 smDefCols: 회차마다 따로)
 let closeData = {};     // { '연도-회차': { date, roster, snap, v } }
 let vatCustomVals = {};   // { '연도-기수(예: 2026-2기예정)': { 거래처id: { 항목id: 값 } } }
 let menuNotes = {};   // [2026.10.27] 신고 메뉴별 중요사항(요청) { vat:[], pay:[], close:[], corp:[], indiv:[] } - works에만 저장
@@ -4032,13 +4145,25 @@ function vatProgShowPrev(cid){
 }
 async function vatProgFromPrev(){
   const pk = vatProgPrevKey(), key = vatProgKey(); if(!pk) return;
-  const carry = vatProgLiveCols().filter(c => c.carry);
-  if(!carry.length) return smAlert('이어받을 항목이 없어요', '항목 이름을 눌러 "다음 기수로 이어받기"를 켜 주세요.');
-  if(!(await smConfirm(`${vatProgKeyLabel(pk)}에서 이어받을까요?`, `이어받기 항목 ${carry.length}개(${carry.map(c => vatProgNorm(c.label)).join('·')})만 가져오고, 나머지 진행 칸은 비워요.`, { okText:'이어받기', icon:'+' }))) return;
-  const out = {};
-  Object.entries(vatProg[pk]).forEach(([cid, v]) => { const o = {}; carry.forEach(c => { if(v[c.id] != null) o[c.id] = v[c.id]; }); if(Object.keys(o).length) out[cid] = o; });
-  vatProg[key] = out;
-  renderVat(); scheduleGoogleSave();
+  if(await vatProgCarry(pk, key)) renderVat();
+}
+// [2026.11.02] "모든 항목을 다음으로 이월 - 항목만/항목+내용 항목마다 선택"(요청) - from 기수 항목을 to 기수로(기본: 이어받기(↻) 항목은 항목+내용, 나머지는 항목만)
+async function vatProgCarry(from, to){
+  const src = vatProgLiveCols(from).slice();
+  if(!src.length) return smAlert('넘길 항목이 없어요', `${vatProgKeyLabel(from)}에 만든 항목이 없어요.`);
+  const picks = await smCarryPick(`${vatProgKeyLabel(from)} → ${vatProgKeyLabel(to)} 이월`, src, c => c.carry ? 'vals' : 'cols');
+  if(!picks) return false;
+  const n = smCarryApply(src, smColsAt(vatProgColsBy, to), picks, id => { const t = vatProg[to] = vatProg[to] || {}; smCarryVal(vatProg[from], t, id); if(!Object.keys(t).length) delete vatProg[to]; });
+  if(!n) return false;
+  scheduleGoogleSave();
+  return n;
+}
+function vatProgNextKey(k){ const o = vatProgKeyOrder(k) + 1; return `${Math.floor(o / 4)}-${VAT_T_PERIODS[o % 4]}`; }
+async function vatProgCarryNext(){
+  const key = vatProgKey(), to = vatProgNextKey(key);
+  const n = await vatProgCarry(key, to); if(!n) return;
+  if(await smConfirm(`${n}개 항목을 넘겼어요`, `${vatProgKeyLabel(to)}로 가서 볼까요?`, { okText:'가기', cancelText:'여기 있기', icon:'✓' })){ const [y, p] = to.split('-'); vatYear = y; vatHalf = p.slice(0, 1); vatKind = p.endsWith('예정') ? 'pre' : 'final'; }
+  renderVat();
 }
 // [2026.10.14] "엑셀을 잘못 불러왔어, 1기 확정에 넣어야 하는데"(요청) - 이 기수 진행 값을 다른 기수로 옮기기 / 비우기
 async function vatProgMove(){
@@ -4056,7 +4181,9 @@ async function vatProgMove(){
   const mode = md[0];
   if(vatProgHasData(to) && !(await smConfirm(`${r[0]}에 이미 적어 둔 내용이 있어요`, mode === COLS ? '항목만 옮기면 그 기수에 적어 둔 값은 비워져요.' : '옮기면 그 내용은 이 내용으로 바뀌어요.', { tone:'danger', icon:'!', okText:'바꾸기' }))) return;
   // 이 기수에 보이는 항목은 옮길 기수에서도 보이게(그 기수부터 뺀 항목이면 빼기를 풀어 줌)
-  vatProgLiveCols(key).forEach(c => { if(c.endKey && vatProgKeyOrder(to) >= vatProgKeyOrder(c.endKey)) delete c.endKey; });
+  // [2026.11.02] 항목도 기수마다 따로 - 이 기수 항목을 옮길 기수로 복사(옮기기면 이 기수 항목은 비움)
+  vatProgColsBy[to] = smColsCopy(vatProgLiveCols(key));
+  if(mode === MV) delete vatProgColsBy[key];
   if(mode === COLS) delete vatProg[to];
   else if(mode === CP) vatProg[to] = JSON.parse(JSON.stringify(vatProg[key]));
   else { vatProg[to] = vatProg[key]; delete vatProg[key]; }
@@ -4137,25 +4264,11 @@ async function vatProgEditCol(id){
   if(r === undefined) return;   // [2026.10.15] 닫기(X) - 아무것도 안 바꿈
   if(r === null && col.fa) return smAlert('고정 항목이에요', '고정자산 등록 칸은 매 기수 늘 있는 항목이라 지울 수 없어요. 안 보이게 하려면 "칸 숨기기"를 써 주세요.');
   if(r === null){
-    const key = vatProgKey(), cur = vatProgKeyOrder(key);
-    const hasPast = Object.keys(vatProg).some(k => vatProgKeyOrder(k) < cur && Object.values(vatProg[k] || {}).some(v => v && v[id] != null));
-    if(hasPast){
-      // [2026.10.16] 전 기수에 적은 값이 있으면 기본은 '이 기수부터 빼기'(전 기수 값은 그대로 남김)
-      const d = await smForm(`'${vatProgNorm(col.label)}' 항목을 뺄까요?`, [{ label:'빼는 범위', options:[`${vatProgKeyLabel(key)}부터 빼기 (전 기수 값은 그대로)`, '모든 기수에서 지우기 (적어 둔 값도 삭제)'], value:`${vatProgKeyLabel(key)}부터 빼기 (전 기수 값은 그대로)` }], { okText:'빼기', icon:'!' });
-      if(!d) return;
-      if(/^모든/.test(d[0])){
-        if(!(await smConfirm('모든 기수에서 지울까요?', '전 기수에 적어 둔 값까지 모두 지워지고 되돌릴 수 없어요.', { tone:'danger', icon:'!', okText:'삭제' }))) return;
-        vatProgCols = vatProgCols.filter(c => c.id !== id);
-        Object.values(vatProg).forEach(per => Object.values(per).forEach(v => { delete v[id]; }));
-      }else{
-        col.endKey = key;   // 이 기수와 그 뒤 기수에 적은 값만 지움
-        Object.keys(vatProg).forEach(k => { if(vatProgKeyOrder(k) >= cur) Object.values(vatProg[k]).forEach(v => { delete v[id]; }); });
-      }
-    }else{
-      if(!(await smConfirm(`'${vatProgNorm(col.label)}' 항목을 지울까요?`, '전 기수에 적은 값은 없어요. 이 항목과 이 기수 값이 지워져요.', { tone:'danger', icon:'!', okText:'삭제' }))) return;
-      vatProgCols = vatProgCols.filter(c => c.id !== id);
-      Object.values(vatProg).forEach(per => Object.values(per).forEach(v => { delete v[id]; }));
-    }
+    // [2026.11.02] 항목이 기수마다 따로라 이 기수에서만 지움(다른 기수 항목·값은 그대로)
+    const key = vatProgKey();
+    if(!(await smConfirm(`'${vatProgNorm(col.label)}' 항목을 지울까요?`, `${vatProgKeyLabel(key)}에서만 지워져요(이 기수에 적은 값 포함). 다른 기수는 그대로예요.`, { tone:'danger', icon:'!', okText:'삭제' }))) return;
+    vatProgCols = vatProgCols.filter(c => c.id !== id);
+    Object.values(vatProg[key] || {}).forEach(v => { delete v[id]; });
   }else{
     if(r[0].trim()) col.label = r[0].trim();
     col.type = (VAT_PROG_TYPES.find(x => x[1] === r[1]) || VAT_PROG_TYPES[0])[0];
@@ -4175,7 +4288,7 @@ function vatProgViewObj(){ if(!vatProgView || typeof vatProgView !== 'object') v
 // [2026.10.16] "항목 이어받고 삭제해도 전에 입력된 건 영향 없게"(요청) - 항목 삭제 때 '이 기수부터 빼기'를 고르면 col.endKey(빠진 기수)만 적고 값은 그대로.
 // 그 이전 기수에서는 항목과 값이 그대로 보이고, endKey 기수부터는 안 보임
 function vatProgColLive(c, key){ return !c.endKey || vatProgKeyOrder(key || vatProgKey()) < vatProgKeyOrder(c.endKey); }
-function vatProgLiveCols(key){ return vatProgCols.filter(c => vatProgColLive(c, key)); }
+function vatProgLiveCols(key){ return smColsAt(vatProgColsBy, key || vatProgKey()).filter(c => vatProgColLive(c, key)); }   // [2026.11.02] 기수마다 따로(그 기수 항목)
 function vatProgAllCols(){ const live = vatProgLiveCols(), lab = c => ({ key:c.id, label: String(c.label).replace(/\s+/g, ' ') }); return VAT_PROG_LINK.map(([k, l]) => ({ key:k, label:l })).concat(live.filter(c => c.fa).map(lab), live.filter(c => !c.fa).map(lab)); }   // [2026.10.20] 등록(고정)은 회사웹 칸 바로 뒤
 function vatProgVisibleKeys(){ const h = vatProgViewObj().hidden; return vatProgAllCols().filter(c => c.key === 'name' || !h.includes(c.key)).map(c => c.key); }
 function vatProgSetFreeze(k){ vatProgViewObj().freeze = k; renderVat(); scheduleGoogleSave(); }
@@ -4412,14 +4525,15 @@ function vatProgHtml(docs){
   const bar = vatProgOrdering ? `<div class="vp-menu vp-menu-ordering">${vpSaveBadgeHtml()}<span class="vp-ord-msg">${vpIc('<path d="M5 9l-3 3 3 3M19 9l3 3-3 3M2 12h20"/>')} 머리글(항목·묶음)을 끌어서 칸 순서를 바꿔요</span><div class="spacer"></div>
       <button class="vp-mb" onclick="vatProgOrderEnd(false)">취소</button><button class="vp-mb vp-mb-primary" onclick="vatProgOrderEnd(true)">저장</button></div>`
     : `<div class="vp-menu"><div class="spacer"></div>
-    ${!vatProgHasData(key) && pk ? `<button class="vp-mb vp-mb-primary" onclick="vatProgFromPrev()" title="이어받기 항목(↻)만 가져와요">${vatProgKeyLabel(pk)}에서 이어받기</button>` : ''}
+    ${!vatProgHasData(key) && pk ? `<button class="vp-mb vp-mb-primary" onclick="vatProgFromPrev()" title="항목마다 안 넘김·항목만·항목+내용을 골라 가져와요">${vatProgKeyLabel(pk)}에서 이어받기</button>` : ''}
     <div class="vp-mg"><span class="vp-mg-l">보기</span>
       <span class="vp-view vp-mb-sel">열 고정 <select onchange="vatProgSetFreeze(this.value)"><option value="" ${!vatProgViewObj().freeze ? 'selected' : ''}>순번만</option>${vatProgAllCols().filter(c => vatProgVisibleKeys().includes(c.key)).map(c => `<option value="${escapeAttr(c.key)}" ${vatProgViewObj().freeze === c.key ? 'selected' : ''}>${taxjEsc(c.label)}까지</option>`).join('')}</select></span>
       <button class="vp-mb" onclick="vatProgHideCols()" title="안 쓰는 칸을 숨겨요">${vpIc('<path d="M3 3l18 18M10.6 10.6a2 2 0 0 0 2.8 2.8M9.9 5.1A10.4 10.4 0 0 1 12 5c6.5 0 10 7 10 7a17.6 17.6 0 0 1-3.2 4.2M6.6 6.6C3.9 8.4 2 12 2 12s3.5 7 10 7a9.7 9.7 0 0 0 5.4-1.6"/>')}칸 숨기기${vatProgViewObj().hidden.length ? ` <b>${vatProgViewObj().hidden.length}</b>` : ''}</button></div>
     <div class="vp-mg vp-mg-ic"><span class="vp-mg-l">항목</span>
       <button class="vp-mb" onclick="vatProgAddCol()" title="항목 추가" aria-label="항목 추가">${vpIc('<path d="M12 5v14M5 12h14"/>')}</button>
       <button class="vp-mb" onclick="vatProgOrderStart()" title="순서 편집 - 표 머리글을 끌어서 칸 순서를 바꿔요" aria-label="순서 편집">${vpIc('<path d="M5 9l-3 3 3 3M19 9l3 3-3 3M2 12h20"/>')}</button>
-      <button class="vp-mb" onclick="vatProgArrange()" title="배치·묶음 - 항목 순서와 묶음(매출·매입 등 두 줄 머리글)을 정해요" aria-label="배치·묶음">${vpIc('<rect x="3" y="4" width="18" height="5" rx="1.5"/><rect x="3" y="12" width="8" height="8" rx="1.5"/><rect x="13" y="12" width="8" height="8" rx="1.5"/>')}</button></div>
+      <button class="vp-mb" onclick="vatProgArrange()" title="배치·묶음 - 항목 순서와 묶음(매출·매입 등 두 줄 머리글)을 정해요" aria-label="배치·묶음">${vpIc('<rect x="3" y="4" width="18" height="5" rx="1.5"/><rect x="3" y="12" width="8" height="8" rx="1.5"/><rect x="13" y="12" width="8" height="8" rx="1.5"/>')}</button>
+      <button class="vp-mb" onclick="vatProgCarryNext()" title="다음 기수로 이월 - 항목마다 안 넘김·항목만·항목+내용을 골라 넘겨요" aria-label="다음 기수로 이월">${vpIc('<path d="M4 5v14"/><path d="M8 12h12"/><path d="M15 7l5 5-5 5"/>')}</button></div>
     <div class="vp-mg vp-mg-ic"><span class="vp-mg-l">값</span>
       <button class="vp-mb" onclick="document.getElementById('vatProgXlsx').click()" title="엑셀 올리기 - 1행 = 항목 이름인 진행표 엑셀을 ${plab}에 넣어요" aria-label="엑셀 올리기">${vpIc('<path d="M12 15V3M7 8l5-5 5 5M4 15v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/>')}</button><input type="file" id="vatProgXlsx" accept=".xlsx,.xls" style="display:none;" onchange="vatProgImport(this)">
       ${vatProgHasData(key) ? `<button class="vp-mb" onclick="vatProgMove()" title="다른 기수로 - 이 기수에 넣은 값을 다른 기수로 옮겨요" aria-label="다른 기수로">${vpIc('<path d="M5 12h14M13 6l6 6-6 6"/>')}</button><button class="vp-mb vp-mb-danger" onclick="vatProgClear()" title="비우기 - 이 기수에 적은 내 항목 값을 지워요" aria-label="비우기">${vpIc('<path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/>')}</button>` : ''}</div></div>
@@ -4669,31 +4783,46 @@ function closeRows(docs){
     return { id, c, gone: !live || !payIsReg(live), order: live ? live._order : 1e6 };
   }).sort((a, b) => a.order - b.order);
 }
-async function closeNewRound(){
+async function closeNewRound(fromKey){
   const docs = taxjFull && taxjFull.docs;
   if(!docs) return smAlert('회사웹 연결이 필요해요', '결산하는 날 수임 중인 거래처를 회사웹에서 가져와서, 먼저 Tax.J에 연결해 주세요.');
-  const y = closeYear || String(new Date().getFullYear()), next = String((closeRounds(y).map(Number).pop() || 0) + 1);
-  const prev = closeLatestKey(), carry = closeCols.filter(c => c.carry);
-  const fields = [{ label:'결산일', type:'date', value: todayStr() }];
-  if(prev && carry.length) fields.push({ label:`${closeKeyLabel(prev)}에서 이어받기 (${carry.map(c => c.label.replace(/\s+/g, '')).join('·')})`, options:['이어받기','비워서 시작'], value:'이어받기' });
-  const r = await smForm(`${y}년 ${next}차 결산 만들기`, fields, { okText:'만들기' });
+  const y = closeYear || String(new Date().getFullYear()), next = String((closeRounds(y).map(Number).pop() || 0) + 1), key = `${y}-${next}`;
+  const prev = fromKey || closeLatestKey(), src = prev ? smColsAt(closeColsBy, prev).slice() : [];
+  const r = await smForm(`${y}년 ${next}차 결산 만들기`, [{ label:'결산일', type:'date', value: todayStr() }], { okText: src.length ? '다음' : '만들기' });
   if(!r) return;
+  // [2026.11.02] "모든 항목을 다음으로 이월 - 항목만/항목+내용 항목마다 선택"(요청) - 앞 회차 항목을 골라 넘김(기본: 이어받기(↻) 항목은 항목+내용, 나머지는 항목만)
+  const picks = src.length ? await smCarryPick(`${closeKeyLabel(prev)} → ${y}년 ${next}차 이월`, src, c => c.carry ? 'vals' : 'cols') : {};
+  if(!picks) return;
   const active = taxjClientIndex(docs).sorted.filter(payIsReg), snap = {}, v = {};
   active.forEach(c => { snap[c.id] = closeSnapOf(c); });
-  if(prev && carry.length && r[1] === '이어받기'){
-    Object.entries(closeData[prev].v || {}).forEach(([cid, vals]) => {
-      if(!snap[cid]) return;   // 이어받기는 지금 수임 중인 거래처만
-      const o = {}; carry.forEach(c => { if(vals[c.id] != null) o[c.id] = vals[c.id]; }); if(Object.keys(o).length) v[cid] = o;
-    });
-  }
-  closeData[`${y}-${next}`] = { date: r[0] || todayStr(), roster: active.map(c => c.id), snap, v };
+  const cols = smColsCopy(smColsAt(closeColsBy, `${y}-`));   // 회차 없을 때 미리 만든 항목
+  delete closeColsBy[`${y}-`];
+  smCarryApply(src, cols, picks, id => smCarryVal((closeData[prev] || {}).v, v, id, cid => !!snap[cid]));   // 내용은 지금 수임 중인 거래처만
+  closeColsBy[key] = cols;
+  closeData[key] = { date: r[0] || todayStr(), roster: active.map(c => c.id), snap, v };
   closeYear = y; closeRound = next; closePicked = new Set();
   renderClose(); scheduleGoogleSave();
 }
+// [2026.11.02] 다음 회차로 이월 - 다음 회차가 있으면 거기로, 없으면 새 회차를 만들면서
+async function closeCarry(){
+  const from = closeKey(); if(!closeData[from]) return;
+  const to = Object.keys(closeData).sort(closeKeyCmp).find(k => closeKeyCmp(k, from) > 0);
+  if(!to) return closeNewRound(from);
+  const src = closeCols.slice();
+  if(!src.length) return smAlert('넘길 항목이 없어요', `${closeKeyLabel(from)}에 만든 항목이 없어요.`);
+  const picks = await smCarryPick(`${closeKeyLabel(from)} → ${closeKeyLabel(to)} 이월`, src, c => c.carry ? 'vals' : 'cols');
+  if(!picks) return;
+  const d = closeData[to], n = smCarryApply(src, smColsAt(closeColsBy, to), picks, id => smCarryVal(closeData[from].v, d.v, id, cid => d.roster.includes(cid)));
+  if(!n) return;
+  scheduleGoogleSave();
+  if(await smConfirm(`${n}개 항목을 넘겼어요`, `${closeKeyLabel(to)}로 가서 볼까요?`, { okText:'가기', cancelText:'여기 있기', icon:'✓' })){ [closeYear, closeRound] = to.split('-'); closePicked = new Set(); }
+  renderClose();
+}
+SM_COL_MOVERS.close = (id, tgt, after) => { const r = smMoveCol(closeCols, id, tgt.col, after); if(!r) return; closeCols = r; renderClose(); scheduleGoogleSave(); };
 async function closeDeleteRound(){
   const k = closeKey(); if(!closeData[k]) return;
   if(!(await smConfirm(`${closeKeyLabel(k)} 결산을 지울까요?`, '이 회차에 적은 값이 모두 지워져요(항목과 다른 회차는 그대로).', { tone:'danger', icon:'!', okText:'삭제' }))) return;
-  delete closeData[k]; closeRound = closeRounds(closeYear).pop() || ''; closePicked = new Set();
+  delete closeData[k]; delete closeColsBy[k]; closeRound = closeRounds(closeYear).pop() || ''; closePicked = new Set();
   renderClose(); scheduleGoogleSave();
 }
 function closeSetDate(v){ const d = closeData[closeKey()]; if(d && v){ d.date = v; scheduleGoogleSave(); } }
@@ -4725,7 +4854,7 @@ async function closeImport(input){
       const n = norm(h);
       if(!n || CLOSE_LINK_RE.test(n)) return;
       const occ = used[n] = (used[n] || 0) + 1;
-      let col = closeCols.filter(c => norm(c.label) === n)[occ - 1];
+      let col = smColsAt(closeColsBy, key).filter(c => norm(c.label) === n)[occ - 1];   // [2026.11.02] 넣을 회차의 항목
       if(!col){
         const vals = body.map(r => r[j]).filter(v => v != null && v !== '');
         const type = vals.length && vals.every(v => typeof v === 'boolean' || /^(true|false)$/i.test(String(v))) ? 'check'
@@ -4765,7 +4894,7 @@ async function closeImport(input){
       ext.length ? `회사웹 거래처에 없는 ${ext.length}곳은 엑셀 정보로 보관해요: ${ext.slice(0, 6).join(', ')}${ext.length > 6 ? ' 외' : ''}` : '',
       exists ? '이 회차에 적어 둔 값은 엑셀 내용으로 바뀌어요.' : '새 회차(결산일 오늘)로 만들어요.'].filter(Boolean).join('\n');
     if(!(await smConfirm(`${closeKeyLabel(key)} 결산에 넣을까요?`, msg, { okText:'넣기', icon:'↑' }))) return;
-    closeCols.push(...newCols);
+    smColsAt(closeColsBy, key).push(...newCols);
     const d = closeData[key] = closeData[key] || { date: todayStr(), roster: [], snap: {}, v: {} };
     taxjClientIndex(docs).sorted.filter(payIsReg).forEach(c => { if(!d.roster.includes(c.id)){ d.roster.push(c.id); d.snap[c.id] = closeSnapOf(c); } });
     const idx = taxjClientIndex(docs);
@@ -4865,14 +4994,14 @@ async function closeEditCol(id){
   const r = await smForm('결산 항목 수정', [{ label:'항목 이름', type:'textarea', rows:2, value: col.label }, { label:'입력 방식', options: CLOSE_TYPES.map(x => x[1]), value: (CLOSE_TYPES.find(x => x[0] === col.type) || CLOSE_TYPES[0])[1] }, { label:'다음 회차로 이어받기', options:['아니오','예'], value: col.carry ? '예' : '아니오' }], { okText:'저장', cancelText:'삭제', icon:'✎' });
   if(r === undefined) return;   // [2026.10.15] 닫기(X) - 아무것도 안 바꿈
   if(r === null){
-    if(!(await smConfirm(`'${col.label.replace(/\s+/g, ' ')}' 항목을 지울까요?`, '모든 회차에서 이 항목에 적어 둔 값도 지워져요.', { tone:'danger', icon:'!', okText:'삭제' }))) return;
+    if(!(await smConfirm(`'${col.label.replace(/\s+/g, ' ')}' 항목을 지울까요?`, `${closeKeyLabel(closeKey())}에서만 지워져요(이 회차에 적은 값 포함). 다른 회차는 그대로예요.`, { tone:'danger', icon:'!', okText:'삭제' }))) return;
     closeCols = closeCols.filter(c => c.id !== id);
-    Object.values(closeData).forEach(d => Object.values(d.v || {}).forEach(v => { delete v[id]; }));
+    Object.values((closeData[closeKey()] || {}).v || {}).forEach(v => { delete v[id]; });   // [2026.11.02] 이 회차만
   }else{
     if(r[0].trim()) col.label = r[0].trim();
     const to = (CLOSE_TYPES.find(x => x[1] === r[1]) || CLOSE_TYPES[0])[0];
     if(to !== col.type){   // [2026.10.15] 이미 불러온 값도 새 입력 방식으로(요청)
-      Object.entries(closeData).forEach(([k, d]) => Object.values(d.v || {}).forEach(v => {
+      Object.entries(closeData).filter(([k]) => k === closeKey()).forEach(([k, d]) => Object.values(d.v || {}).forEach(v => {   // [2026.11.02] 이 회차 값만
         if(!(id in v)) return;
         const nv = closeConvertVal(v[id], col.type, to, k.split('-')[0]);
         if(nv === '' || nv == null || nv === false) delete v[id]; else v[id] = nv;
@@ -4898,7 +5027,7 @@ function closeTableHtml(docs){
   });
   const head = `<th class="tx-seq"><input type="checkbox" title="날짜 일괄 입력할 거래처 모두 고르기" onchange="closePickAll(this.checked)"></th><th class="tx-seq cl-lk">순번</th>`
     + ['상호명','법인등록번호','사업자번호','개업일'].map((l, i) => `<th class="vp-link cl-lk${i === 0 ? ' vp-sticky' : ''}${i === 3 ? ' vp-div' : ''}" title="회사웹 값(조회만)">${l}</th>`).join('')
-    + closeCols.map(c => `<th><button class="vp-th" onclick="closeEditCol('${c.id}')" title="눌러서 이름·입력 방식·이어받기 수정 또는 삭제${c.carry ? '\n(다음 회차로 이어받는 항목)' : ''}">${taxjEsc(c.label).replace(/\n/g, '<br>')}${c.carry ? '<span class="vp-carry">↻</span>' : ''}</button></th>`).join('');
+    + closeCols.map(c => `<th data-smdrag="close" data-smcol="${c.id}" draggable="true"><button class="vp-th" onclick="closeEditCol('${c.id}')" title="눌러서 이름·입력 방식·이어받기 수정 또는 삭제 · 끌어서 위치 옮기기${c.carry ? '\n(다음 회차로 이어받는 항목)' : ''}">${taxjEsc(c.label).replace(/\n/g, '<br>')}${c.carry ? '<span class="vp-carry">↻</span>' : ''}</button></th>`).join('');
   const body = rows.map((x, n) => {
     const cid = escapeAttr(x.id), v = d.v[x.id] || {}, t = s => s ? taxjEsc(String(s)) : '-';
     const lk = (val, extra) => `<td class="cl-lk cl-num${extra || ''}${val ? '' : ' cl-na'}">${t(val)}</td>`;   // 회사웹 거래처 표와 같은 칸
@@ -5012,6 +5141,7 @@ function renderClose(){
       <button class="btn primary xs" onclick="closeNewRound()">+ 새 회차</button>
       ${d ? `<button class="sm-tool-ic" onclick="closeBulk()" title="날짜 일괄 입력 - 왼쪽 체크박스로 고른 거래처(없으면 보이는 전체)에 오늘 또는 고른 날짜를 넣어요" aria-label="날짜 일괄 입력">${ICON_BULK}</button>` : ''}
       <button class="sm-tool-ic" onclick="closeAddCol()" title="항목 추가" aria-label="항목 추가">${ICON_PLUS}</button>
+      ${d ? `<button class="sm-tool-ic" onclick="closeCarry()" title="다음 회차로 이월 - 항목마다 안 넘김·항목만·항목+내용을 골라 넘겨요(다음 회차가 없으면 새로 만들면서)" aria-label="다음 회차로 이월">${ICON_CARRY}</button>` : ''}
       <button class="btn ghost xs" onclick="document.getElementById('closeXlsx').click()" title="1행 = 항목 이름인 결산 엑셀을 고른 회차(없으면 새 회차)에 넣어요">엑셀 올리기</button><input type="file" id="closeXlsx" accept=".xlsx,.xls" style="display:none;" onchange="closeImport(this)">
       ${d ? '<button class="btn ghost xs danger" onclick="closeDeleteRound()">회차 삭제</button>' : ''}
     </div>
@@ -5100,6 +5230,90 @@ function renderPayLegacy(){
    법인세
    ========================================================= */
 
+/* [2026.11.02] 법인세·종소세 내 항목(요청: "법인세·종소세에도 항목 추가부터 - 끌어서 옮기기, 다음으로 이월")
+   원천세 신고현황 내 항목과 같은 방식(입력 방식 날짜·체크·글자, 머리글을 눌러 수정·삭제, 끌어서 위치). 항목·값은 귀속연도마다 따로(works에만 저장)
+   taxColsBy[kind][연도] = [{ id, label, type, pos }] · taxColVals[kind][연도][거래처id][항목id] = 값. pos = 어느 고정 칸 앞(step·co·note·honest) 또는 end */
+const TAX_COL_KINDS = {
+  corp: { label:'법인세', year: () => currentCorpYear, setYear: y => { currentCorpYear = y; }, years: () => corpYears, render: () => renderCorp() },
+  indiv: { label:'종소세', year: () => currentIndivYear, setYear: y => { currentIndivYear = y; }, years: () => indivYears, render: () => renderIndiv() },
+};
+function taxCols(kind){ return smColsAt(taxColsBy[kind] = taxColsBy[kind] || {}, TAX_COL_KINDS[kind].year()); }
+function taxColVal(kind, cid, colId){ return (((taxColVals[kind] || {})[TAX_COL_KINDS[kind].year()] || {})[cid] || {})[colId]; }
+function taxSetVal(kind, cid, colId, value){
+  const y = TAX_COL_KINDS[kind].year(), K = taxColVals[kind] = taxColVals[kind] || {}, per = K[y] = K[y] || {}, r = per[cid] = per[cid] || {};
+  if(value === '' || value === false || value == null) delete r[colId]; else r[colId] = value;
+  if(!Object.keys(r).length) delete per[cid];
+  if(!Object.keys(per).length) delete K[y];
+  TAX_COL_KINDS[kind].render(); scheduleGoogleSave();
+}
+function taxColHeadHtml(kind, pos){
+  return taxCols(kind).filter(c => (c.pos || 'end') === pos).map(c => `<th data-smdrag="${kind}" data-smcol="${c.id}" draggable="true" title="끌어서 위치 옮기기"><button class="btn ghost xs" onclick="taxEditCol('${kind}','${c.id}')" title="눌러서 이름·입력 방식 수정 또는 삭제 · 끌어서 위치 옮기기" style="font-weight:800;">${taxjEsc(c.label)} ✎</button></th>`).join('');
+}
+function taxColCellsHtml(kind, cid, pos){
+  return taxCols(kind).filter(c => (c.pos || 'end') === pos).map(c => {
+    const v = taxColVal(kind, cid, c.id);
+    if(c.type === 'check') return `<td><input type="checkbox" ${v ? 'checked' : ''} onchange="taxSetVal('${kind}',${JSON.stringify(cid)},'${c.id}',this.checked)"></td>`;
+    if(c.type === 'text') return `<td class="note-cell"><input type="text" value="${escapeAttr(v || '')}" onchange="taxSetVal('${kind}',${JSON.stringify(cid)},'${c.id}',this.value)" style="width:100%"></td>`;
+    return `<td><div class="date-cell"><button type="button" class="cl-dt" data-kind="${kind}" data-cid="${escapeAttr(String(cid))}" data-col="${c.id}" title="${escapeAttr(v || '날짜 입력')}" onclick="taxDatePop(this)">${payChkHtml(v)}</button></div></td>`;
+  }).join('');
+}
+// 날짜 칸 작은 창 - 신고현황 날짜 창(payDatePop)과 같은 모양
+function taxDatePop(btn){
+  closeDatePopClose();
+  const { kind, cid, col } = btn.dataset, cur = taxColVal(kind, cid, col) || '';
+  const pop = document.createElement('div');
+  pop.id = 'closeDatePop'; pop.className = 'cl-pop';
+  pop.innerHTML = `<input type="date" class="cl-pop-date" value="${/^\d{4}-\d{2}-\d{2}$/.test(cur) ? cur : ''}">
+    <div class="cl-pop-row"><button type="button" data-v="__today">오늘</button><button type="button" data-v="해당없음">해당없음</button><button type="button" data-v="__clear" class="del">지우기</button></div>`;
+  document.body.appendChild(pop);
+  const r = btn.getBoundingClientRect(), pw = pop.offsetWidth, ph = pop.offsetHeight;
+  pop.style.left = Math.max(8, Math.min(window.innerWidth - pw - 8, r.left)) + 'px';
+  pop.style.top = (r.bottom + ph + 8 > window.innerHeight ? r.top - ph - 4 : r.bottom + 4) + 'px';
+  const set = v => { closeDatePopClose(); taxSetVal(kind, cid, col, v); };
+  const di = pop.querySelector('.cl-pop-date');
+  di.addEventListener('change', () => { if(di.value) set(di.value); });
+  di.addEventListener('keydown', e => { if(e.key === 'Escape') closeDatePopClose(); });
+  pop.querySelectorAll('[data-v]').forEach(b => b.onclick = () => set(b.dataset.v === '__today' ? todayStr() : b.dataset.v === '__clear' ? '' : b.dataset.v));
+  setTimeout(() => document.addEventListener('mousedown', closeDatePopOutside, true), 0);
+  try{ di.showPicker(); }catch(e){ di.focus(); }
+}
+async function taxAddCol(kind){
+  const r = await smForm(`${TAX_COL_KINDS[kind].label} 항목 추가`, [{ label:'항목 이름', placeholder:'예: 자료 요청' }, { label:'입력 방식', options: PAY_COL_TYPES.map(x => x[1]), value:'날짜' }], { okText:'추가' });
+  if(!r || !r[0].trim()) return;
+  taxCols(kind).push({ id: 't' + Date.now().toString(36), label: r[0].trim(), type: (PAY_COL_TYPES.find(x => x[1] === r[1]) || PAY_COL_TYPES[0])[0], pos: 'end' });
+  TAX_COL_KINDS[kind].render(); scheduleGoogleSave();
+}
+async function taxEditCol(kind, id){
+  const K = TAX_COL_KINDS[kind], y = K.year(), col = taxCols(kind).find(c => c.id === id); if(!col) return;
+  const r = await smForm('항목 수정', [{ label:'항목 이름', value: col.label }, { label:'입력 방식', options: PAY_COL_TYPES.map(x => x[1]), value: (PAY_COL_TYPES.find(x => x[0] === col.type) || PAY_COL_TYPES[0])[1] }], { okText:'저장', cancelText:'삭제', icon:'✎', closeX:true });
+  if(r === undefined) return;
+  if(r === null){
+    if(!(await smConfirm(`'${col.label}' 항목을 지울까요?`, `${y}년 귀속에서만 지워져요(이 해에 적은 값 포함). 다른 해는 그대로예요.`, { tone:'danger', icon:'!', okText:'삭제' }))) return;
+    taxColsBy[kind][y] = taxCols(kind).filter(c => c.id !== id);
+    Object.values(((taxColVals[kind] || {})[y]) || {}).forEach(v => { delete v[id]; });
+  }else{
+    if(r[0].trim()) col.label = r[0].trim();
+    col.type = (PAY_COL_TYPES.find(x => x[1] === r[1]) || PAY_COL_TYPES[0])[0];
+  }
+  K.render(); scheduleGoogleSave();
+}
+['corp', 'indiv'].forEach(kind => { SM_COL_MOVERS[kind] = (id, tgt, after) => { const r = smMovePosCol(taxCols(kind), id, tgt, after); if(!r) return; taxColsBy[kind][TAX_COL_KINDS[kind].year()] = r; TAX_COL_KINDS[kind].render(); scheduleGoogleSave(); }; });
+// 다음 귀속연도로 이월(그 연도가 목록에 없으면 목록에 넣음)
+async function taxCarry(kind){
+  const K = TAX_COL_KINDS[kind], from = K.year(), to = String(Number(from) + 1), src = taxCols(kind).slice();
+  if(!src.length) return smAlert('넘길 항목이 없어요', `${from}년 귀속에 만든 항목이 없어요.`);
+  const picks = await smCarryPick(`${from}년 → ${to}년 귀속 이월`, src, () => 'cols');
+  if(!picks) return;
+  const V = taxColVals[kind] = taxColVals[kind] || {};
+  const n = smCarryApply(src, smColsAt(taxColsBy[kind], to), picks, id => { V[to] = V[to] || {}; smCarryVal(V[from], V[to], id); if(!Object.keys(V[to]).length) delete V[to]; });
+  if(!n) return;
+  const ys = K.years(); if(!ys.includes(to)){ ys.push(to); ys.sort(); }
+  scheduleGoogleSave();
+  if(await smConfirm(`${n}개 항목을 넘겼어요`, `${to}년 귀속으로 가서 볼까요?`, { okText:'가기', cancelText:'여기 있기', icon:'✓' })) K.setYear(to);
+  K.render();
+}
+function taxToolbarIcsHtml(kind){ return `<div style="display:flex; align-items:center; justify-content:flex-end; gap:6px;"><button class="sm-tool-ic" onclick="taxAddCol('${kind}')" title="항목 추가" aria-label="항목 추가">${ICON_PLUS}</button><button class="sm-tool-ic" onclick="taxCarry('${kind}')" title="다음 해로 이월 - 항목마다 안 넘김·항목만·항목+내용을 골라 넘겨요" aria-label="다음 해로 이월">${ICON_CARRY}</button></div>`; }
+
 function corpClients(){ return clients.filter(c => c.type === '법인'); }
 function toggleCorpStep(id, step){
   ensureTaxRows();
@@ -5122,11 +5336,15 @@ function renderCorp(){
   el.innerHTML = `
     <div class="card">
       ${taxjLiveBarHtml()}
-      <div class="toolbar" style="justify-content:center;"><!-- [2026.10.15] 귀속 제목 가운데(요청) -->
+      <div class="toolbar" style="display:grid; grid-template-columns:1fr auto 1fr; align-items:center;"><!-- [2026.10.15] 귀속 제목 가운데(요청) · [2026.11.02] 오른쪽에 항목 추가·이월 아이콘 -->
+        <div></div>
+        <div style="display:flex; align-items:center; gap:10px;">
         <select onchange="currentCorpYear=this.value; renderCorp();">
           ${corpYears.map(y => `<option value="${y}" ${y===currentCorpYear?'selected':''}>${y}년 귀속</option>`).join('')}
         </select>
         <span class="${dueClass(corpDue[currentCorpYear]||'2999-01-01')}">신고기한: ${corpDue[currentCorpYear] || '-'}</span>
+        </div>
+        ${taxToolbarIcsHtml('corp')}
       </div>
       <div class="summary-row">
         <div class="stat tone-rose"><div class="n">${rows.length}</div><div class="label">법인 거래처</div></div>
@@ -5134,7 +5352,7 @@ function renderCorp(){
       </div>
       <div class="table-scroll" style="margin-top:16px;">
       <table>
-        <thead><tr><th class="tx-seq">순번</th><th class="tx-type">구분</th><th>상호명</th><th>진행 단계</th><th>회사 진행</th><th>비고</th></tr></thead>
+        <thead><tr><th class="tx-seq">순번</th><th class="tx-type">구분</th><th data-smdrag="corp" data-smfix="step,step">상호명</th>${taxColHeadHtml('corp','step')}<th data-smdrag="corp" data-smfix="step,co">진행 단계</th>${taxColHeadHtml('corp','co')}<th data-smdrag="corp" data-smfix="co,note">회사 진행</th>${taxColHeadHtml('corp','note')}<th data-smdrag="corp" data-smfix="note,end">비고</th>${taxColHeadHtml('corp','end')}</tr></thead>
         <tbody>
           ${sortedClients().filter(x => rows.includes(x)).map(c => {
             const r = data[c.id] || {steps:Object.fromEntries(corpSteps.map(s=>[s,''])), note:''};
@@ -5143,16 +5361,16 @@ function renderCorp(){
               <td class="tx-seq">${c.seq || '-'}</td>
               <td class="tx-type"><span class="tag ${c.type==='법인'?'tag-corp-type':'tag-indiv-type'}">${c.type}</span></td>
               <td class="tx-name"><a class="cl-name" onclick="openClientDetail(${c.id})">${c.name}</a></td>
-              <td>
+              ${taxColCellsHtml('corp', c.id, 'step')}<td>
                 <div class="steps">
                   ${corpSteps.map(s => `
                     <span class="step-chip ${r.steps[s]?'done tone-corp':''}" onclick="toggleCorpStep(${c.id},'${s}')">${s}${r.steps[s]?`<span class="step-date">${r.steps[s].slice(5)}</span>`:''}</span>
                   `).join('')}
                 </div>
               </td>
-              <td>${taxjStatusCellHtml('법인세', currentCorpYear, c)}</td>
-              <td class="note-cell"><input type="text" value="${r.note}" onchange="updateCorpNote(${c.id}, this.value)" style="width:100%"></td>
-            </tr>`;
+              ${taxColCellsHtml('corp', c.id, 'co')}<td>${taxjStatusCellHtml('법인세', currentCorpYear, c)}</td>
+              ${taxColCellsHtml('corp', c.id, 'note')}<td class="note-cell"><input type="text" value="${r.note}" onchange="updateCorpNote(${c.id}, this.value)" style="width:100%"></td>
+              ${taxColCellsHtml('corp', c.id, 'end')}</tr>`;
           }).join('')}
         </tbody>
       </table>
@@ -5188,11 +5406,15 @@ function renderIndiv(){
   el.innerHTML = `
     <div class="card">
       ${taxjLiveBarHtml()}
-      <div class="toolbar" style="justify-content:center;"><!-- [2026.10.15] 귀속 제목 가운데(요청) -->
+      <div class="toolbar" style="display:grid; grid-template-columns:1fr auto 1fr; align-items:center;"><!-- [2026.10.15] 귀속 제목 가운데(요청) · [2026.11.02] 오른쪽에 항목 추가·이월 아이콘 -->
+        <div></div>
+        <div style="display:flex; align-items:center; gap:10px;">
         <select onchange="currentIndivYear=this.value; renderIndiv();">
           ${indivYears.map(y => `<option value="${y}" ${y===currentIndivYear?'selected':''}>${y}년 귀속</option>`).join('')}
         </select>
         <span class="${dueClass(indivDue[currentIndivYear]||'2999-01-01')}">신고기한: ${indivDue[currentIndivYear] || '-'}</span>
+        </div>
+        ${taxToolbarIcsHtml('indiv')}
       </div>
       <div class="summary-row">
         <div class="stat tone-violet"><div class="n">${rows.length}</div><div class="label">개인 거래처</div></div>
@@ -5200,7 +5422,7 @@ function renderIndiv(){
       </div>
       <div class="table-scroll" style="margin-top:16px;">
       <table>
-        <thead><tr><th class="tx-seq">순번</th><th class="tx-type">구분</th><th>상호명</th><th>성실신고</th><th>진행 단계</th><th>회사 진행</th><th>비고</th></tr></thead>
+        <thead><tr><th class="tx-seq">순번</th><th class="tx-type">구분</th><th data-smdrag="indiv" data-smfix="honest,honest">상호명</th>${taxColHeadHtml('indiv','honest')}<th data-smdrag="indiv" data-smfix="honest,step">성실신고</th>${taxColHeadHtml('indiv','step')}<th data-smdrag="indiv" data-smfix="step,co">진행 단계</th>${taxColHeadHtml('indiv','co')}<th data-smdrag="indiv" data-smfix="co,note">회사 진행</th>${taxColHeadHtml('indiv','note')}<th data-smdrag="indiv" data-smfix="note,end">비고</th>${taxColHeadHtml('indiv','end')}</tr></thead>
         <tbody>
           ${sortedClients().filter(x => rows.includes(x)).map(c => {
             const r = data[c.id] || {honest:false, steps:Object.fromEntries(indivSteps.map(s=>[s,''])), note:''};
@@ -5209,17 +5431,17 @@ function renderIndiv(){
               <td class="tx-seq">${c.seq || '-'}</td>
               <td class="tx-type"><span class="tag ${c.type==='법인'?'tag-corp-type':'tag-indiv-type'}">${c.type}</span></td>
               <td class="tx-name"><a class="cl-name" onclick="openClientDetail(${c.id})">${c.name}</a></td>
-              <td><input type="checkbox" ${r.honest?'checked':''} onchange="toggleIndivHonest(${c.id})"></td>
-              <td>
+              ${taxColCellsHtml('indiv', c.id, 'honest')}<td><input type="checkbox" ${r.honest?'checked':''} onchange="toggleIndivHonest(${c.id})"></td>
+              ${taxColCellsHtml('indiv', c.id, 'step')}<td>
                 <div class="steps">
                   ${indivSteps.map(s => `
                     <span class="step-chip ${r.steps[s]?'done tone-indiv':''}" onclick="toggleIndivStep(${c.id},'${s}')">${s}${r.steps[s]?`<span class="step-date">${r.steps[s].slice(5)}</span>`:''}</span>
                   `).join('')}
                 </div>
               </td>
-              <td>${taxjStatusCellHtml('종소세', currentIndivYear, c)}</td>
-              <td class="note-cell"><input type="text" value="${r.note}" onchange="updateIndivNote(${c.id}, this.value)" style="width:100%"></td>
-            </tr>`;
+              ${taxColCellsHtml('indiv', c.id, 'co')}<td>${taxjStatusCellHtml('종소세', currentIndivYear, c)}</td>
+              ${taxColCellsHtml('indiv', c.id, 'note')}<td class="note-cell"><input type="text" value="${r.note}" onchange="updateIndivNote(${c.id}, this.value)" style="width:100%"></td>
+              ${taxColCellsHtml('indiv', c.id, 'end')}</tr>`;
           }).join('')}
         </tbody>
       </table>
@@ -5816,10 +6038,11 @@ const GOOGLE_DATA_KEYS = [
   'manuals','nextManualId','manualCats',
   'submitMine',     // [2026.10.12] 제출 탭 내 확인·메모
   'attendMine',     // [2026.10.12] 근태경비 탭 내 확인·메모
-  'payCustomCols','payCustomVals',   // [2026.10.13] 원천세 신고현황 내가 만든 항목
+  'payColsBy','payCustomVals',   // [2026.10.13] 원천세 신고현황 내가 만든 항목 ([2026.11.02] 항목은 귀속월마다 따로 - 예전 'payCustomCols')
   'vatCustomCols','vatCustomVals',   // [2026.10.13] 부가세 내가 만든 항목
-  'vatProgCols','vatProg','vatProgView',   // [2026.10.14] 부가세 진행표
-  'closeCols','closeData',   // [2026.10.14] 결산
+  'vatProgColsBy','vatProg','vatProgView',   // [2026.10.14] 부가세 진행표 ([2026.11.02] 항목은 기수마다 따로 - 예전 'vatProgCols')
+  'closeColsBy','closeData',   // [2026.10.14] 결산 ([2026.11.02] 항목은 회차마다 따로 - 예전 'closeCols')
+  'taxColsBy','taxColVals',   // [2026.11.02] 법인세·종소세 내 항목
   'quickMemos','nextMemoId',   // [2026.10.15] 홈 빠른 메모
   'menuNotes',   // [2026.10.27] 신고 메뉴별 중요사항
   'accountVault',   // [2026.10.08] 계정 보관함이 Google 시트에 저장되지 않아 다시 열면 "보관함 만들기"가 다시 뜨던 문제 수정(요청)
@@ -5837,7 +6060,8 @@ function collectGoogleSnapshot(){
     trashBin, nextTrashId,
     links, nextLinkId, linkCats, forms, nextFormId, formCats, laws, nextLawId, lawCats,
     manuals, nextManualId, manualCats,
-    accountVault, submitMine, attendMine, payCustomCols, payCustomVals, vatCustomCols, vatCustomVals, vatProgCols, vatProg, vatProgView, closeCols, closeData, quickMemos, nextMemoId, menuNotes,
+    accountVault, submitMine, attendMine, payColsBy: smColsPrune(payColsBy), payCustomVals, vatCustomCols, vatCustomVals, vatProgColsBy: smColsPrune(vatProgColsBy), vatProg, vatProgView, closeColsBy: smColsPrune(closeColsBy), closeData,
+    taxColsBy: { corp: smColsPrune(taxColsBy.corp), indiv: smColsPrune(taxColsBy.indiv) }, taxColVals, quickMemos, nextMemoId, menuNotes,
   };
 }
 
@@ -5900,18 +6124,21 @@ async function loadFromGoogleSheet(){
     if(map.accountVault)  accountVault = JSON.parse(map.accountVault);
     if(map.submitMine)    submitMine   = JSON.parse(map.submitMine);
     if(map.attendMine)    attendMine   = JSON.parse(map.attendMine);
-    if(map.payCustomCols) payCustomCols = JSON.parse(map.payCustomCols);
+    if(map.payColsBy) payColsBy = JSON.parse(map.payColsBy) || {}; else if(map.payCustomCols){ payColsBy = {}; (smColsLegacy = smColsLegacy || {}).pay = JSON.parse(map.payCustomCols); }
     if(map.payCustomVals) payCustomVals = JSON.parse(map.payCustomVals);
     if(map.quickMemos) quickMemos = JSON.parse(map.quickMemos);
     if(map.menuNotes) menuNotes = JSON.parse(map.menuNotes) || {};
     if(map.nextMemoId) nextMemoId = JSON.parse(map.nextMemoId);
     if(map.vatCustomCols) vatCustomCols = JSON.parse(map.vatCustomCols);
     if(map.vatCustomVals) vatCustomVals = JSON.parse(map.vatCustomVals);
-    if(map.vatProgCols) vatProgCols = JSON.parse(map.vatProgCols);
+    if(map.vatProgColsBy) vatProgColsBy = JSON.parse(map.vatProgColsBy) || {}; else if(map.vatProgCols){ vatProgColsBy = {}; (smColsLegacy = smColsLegacy || {}).vat = JSON.parse(map.vatProgCols); }
     if(map.vatProg) vatProg = JSON.parse(map.vatProg);
     if(map.vatProgView) vatProgView = JSON.parse(map.vatProgView);
-    if(map.closeCols) closeCols = JSON.parse(map.closeCols);
+    if(map.closeColsBy) closeColsBy = JSON.parse(map.closeColsBy) || {}; else if(map.closeCols){ closeColsBy = {}; (smColsLegacy = smColsLegacy || {}).close = JSON.parse(map.closeCols); }
     if(map.closeData) closeData = JSON.parse(map.closeData);
+    if(map.taxColsBy) taxColsBy = Object.assign({ corp:{}, indiv:{} }, JSON.parse(map.taxColsBy));
+    if(map.taxColVals) taxColVals = Object.assign({ corp:{}, indiv:{} }, JSON.parse(map.taxColVals));
+    if(smMigrateCols()) needsResaveAfterLoad = true;   // [2026.11.02] 예전 공통 항목 → 모든 회차에 복사하고 새 형식으로 다시 저장
     if(map.links)         links        = JSON.parse(map.links);
     if(map.nextLinkId)    nextLinkId   = JSON.parse(map.nextLinkId);
     if(map.linkCats)      linkCats     = JSON.parse(map.linkCats);
@@ -6159,18 +6386,21 @@ function applySnapshot(o){
   if(o.accountVault) accountVault = o.accountVault;
   if(o.submitMine) submitMine = o.submitMine;
   if(o.attendMine) attendMine = o.attendMine;
-  if(o.payCustomCols) payCustomCols = o.payCustomCols;
+  if(o.payColsBy) payColsBy = o.payColsBy; else if(o.payCustomCols){ payColsBy = {}; (smColsLegacy = smColsLegacy || {}).pay = o.payCustomCols; }
   if(o.payCustomVals) payCustomVals = o.payCustomVals;
   if(o.quickMemos) quickMemos = o.quickMemos;
   if(o.menuNotes) menuNotes = o.menuNotes;
   if(o.nextMemoId) nextMemoId = o.nextMemoId;
   if(o.vatCustomCols) vatCustomCols = o.vatCustomCols;
   if(o.vatCustomVals) vatCustomVals = o.vatCustomVals;
-  if(o.vatProgCols) vatProgCols = o.vatProgCols;
+  if(o.vatProgColsBy) vatProgColsBy = o.vatProgColsBy; else if(o.vatProgCols){ vatProgColsBy = {}; (smColsLegacy = smColsLegacy || {}).vat = o.vatProgCols; }
   if(o.vatProg) vatProg = o.vatProg;
   if(o.vatProgView) vatProgView = o.vatProgView;
-  if(o.closeCols) closeCols = o.closeCols;
+  if(o.closeColsBy) closeColsBy = o.closeColsBy; else if(o.closeCols){ closeColsBy = {}; (smColsLegacy = smColsLegacy || {}).close = o.closeCols; }
   if(o.closeData) closeData = o.closeData;
+  if(o.taxColsBy) taxColsBy = Object.assign({ corp:{}, indiv:{} }, o.taxColsBy);
+  if(o.taxColVals) taxColVals = Object.assign({ corp:{}, indiv:{} }, o.taxColVals);
+  smMigrateCols();
   if(o.links) links = o.links;
   if(o.nextLinkId) nextLinkId = o.nextLinkId;
   if(o.linkCats) linkCats = o.linkCats;
@@ -6801,7 +7031,7 @@ async function resetAllData(){
   clients = [];
   tasks = [];
   vatData = {}; payData = {}; corpData = {}; indivData = {};
-  submitMine = {}; attendMine = {}; payCustomCols = []; payCustomVals = {}; quickMemos = []; nextMemoId = 1; vatCustomCols = []; vatCustomVals = {}; vatProgCols = []; vatProg = {}; closeCols = []; closeData = {}; menuNotes = {};
+  submitMine = {}; attendMine = {}; payColsBy = {}; payCustomVals = {}; quickMemos = []; nextMemoId = 1; vatCustomCols = []; vatCustomVals = {}; vatProgColsBy = {}; vatProg = {}; closeColsBy = {}; closeData = {}; taxColsBy = { corp:{}, indiv:{} }; taxColVals = { corp:{}, indiv:{} }; menuNotes = {};
   worklistChecklist = {}; worklistSchedule = {};
   events = [];
   clientsOther = []; clientsTerminated = [];
@@ -8153,6 +8383,7 @@ const PAY_COL_TYPES = [['date','날짜'], ['check','체크'], ['text','글자']]
 const PAY_COL_POS = [['end','맨 끝 (메모 뒤)'], ['cycle','신고 앞'], ['payslip','급여명세서 전달 앞'], ['payroll','급여마감 앞'], ['close','신고서 마감 앞'], ['filed','신고일자 앞'], ['bill','신고서류 앞'], ['paid','납부마감 앞'], ['memo','메모 앞']];
 function payPosKey(label){ return (PAY_COL_POS.find(x => x[1] === label) || PAY_COL_POS[0])[0]; }
 function payPosLabel(key){ return (PAY_COL_POS.find(x => x[0] === (key || 'end')) || PAY_COL_POS[0])[1]; }
+// [2026.11.02] "OO 앞 말고 그냥 끌어서 앞으로 오게"(요청) - 위치 고르기 대신 머리글을 끌어 놓음(payColDrop). pos는 그대로 '어느 칸 앞' 묶음으로 저장
 function payFocusMonth(docs){
   const d = new Date(); if(d.getDate() <= 10) d.setMonth(d.getMonth() - 1);
   const base = `${d.getFullYear()}-${pad2(d.getMonth() + 1)}`;
@@ -8188,25 +8419,41 @@ function payPendingCount(docs, p){
 }   // Tax.J itFocusPeriodNow와 같음(10일까지는 지난달 귀속)
 function payShiftMonth(n){ const [y, m] = payMonth.split('-').map(Number); const d = new Date(y, m - 1 + n, 1); payMonth = `${d.getFullYear()}-${pad2(d.getMonth() + 1)}`; payPicked = new Set(); renderPay(); }
 async function addPayCustomCol(){
-  const r = await smForm('신고현황 항목 추가', [{ label:'항목 이름', placeholder:'예: 4대보험 확인' }, { label:'입력 방식', options: PAY_COL_TYPES.map(x => x[1]), value:'날짜' }, { label:'위치', options: PAY_COL_POS.map(x => x[1]), value: PAY_COL_POS[0][1] }], { okText:'추가' });
+  const r = await smForm('신고현황 항목 추가', [{ label:'항목 이름', placeholder:'예: 4대보험 확인' }, { label:'입력 방식', options: PAY_COL_TYPES.map(x => x[1]), value:'날짜' }, ], { okText:'추가' });   // [2026.11.02] 위치는 끌어서(맨 끝에 생김)
   if(!r || !r[0].trim()) return;
-  payCustomCols.push({ id: 'c' + Date.now().toString(36), label: r[0].trim(), type: (PAY_COL_TYPES.find(x => x[1] === r[1]) || PAY_COL_TYPES[0])[0], pos: payPosKey(r[2]) });
+  payCustomCols.push({ id: 'c' + Date.now().toString(36), label: r[0].trim(), type: (PAY_COL_TYPES.find(x => x[1] === r[1]) || PAY_COL_TYPES[0])[0], pos: 'end' });
   renderPay(); scheduleGoogleSave();
 }
 async function editPayCustomCol(id){
   const col = payCustomCols.find(c => c.id === id); if(!col) return;
-  const r = await smForm('항목 수정', [{ label:'항목 이름', value: col.label }, { label:'입력 방식', options: PAY_COL_TYPES.map(x => x[1]), value: (PAY_COL_TYPES.find(x => x[0] === col.type) || PAY_COL_TYPES[0])[1] }, { label:'위치', options: PAY_COL_POS.map(x => x[1]), value: payPosLabel(col.pos) }], { okText:'저장', cancelText:'삭제', icon:'✎', closeX:true });
+  const r = await smForm('항목 수정', [{ label:'항목 이름', value: col.label }, { label:'입력 방식', options: PAY_COL_TYPES.map(x => x[1]), value: (PAY_COL_TYPES.find(x => x[0] === col.type) || PAY_COL_TYPES[0])[1] }], { okText:'저장', cancelText:'삭제', icon:'✎', closeX:true });
   if(r === undefined) return;   // [2026.10.15] 닫기(X) - 아무것도 안 바꿈
   if(r === null){
-    if(!(await smConfirm(`'${col.label}' 항목을 지울까요?`, '이 항목에 적어 둔 값도 모두 지워져요.', { tone:'danger', icon:'!', okText:'삭제' }))) return;
+    if(!(await smConfirm(`'${col.label}' 항목을 지울까요?`, `${payMonth.replace('-', '년 ')}월 귀속에서만 지워져요(이 달에 적은 값 포함). 다른 달은 그대로예요.`, { tone:'danger', icon:'!', okText:'삭제' }))) return;
     payCustomCols = payCustomCols.filter(c => c.id !== id);
-    Object.values(payCustomVals).forEach(per => Object.values(per).forEach(v => { delete v[id]; }));
+    Object.values(payCustomVals[payMonth] || {}).forEach(v => { delete v[id]; });   // [2026.11.02] 이 달만
   }else{
     if(r[0].trim()) col.label = r[0].trim();
     col.type = (PAY_COL_TYPES.find(x => x[1] === r[1]) || PAY_COL_TYPES[0])[0];
-    col.pos = payPosKey(r[2]);
   }
   renderPay(); scheduleGoogleSave();
+}
+SM_COL_MOVERS.pay = (id, tgt, after) => { const r = smMovePosCol(payCustomCols, id, tgt, after); if(!r) return; payCustomCols = r; renderPay(); scheduleGoogleSave(); };
+// [2026.11.02] 다음 달로 이월(요청) - 이 달 항목을 골라 다음 달에 복사(항목+내용이면 거래처 줄 값도). 넘긴 뒤엔 달마다 따로
+async function payCarryCols(){
+  const from = payMonth; if(!from) return;
+  const [y, m] = from.split('-').map(Number), nx = new Date(y, m, 1), to = `${nx.getFullYear()}-${pad2(nx.getMonth() + 1)}`;
+  const lab = k => `${Number(k.slice(0, 4))}년 ${Number(k.slice(5))}월`;
+  const src = payCustomCols.slice();
+  if(!src.length) return smAlert('넘길 항목이 없어요', `${lab(from)} 귀속에 만든 항목이 없어요.`);
+  const picks = await smCarryPick(`${lab(from)} → ${lab(to)} 이월`, src, () => 'cols');
+  if(!picks) return;
+  const dst = smColsAt(payColsBy, to);
+  const n = smCarryApply(src, dst, picks, id => { payCustomVals[to] = payCustomVals[to] || {}; smCarryVal(payCustomVals[from], payCustomVals[to], id); if(!Object.keys(payCustomVals[to]).length) delete payCustomVals[to]; });
+  if(!n) return;
+  scheduleGoogleSave();
+  if(await smConfirm(`${n}개 항목을 넘겼어요`, `${lab(to)} 귀속으로 가서 볼까요?`, { okText:'가기', cancelText:'여기 있기', icon:'✓' })){ payMonth = to; payPicked = new Set(); }
+  renderPay();
 }
 function setPayCustomVal(key, colId, value){
   const per = payCustomVals[payMonth] = payCustomVals[payMonth] || {};
@@ -8427,14 +8674,14 @@ function payStatusHtml(docs){
     });
   });
   const pct = total ? Math.round(cntPayroll / total * 100) : 0;
-  const ch = pos => payCustomCols.filter(col => (col.pos || 'end') === pos).map(col => `<th rowspan="2"><button class="btn ghost xs" onclick="editPayCustomCol('${col.id}')" title="눌러서 이름·입력 방식·위치 수정 또는 삭제" style="font-weight:800;">${taxjEsc(col.label)} ✎</button></th>`).join('');
+  const ch = pos => payCustomCols.filter(col => (col.pos || 'end') === pos).map(col => `<th rowspan="2" data-smdrag="pay" data-smcol="${col.id}" draggable="true" title="끌어서 위치 옮기기"><button class="btn ghost xs" onclick="editPayCustomCol('${col.id}')" title="눌러서 이름·입력 방식 수정 또는 삭제 · 끌어서 위치 옮기기" style="font-weight:800;">${taxjEsc(col.label)} ✎</button></th>`).join('');
   // [2026.10.15] "연월 귀속 제목은 가운데로, 검색은 항목 추가 칩 아래로"(요청)
   return `<div class="toolbar" style="display:grid; grid-template-columns:1fr auto 1fr; align-items:center;">
       <div>${payStatusSegHtml()}</div>
       <div style="display:flex; align-items:center; gap:10px;"><button class="btn ghost xs" onclick="payShiftMonth(-1)" title="이전 달">‹</button><span style="font-weight:800;">${yy}년 ${mm}월 귀속</span><button class="btn ghost xs" onclick="payShiftMonth(1)" title="다음 달">›</button></div>
       <div style="display:flex; flex-direction:column; align-items:flex-end; gap:8px;">
         <div style="display:flex; align-items:center; gap:6px;"><!-- [2026.10.16] 일괄 입력·항목 추가는 아이콘으로, 'N줄 선택' 글자는 없앰(요청) -->
-        <button class="sm-tool-ic" onclick="payBulk()" title="날짜 일괄 입력 - 왼쪽 체크박스로 고른 거래처(없으면 보이는 전체)에 날짜·완납·미납을 한 번에 넣어요" aria-label="날짜 일괄 입력">${ICON_BULK}</button><button class="sm-tool-ic" onclick="addPayCustomCol()" title="항목 추가" aria-label="항목 추가">${ICON_PLUS}</button></div>
+        <button class="sm-tool-ic" onclick="payBulk()" title="날짜 일괄 입력 - 왼쪽 체크박스로 고른 거래처(없으면 보이는 전체)에 날짜·완납·미납을 한 번에 넣어요" aria-label="날짜 일괄 입력">${ICON_BULK}</button><button class="sm-tool-ic" onclick="addPayCustomCol()" title="항목 추가" aria-label="항목 추가">${ICON_PLUS}</button><button class="sm-tool-ic" onclick="payCarryCols()" title="다음 달로 이월 - 항목마다 안 넘김·항목만·항목+내용을 골라 넘겨요" aria-label="다음 달로 이월">${ICON_CARRY}</button></div>
         ${paySearchHtml()}
       </div>
     </div>
@@ -8444,7 +8691,7 @@ function payStatusHtml(docs){
       <div class="stat"><div class="n">${cntClose} · ${cntFiled}</div><div class="label">신고서 마감 · 신고 완료</div></div>
     </div>
     <div class="progress-bar"><div class="fill tone-blue" style="width:${pct}%"></div></div>
-    ${rows.length ? `<div class="table-scroll" style="margin-top:16px;"><table><thead><tr><th class="tx-seq" rowspan="2">순번</th><th rowspan="2">상호명</th>${ch('cycle')}<th rowspan="2">신고</th><th rowspan="2">실 급여일</th>${ch('payslip')}<th rowspan="2">급여명세서 전달</th>${ch('payroll')}<th rowspan="2">급여마감</th>${ch('close')}<th colspan="2">신고서 마감</th>${ch('filed')}<th colspan="2">신고일자</th>${ch('bill')}<th rowspan="2">신고서류</th>${ch('paid')}<th rowspan="2">납부마감</th>${ch('memo')}<th rowspan="2">메모</th>
+    ${rows.length ? `<div class="table-scroll" style="margin-top:16px;"><table><thead><tr><th class="tx-seq" rowspan="2">순번</th><th rowspan="2" data-smdrag="pay" data-smfix="cycle,cycle">상호명</th>${ch('cycle')}<th rowspan="2" data-smdrag="pay" data-smfix="cycle,payslip">신고</th><th rowspan="2" data-smdrag="pay" data-smfix="payslip,payslip">실 급여일</th>${ch('payslip')}<th rowspan="2" data-smdrag="pay" data-smfix="payslip,payroll">급여명세서 전달</th>${ch('payroll')}<th rowspan="2" data-smdrag="pay" data-smfix="payroll,close">급여마감</th>${ch('close')}<th colspan="2" data-smdrag="pay" data-smfix="close,filed">신고서 마감</th>${ch('filed')}<th colspan="2" data-smdrag="pay" data-smfix="filed,bill">신고일자</th>${ch('bill')}<th rowspan="2" data-smdrag="pay" data-smfix="bill,paid">신고서류</th>${ch('paid')}<th rowspan="2" data-smdrag="pay" data-smfix="paid,memo">납부마감</th>${ch('memo')}<th rowspan="2" data-smdrag="pay" data-smfix="memo,end">메모</th>
       ${ch('end')}</tr><tr><th>국세</th><th>지방세</th><th>국세</th><th>지방세</th></tr></thead><tbody>${rows.join('')}</tbody></table></div>`
       : `<div class="empty">${q ? '검색 결과가 없어요.' : `${yy}년 ${mm}월 귀속 신고대상이 없어요.`}</div>`}`;
 }
