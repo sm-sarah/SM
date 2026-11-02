@@ -8563,14 +8563,15 @@ function renderAttend(){
   el.innerHTML = `
     <div class="card">
       ${taxjLiveBarHtml()}
-      <div class="toolbar">
-        <!-- [2026.10.14] 왼쪽 하위메뉴와 같은 가로 메뉴는 없앰(요청) -->
+      <div class="toolbar" style="display:grid; grid-template-columns:1fr auto 1fr; align-items:center;">
+        <!-- [2026.10.14] 왼쪽 하위메뉴와 같은 가로 메뉴는 없앰(요청) · [2026.11.02] "달력 연월은 가운데로"(요청) - 근태경비 하위메뉴 모두 같게(원천세 신고현황 귀속월과 같은 배치) -->
+        <div style="display:flex; align-items:center; gap:10px;">${taxjFull && attendView !== 'cal' ? '<button class="btn xs" onclick="attendOpenYear()" title="고른 직원의 한 해를 월별로 봐요">연간 전체보기</button>' : ''}</div><!-- [2026.10.16] 연간 전체보기(요청) -->
+        <div style="display:flex; align-items:center; gap:10px;">
         <button class="btn ghost xs" onclick="attendShiftMonth(-1)" title="이전 달">‹</button>
         <span style="font-weight:800;">${yy}년 ${mm}월</span>
         <button class="btn ghost xs" onclick="attendShiftMonth(1)" title="다음 달">›</button>
-        ${taxjFull && attendView !== 'cal' ? '<button class="btn xs" onclick="attendOpenYear()" title="고른 직원의 한 해를 월별로 봐요">연간 전체보기</button>' : ''}<!-- [2026.10.16] 연간 전체보기(요청) -->
-        <div class="spacer"></div>
-        ${people.length > 1 ? `<select onchange="attendPerson=this.value; renderAttend();">${people.map(p => `<option value="${escapeAttr(p.id)}" ${p.id === attendPerson ? 'selected' : ''}>${taxjEsc(p.name || p.email || p.id)}</option>`).join('')}</select>` : ''}
+        </div>
+        <div style="display:flex; justify-content:flex-end;">${people.length > 1 ? `<select onchange="attendPerson=this.value; renderAttend();">${people.map(p => `<option value="${escapeAttr(p.id)}" ${p.id === attendPerson ? 'selected' : ''}>${taxjEsc(p.name || p.email || p.id)}</option>`).join('')}</select>` : ''}</div>
       </div>
       ${!taxjFull ? '<div class="empty">Tax.J에 연결하면 회사웹 근태·경비 기록이 여기에 채워져요.</div>' : `
       <div class="summary-row">${stats}</div>
