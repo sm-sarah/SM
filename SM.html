@@ -1134,7 +1134,8 @@ function smTogglePcView(){ try{ localStorage.setItem('sm_pc_view', window.SM_PC_
   .cl-subtab.on span{ background:#fff; color:var(--primary-dark); }
   /* [2026.10.13] 원천세 메뉴 2단(요청 - "메뉴구성 스타일이 이상하다"): 윗줄(총괄·신고현황·일용직·제출)은 큰 탭 + 아래 구분선,
      아랫줄(매월·반기·연간)은 옆 선택칸과 같은 높이의 작은 칸 묶음으로 구분 */
-  .pay-prog .cl-subtab{ cursor:default; }   /* [2026.11.02] 원천세 진행현황 칩(누르는 버튼 아님) */
+  .pay-prog .cl-subtab{ cursor:default; }
+  #tab-pay tr.pay-off > td{ opacity:.45; }   /* [2026.11.02] 이 달 급여 없는 거래처(올해 다른 달엔 있음) */   /* [2026.11.02] 원천세 진행현황 칩(누르는 버튼 아님) */
   .pay-maintabs{ border-bottom:1px solid var(--border); padding-bottom:10px; margin-bottom:14px !important; }
   /* [2026.11.02] works 위 탭(거래처~종소세)·하위메뉴 - 가운데 */
   .page-head .works-tabs, .page-head .works-subtabs{ justify-content:center; }
@@ -8883,10 +8884,15 @@ function payStatusHtml(docs){
     const own = payTarget(docs, c.id, p);
     // [2026.10.26] "신고현황은 급여가 있는 모든 거래처가 나오게 - 반기 상관없이"(요청) - 그 달 신고구분이 반기(대상)인 거래처는 그 달 신고대상 표시가 없어도 매달 보여줌
     const halfOn = !!(rec && payRecApp(rec) && rec.cycle === '반기' && recs.length && p >= recs[0].effectiveFrom);
-    if(!halfOn && !(own && own.applicable && (own.sameMonthPay || own.nextMonthPay))) return;
+    // [2026.11.02] "그 귀속연도에 한 번이라도 급여가 있었던 곳은 다 나와야"(요청) - 이 달 신고대상이 아니어도 같은 해 다른 달에 신고대상(급여)이 있었으면
+    //   흐린 줄로 보여줌(이 달 신고대상·완료 건수에는 안 셈)
+    const monthOn = halfOn || !!(own && own.applicable && (own.sameMonthPay || own.nextMonthPay));
+    const yearOn = monthOn || Array.from({ length:12 }, (_, i) => `${yy}-${pad2(i + 1)}`).some(pp => { const o = payTarget(docs, c.id, pp); return !!(o && o.applicable && (o.sameMonthPay || o.nextMonthPay)); });
+    if(!yearOn) return;
+    const offMonth = !monthOn;
     // [2026.10.15] "미대상도 나온다. 그 달 귀속 급여가 있는 거래처만"(요청) - 회사웹 filingApplicableAt과 같게 그 달 신고구분이 미대상이거나
     // 신고구분 시작 전 달이면 신고대상 표시가 남아 있어도 뺌(신고구분 이력이 없으면 신고대상 등록만으로 판단)
-    if(recs.length && !(p >= recs[0].effectiveFrom && payRecApp(rec))) return;
+    if(!offMonth && recs.length && !(p >= recs[0].effectiveFrom && payRecApp(rec))) return;
     // [2026.10.14] "노아하우징쿱은 26.9월에 급여가 없는데도 나온다"(요청) - 반기 신고 거래처는 그 달에 급여(그 달 신고대상 등록)가 있거나
     // 이 달에 적은 기록이 있을 때만 보여줌(예전엔 신고구분만 보고 반기 안의 모든 달에 나왔음). 매월 거래처는 그대로
     // [2026.10.26] 반기 거래처를 그 달 급여(신고대상 표시)·기록이 있을 때만 보여주던 조건은 뺌(요청 - 반기 상관없이 매달)
@@ -8899,11 +8905,13 @@ function payStatusHtml(docs){
     n++;
     lanes.forEach((k, li) => {
       const v = e[k] || {}, key = `${c.id}|${k}`;
-      total++;
-      if(v.payroll) cntPayroll++;
       const ho = halfOff(c.id);
-      if(!ho && v.returnClose && v.returnCloseLocal) cntClose++;
-      if(!ho && v.national && v.local) cntFiled++;
+      if(!offMonth){
+        total++;
+        if(v.payroll) cntPayroll++;
+        if(!ho && v.returnClose && v.returnCloseLocal) cntClose++;
+        if(!ho && v.national && v.local) cntFiled++;
+      }
       const slip = skipAll || v.payslipNA ? '<span class="hint" style="margin:0;">미해당</span>' : taxjChk(v.payslip);   // [2026.11.02] 미해당으로 통일(요청)
       // [2026.10.13] "신고서 마감을 국세·지방세 나눠서, 그리고 신고일자"(요청) - 신고서 마감(returnClose·returnCloseLocal)·신고일자(national·local)를 각각 국세·지방세 칸으로.
       // 반기 거래처의 6·12월 외 달은 신고서 마감·신고가 없어서 두 칸을 합쳐 '반기'
@@ -8914,7 +8922,8 @@ function payStatusHtml(docs){
       const cc = pos => payCustomCols.filter(col => (col.pos || 'end') === pos).map(col => payCustomCellHtml(key, col)).join('');
       const [billTd, paidTd] = payBillCellsHtml(key);
       payRowsShown.push({ key, name: c.name, lane: dual ? k : '' });
-      rows.push(`<tr${dual ? (li ? ' class="pay-lane-2"' : ' class="pay-lane-1"') : ''}>
+      const trCls = [dual ? (li ? 'pay-lane-2' : 'pay-lane-1') : '', offMonth ? 'pay-off' : ''].filter(Boolean).join(' ');
+      rows.push(`<tr${trCls ? ` class="${trCls}"` : ''}${offMonth ? ` title="${mm}월 급여 없음 - ${yy}년 다른 달에 급여가 있어서 보여요"` : ''}>
         ${li ? '' : `<td class="tx-seq"${span}>${n}</td><td class="tx-name"${span} style="${smEntCss(c.entityType)}">${taxjEsc(c.name)}</td>`}
         ${cc('cycle')}<td style="white-space:nowrap; font-weight:700;">${payCycleLabelHtml(base, dual ? k : '')}</td>
         ${li ? '' : `<td style="white-space:nowrap;"${span}>${(ov[c.id] || {}).actualPayDay ? taxjEsc(ov[c.id].actualPayDay) : PAY_NA}</td>`}<!-- [2026.10.23] "신고 오른쪽에 총괄의 실지급일"(요청) - 회사웹 원천세 › 총괄의 실 급여일(s__itOverview.actualPayDay), 거래처당 한 칸 -->
