@@ -944,7 +944,9 @@ function smTogglePcView(){ try{ localStorage.setItem('sm_pc_view', window.SM_PC_
   .wl-memo-new textarea:focus{ outline:2px solid var(--primary-soft); border-color:var(--primary); }
   .wl-memo-list{ margin-top:8px; max-height:240px; overflow-y:auto; }
   .wl-memo-item{ padding:6px 2px 8px; border-bottom:1px solid var(--border); }
-  .wl-memo-day{ font-size:12px; font-weight:800; color:var(--primary-dark); margin:10px 0 2px; display:flex; align-items:center; gap:6px; }
+  .wl-memo-day{ font-size:12px; font-weight:800; color:var(--primary-dark); margin:10px 0 2px; display:flex; align-items:center; gap:6px; cursor:pointer; user-select:none; }
+  .wl-memo-day.shut{ color:var(--muted); }
+  .wl-memo-day .wl-memo-caret{ background:none !important; padding:0 !important; font-size:10px; color:inherit !important; width:10px; }
   .wl-memo-day span{ font-size:11px; font-weight:700; color:var(--muted); background:#f3eef1; border-radius:999px; padding:0 7px; }
   .wl-memo-text{ font-size:13px; white-space:pre-wrap; word-break:break-word; line-height:1.5; }
   .wl-memo-text mark{ background:#fde68a; border-radius:2px; padding:0 1px; }
@@ -3593,12 +3595,16 @@ function renderWlMemo(){
     <div class="notice-top"><span></span><div class="today-title" onclick="wlMemoOpen=!wlMemoOpen; renderWlMemo();" style="cursor:pointer;" title="${wlMemoOpen ? '접기' : '펼치기'}">Memo</div>
       <div class="search-wrap open" style="justify-self:end;"><input type="text" id="wlMemoSearch" class="search-input" placeholder="메모 검색" value="${escapeAttr(wlMemoSearch)}" oninput="wlMemoOnSearch(this.value)" onkeydown="if(event.key==='Escape'){ this.value=''; wlMemoOnSearch(''); }"><span class="search-icon static" aria-hidden="true">${SEARCH_SVG}</span></div></div>
     ${!wlMemoOpen ? '' : `<div class="wl-memo-new"><textarea id="wlMemoInput" rows="2" placeholder="급하게 적어 둘 메모 (Ctrl+Enter로 저장)" onkeydown="if(event.key==='Enter' && (event.ctrlKey || event.metaKey) && !event.isComposing){ event.preventDefault(); wlMemoAdd(); }">${taxjEsc(draft)}</textarea><button class="btn primary xs" onclick="wlMemoAdd()">저장</button></div>
-    <div class="wl-memo-list">${list.length ? wlMemoGroups(list).map(([day, ms]) => `<div class="wl-memo-day">${taxjEsc(worklistDayLabel(day))}<span>${ms.length}</span></div>`
-        + ms.map(m => `<div class="wl-memo-item">
+    <div class="wl-memo-list">${list.length ? wlMemoGroups(list).map(([day, ms]) => { const open = wlMemoDayIsOpen(day, !!q); return `<div class="wl-memo-day${open ? '' : ' shut'}" onclick="wlMemoToggleDay('${day}')" title="${open ? '접기' : '펼치기'}"><span class="wl-memo-caret">${open ? '▾' : '▸'}</span>${taxjEsc(worklistDayLabel(day))}<span>${ms.length}</span></div>`
+        + (!open ? '' : ms.map(m => `<div class="wl-memo-item">
         <div class="wl-memo-meta"><span>${taxjEsc(String(m.at).slice(11))}${m.edited ? ` · 수정 ${taxjEsc(m.edited.slice(0,10) === day ? m.edited.slice(11) : m.edited)}` : ''}</span><span class="row-actions" style="display:inline-flex; gap:2px;"><button class="icon-btn" onclick="wlMemoEdit(${m.id})" title="수정" aria-label="수정">${ICON_EDIT}</button><button class="icon-btn danger" onclick="wlMemoDelete(${m.id})" title="삭제" aria-label="삭제">${ICON_TRASH}</button></span></div>
-        <div class="wl-memo-text">${hl(m.text)}</div></div>`).join('')).join('')
+        <div class="wl-memo-text">${hl(m.text)}</div></div>`).join('')); }).join('')
       : `<div class="empty" style="padding:10px 0;">${q ? '검색과 맞는 메모가 없어요.' : '아직 메모가 없어요.'}</div>`}</div>`}`;
 }
+// [2026.11.02] "메모도 지난 날짜는 자동으로 접히게"(요청) - 오늘 메모만 펼치고 지난 날짜는 접음(날짜 제목을 누르면 펼치기·접기, 이 창에서만 기억). 검색할 때는 모두 펼침
+const wlMemoDayToggled = {};
+function wlMemoDayIsOpen(day, searching){ if(searching) return true; const def = day === todayStr(); return day in wlMemoDayToggled ? wlMemoDayToggled[day] : def; }
+function wlMemoToggleDay(day){ wlMemoDayToggled[day] = !wlMemoDayIsOpen(day, false); renderWlMemo(); }
 // [2026.10.15] "메모도 등록일자별로 목록형, 수정 버튼은 위에"(요청) - 등록한 날짜별로 묶어(최신 날짜 위) 날짜 제목 아래 시간·수정·삭제 줄, 그 아래 내용
 function wlMemoGroups(list){
   const g = {};
@@ -8888,7 +8894,11 @@ function payStatusHtml(docs){
     // [2026.11.02] "그 귀속연도에 한 번이라도 급여가 있었던 곳은 다 나와야"(요청) - 이 달 신고대상이 아니어도 같은 해 다른 달에 신고대상(급여)이 있었으면
     //   흐린 줄로 보여줌(이 달 신고대상·완료 건수에는 안 셈)
     const monthOn = halfOn || !!(own && own.applicable && (own.sameMonthPay || own.nextMonthPay));
-    const yearOn = monthOn || Array.from({ length:12 }, (_, i) => `${yy}-${pad2(i + 1)}`).some(pp => { const o = payTarget(docs, c.id, pp); return !!(o && o.applicable && (o.sameMonthPay || o.nextMonthPay)); });
+    // 그 달 신고구분이 미대상이거나 신고구분 시작 전이면 신고대상 표시가 남아 있어도 급여 있는 달로 안 셈(이 달 판단과 같은 기준)
+    const yearOn = monthOn || Array.from({ length:12 }, (_, i) => `${yy}-${pad2(i + 1)}`).some(pp => {
+      const o = payTarget(docs, c.id, pp); if(!(o && o.applicable && (o.sameMonthPay || o.nextMonthPay))) return false;
+      return !recs.length || (pp >= recs[0].effectiveFrom && payRecApp(payCycleAt(docs, c.id, pp)));
+    });
     if(!yearOn) return;
     const offMonth = !monthOn;
     // [2026.10.15] "미대상도 나온다. 그 달 귀속 급여가 있는 거래처만"(요청) - 회사웹 filingApplicableAt과 같게 그 달 신고구분이 미대상이거나
