@@ -1573,6 +1573,7 @@ function smTogglePcView(){ try{ localStorage.setItem('sm_pc_view', window.SM_PC_
   :is(#tab-clients, #tab-pay, #tab-vat, #tab-close, #tab-corp, #tab-indiv, #tab-attend) .table-scroll > table,
   :is(#tab-clients, #tab-pay, #tab-vat, #tab-close, #tab-corp, #tab-indiv, #tab-attend) table.cl-table{ width:100%; }
   table.cl-table th, table.cl-table td{ padding:8px 12px; font-size:13px; white-space:nowrap; }
+  table.cl-table td.cl-addr{ max-width:280px; overflow:hidden; text-overflow:ellipsis; }   /* [2026.11.02] 사업장 주소 - 길면 … */
   /* [2026.10.16] 회사웹 상세구분 칩(본점·지점·성실·면세 등) + 메모 있으면 * (마우스를 올리면 내용) */
   .cl-subtag{ position:relative; display:inline-flex; align-items:center; margin-left:5px; padding:1px 7px; border-radius:8px; font-size:9.5px; font-weight:800; vertical-align:middle; }
   .cl-subtag sup{ position:absolute; top:-5px; right:-4px; font-size:10px; font-weight:900; line-height:1; cursor:help; }
@@ -5980,17 +5981,26 @@ function clSubTagsHtml(c){
     return `<span class="cl-subtag" style="background:${bg}; color:${fg};">${taxjEsc(x.key)}${note ? `<sup title="${escapeAttr(note)}" onclick="event.stopPropagation(); smAlert(${escapeAttr(JSON.stringify(x.key))}, ${escapeAttr(JSON.stringify(note))}, { icon:'*' })">*</sup>` : ''}</span>`;
   }).join('');
 }
+// [2026.11.02] "거래처 표에서 대표자 오른쪽에 사업장 주소"(요청) - 주소는 회사웹 거래처(s__clients.bizAddress)에서 사업자번호(없으면 상호)로 맞춰 읽음(조회만). 길면 … 마우스를 올리면 전체
+function clAddrMap(){
+  const docs = taxjFull && taxjFull.docs, list = docs ? ((docs.s__clients || {}).list || []) : [], dg = x => String(x || '').replace(/[^0-9]/g, '');
+  const byBiz = {}, byName = {};
+  list.forEach(x => { const a = x.bizAddress || ''; if(!a) return; const d = dg(x.bizNo); if(d && !byBiz[d]) byBiz[d] = a; const n = taxjNormName(x.name); if(n && !byName[n]) byName[n] = a; });
+  return c => (dg(c.biz) && byBiz[dg(c.biz)]) || byName[taxjNormName(c.name)] || '';
+}
+function clAddrTd(a){ return `<td class="cl-addr${a ? '' : ' cl-na'}" title="${escapeAttr(a)}">${a ? taxjEsc(a) : '-'}</td>`; }
 function renderReadonlyClientTable(list, terminated){
+  const addrOf = clAddrMap();
   const e = v => String(v == null || v === '' ? '-' : v).replace(/&/g,'&amp;').replace(/</g,'&lt;');
   if(!list.length) return '<div class="empty">아직 가져온 목록이 없어요. 오른쪽 위 엑셀 아이콘(Tax.J 엑셀 가져오기)으로 전체거래처가 들어 있는 엑셀을 올려주세요.</div>';
   const ec = c => c.type === '법인' ? '#0b5a78' : c.type === '개인' ? '#be185d' : 'inherit';
   const na = v => String(v == null ? '' : v).trim() ? '' : 'cl-na';
   return `<div class="table-scroll"><table class="cl-table">
-    <thead><tr><th>순번</th><th>수임구분</th><th>사업자구분</th><th class="cl-name-th">상호명</th><th>사업자번호</th><th>법인등록번호</th><th>대표자</th><th>수임료</th><th>계약일</th><th>수임시작일</th>${terminated ? '<th>해지일</th><th>종료월</th><th>해지사유</th>' : ''}</tr></thead>
+    <thead><tr><th>순번</th><th>수임구분</th><th>사업자구분</th><th class="cl-name-th">상호명</th><th>사업자번호</th><th>법인등록번호</th><th>대표자</th><th>사업장 주소</th><th>수임료</th><th>계약일</th><th>수임시작일</th>${terminated ? '<th>해지일</th><th>종료월</th><th>해지사유</th>' : ''}</tr></thead>
     <tbody>${list.map(c => `<tr>
       <td class="${na(c.seq)}">${e(c.seq)}</td><td class="cl-taxtype ${c.taxType === '기장대행' ? 'kj' : c.taxType === '신고대리' ? 'sd' : ''} ${na(c.taxType)}">${e(c.taxType)}</td>
       <td style="color:${ec(c)}; font-weight:800;">${e(c.type)}</td>
-      <td class="cl-name-cell" style="color:${ec(c)}; font-weight:800;">${e(c.name)}${clSubTagsHtml(c)}</td><td class="${na(c.biz)}">${e(c.biz)}</td><td class="${c.type === '개인' ? 'cl-off' : na(c.corpNo)}">${e(c.corpNo)}</td><td class="${na(c.ceo)}">${e(c.ceo)}</td><td class="num ${na(c.fee)}">${e(c.fee)}</td>
+      <td class="cl-name-cell" style="color:${ec(c)}; font-weight:800;">${e(c.name)}${clSubTagsHtml(c)}</td><td class="${na(c.biz)}">${e(c.biz)}</td><td class="${c.type === '개인' ? 'cl-off' : na(c.corpNo)}">${e(c.corpNo)}</td><td class="${na(c.ceo)}">${e(c.ceo)}</td>${clAddrTd(addrOf(c))}<td class="num ${na(c.fee)}">${e(c.fee)}</td>
       <td class="${na(c.contractDate)}">${e(c.contractDate)}</td><td class="${na(c.start)}">${e(c.start)}</td>
       ${terminated ? `<td class="${na(c.terminationDate)}">${e(c.terminationDate)}</td><td class="${na(c.terminationMonth)}">${e(c.terminationMonth)}</td><td class="${na(c.terminationReason)}">${e(c.terminationReason)}</td>` : ''}
     </tr>`).join('')}</tbody></table></div>`;
@@ -6062,6 +6072,7 @@ function clientAccountsHtml(){
     <tbody>${rows || `<tr><td colspan="9"><div class="empty" style="padding:18px;">${q ? '검색 결과가 없어요.' : '거래처가 없어요.'}</div></td></tr>`}</tbody></table></div>`;
 }
 function renderClients(){
+  const addrOf = clAddrMap();
   const el = document.getElementById('tab-clients');
   if(clientsView === 'accounts'){ el.innerHTML = `<div class="card">${taxjLiveBarHtml()}${clientAccountsHtml()}</div>`; el.classList.add('vat-wide'); return; }   // [2026.10.14] 계정정보
   el.innerHTML = `
@@ -6092,7 +6103,7 @@ function renderClients(){
       </div>
       <div class="table-scroll">
       <table class="cl-table">
-        <thead><tr><th>순번</th><th>수임구분</th><th>사업자구분</th><th class="cl-name-th">상호명</th><th>사업자번호</th><th>법인등록번호</th><th>대표자</th><th>수임료</th><th>계약일</th><th>수임시작일</th><th style="text-align:center;">관리</th></tr></thead>
+        <thead><tr><th>순번</th><th>수임구분</th><th>사업자구분</th><th class="cl-name-th">상호명</th><th>사업자번호</th><th>법인등록번호</th><th>대표자</th><th>사업장 주소</th><th>수임료</th><th>계약일</th><th>수임시작일</th><th style="text-align:center;">관리</th></tr></thead>
         <tbody>
           ${sortedClients().map(c => {
             const ov = c.overrides || {};
@@ -6111,6 +6122,7 @@ function renderClients(){
               <td class="${na('biz', c.biz)}">${cellV('biz', c.biz)}</td>
               <td class="${c.type === '개인' ? 'cl-off' : na('corpNo', c.corpNo)}">${cellV('corpNo', c.corpNo)}</td>
               <td class="${na('ceo', c.ceo)}">${cellV('ceo', c.ceo)}</td>
+              ${clAddrTd(addrOf(c))}
               <td class="num ${c.taxType === '신고대리' ? 'cl-off' : na('fee', c.fee)}">${cellV('fee', feeTxt)}</td>
               <td class="${na('contractDate', c.contractDate)}">${cellV('contractDate', c.contractDate)}</td>
               <td class="${na('start', c.start)}">${cellV('start', c.start)}</td>
