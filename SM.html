@@ -1437,9 +1437,10 @@ function smTogglePcView(){ try{ localStorage.setItem('sm_pc_view', window.SM_PC_
   }
 
   /* [2026.10.20] 새로고침 직후 시트를 불러오기 전에는 본문 대신 "불러오는 중…" (왼쪽 메뉴·머리글은 그대로) */
-  html.sm-loading main > .tab{ visibility:hidden; }
-  html.sm-loading main{ position:relative; }
-  html.sm-loading main::before{ content:'불러오는 중…'; position:absolute; left:0; right:0; top:140px; text-align:center; font-size:14px; font-weight:800; color:var(--primary-dark); z-index:5; animation:smLoadPulse 1.2s ease-in-out infinite; }
+  /* [2026.11.02] "불러오는 중 안내가 제목과 겹쳐 보임 - 회사웹처럼 불러오는 중만"(요청) - 제목·탭·안내띠까지 본문 전체를 가리고 글자만 가운데 */
+  html.sm-loading main > *{ visibility:hidden; }
+  html.sm-loading main{ position:relative; min-height:60vh; }
+  html.sm-loading main::before{ content:'불러오는 중…'; position:absolute; left:0; right:0; top:28vh; text-align:center; font-size:14px; font-weight:800; color:var(--primary-dark); z-index:5; animation:smLoadPulse 1.2s ease-in-out infinite; }
   html.sm-loading .sm-fab{ display:none !important; }
   @keyframes smLoadPulse{ 0%,100%{ opacity:.4; } 50%{ opacity:1; } }
   #connectingOverlay{ position:fixed; inset:0; z-index:1100; background:rgba(255,255,255,.55); display:flex; align-items:center; justify-content:center; }
