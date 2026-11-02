@@ -264,7 +264,7 @@ function smTogglePcView(){ try{ localStorage.setItem('sm_pc_view', window.SM_PC_
   .toolbar{
     display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:16px;
   }
-  select, input[type=text], input[type=date], input[type=number]{
+  select, input[type=text], input[type=password], input[type=date], input[type=number]{   /* [2026.11.02] 비밀번호 칸도 같은 모양(검은 테두리 → 다른 입력칸과 같게) */
     font-family:inherit; font-size:13px;
     padding:8px 12px;
     border:1px solid var(--border);
@@ -552,7 +552,7 @@ function smTogglePcView(){ try{ localStorage.setItem('sm_pc_view', window.SM_PC_
   .card .desc{ font-size:13.5px; color:var(--muted); }
   .page-head .subtitle{ font-size:14px; }
 
-  select, input[type=text], input[type=date], input[type=number]{ font-size:14px; border:1px solid var(--border); background:#fff; color:var(--text); }
+  select, input[type=text], input[type=password], input[type=date], input[type=number]{ font-size:14px; border:1px solid var(--border); background:#fff; color:var(--text); }
   button.btn{ font-size:13.5px; border:1px solid var(--border); color:var(--text); }
   button.btn.xs{ font-size:12.5px; padding:6px 11px; }
   button.btn.ghost{ color:var(--slate); }
@@ -1052,6 +1052,12 @@ function smTogglePcView(){ try{ localStorage.setItem('sm_pc_view', window.SM_PC_
   .task-list li:hover .row-actions{ opacity:1; }
   .notice-item{ align-items:center; cursor:default; }
   .notice-text{ flex:1; cursor:pointer; }
+  /* [2026.11.02] 체크리스트 이월 표시 */
+  .notice-carry{ display:inline-block; margin-left:6px; padding:0 7px; border-radius:999px; font-size:10.5px; font-weight:700; line-height:17px; vertical-align:1px; background:var(--primary-soft); color:var(--primary-dark); text-decoration:none; }
+  .notice-carry.to{ background:#f1ecef; color:var(--muted); }
+  .notice-item.carried .notice-text{ color:var(--muted-soft); font-weight:400 !important; }
+  .notice-item.carried input[type=checkbox]{ opacity:.35; }
+  .wl-navbtn:disabled{ opacity:.35; cursor:default; }
   .notice-item .row-actions{ opacity:0; transition:opacity .12s; }
   .notice-item:hover .row-actions{ opacity:1; }
   .notice-item .row-actions .icon-btn{ width:24px; height:24px; }
@@ -1124,8 +1130,11 @@ function smTogglePcView(){ try{ localStorage.setItem('sm_pc_view', window.SM_PC_
   .pay-maintabs{ border-bottom:1px solid var(--border); padding-bottom:10px; margin-bottom:14px !important; }
   /* [2026.11.02] works 위 탭(거래처~종소세)·하위메뉴 - 가운데 */
   .page-head .works-tabs, .page-head .works-subtabs{ justify-content:center; }
-  .page-head .works-subtabs{ margin-bottom:16px; }
-  .page-head .works-subtabs .cl-subtab{ font-size:13px; padding:5px 11px; }
+  /* [2026.11.02] "하위메뉴 선택될 때 컬러 다르게·둥근 칩"(요청) - 흰 둥근 묶음 안에서 고른 것만 분홍으로 채움 */
+  .page-head .works-subtabs{ width:max-content; max-width:100%; margin:0 auto 16px; padding:4px; gap:4px; background:#fff; border:1px solid var(--border); border-radius:999px; }
+  .page-head .works-subtabs .cl-subtab{ font-size:13px; padding:5px 13px; border-radius:999px; }
+  .page-head .works-subtabs .cl-subtab:hover{ color:var(--primary-dark); }
+  .page-head .works-subtabs .cl-subtab.on{ background:var(--primary); color:#fff; }
   /* [2026.10.14] 체크리스트 중요 표시(별) */
   .notice-star{ flex:none; border:none; background:transparent; padding:0 1px; margin-top:-1px; font-size:15px; line-height:1.2; color:var(--muted-soft); cursor:pointer; opacity:.55; }
   .notice-star:hover{ opacity:1; color:#f5b544; }
@@ -1150,8 +1159,16 @@ function smTogglePcView(){ try{ localStorage.setItem('sm_pc_view', window.SM_PC_
   .cl-dt{ font:inherit; font-size:12.5px; min-width:46px; height:26px; padding:0 6px; border:1px solid transparent; border-radius:6px; background:transparent; color:var(--text); cursor:pointer; white-space:nowrap; }
   .cl-dt:hover{ border-color:var(--border); background:#fff; }
   /* [2026.10.27] 신고 메뉴별 중요사항 띠(요청: "신고메뉴마다 중요사항 고정") - 화면 위쪽에 항상 펼쳐 둠 */
-  .mn-band{ background:#fffaf0; border:1px solid #f1dfb4; border-radius:var(--radius-md); padding:8px 12px; margin-bottom:12px; font-size:12.5px; line-height:1.5; }
-  .mn-band .mn-head{ font-weight:800; color:#a16207; margin-bottom:2px; }
+  /* [2026.11.02] 중요사항 = 카드 밖 오른쪽 위 칩 + 마우스 올림·누름 창 */
+  .mn-band{ display:flex; justify-content:flex-end; margin-bottom:8px; font-size:12.5px; line-height:1.5; }
+  .mn-wrap{ position:relative; }
+  .mn-chip{ font:inherit; font-size:12.5px; font-weight:800; color:#a16207; background:#fffaf0; border:1px solid #f1dfb4; border-radius:999px; padding:4px 12px; cursor:pointer; display:inline-flex; align-items:center; gap:6px; }
+  .mn-chip:hover, .mn-wrap.open .mn-chip{ border-color:#e3c27a; }
+  .mn-cnt{ background:#a16207; color:#fff; border-radius:999px; font-size:11px; padding:0 6px; line-height:17px; }
+  .mn-pop{ display:none; position:absolute; right:0; top:100%; padding-top:6px; z-index:60; width:min(420px, calc(100vw - 40px)); }
+  .mn-wrap:hover .mn-pop, .mn-wrap.open .mn-pop, .mn-wrap:focus-within .mn-pop{ display:block; }
+  .mn-pop-in{ background:#fffaf0; border:1px solid #f1dfb4; border-radius:12px; padding:10px 12px; box-shadow:var(--shadow-md); text-align:left; }
+  .mn-band .mn-empty{ color:var(--muted); margin-bottom:2px; }
   .mn-band .mn-row{ display:flex; gap:6px; align-items:flex-start; }
   .mn-band .mn-no{ color:#b45309; font-weight:700; min-width:16px; }
   .mn-band .mn-txt{ flex:1; white-space:pre-wrap; word-break:break-all; }
@@ -1173,6 +1190,19 @@ function smTogglePcView(){ try{ localStorage.setItem('sm_pc_view', window.SM_PC_
   .cl-dt.vp-memo.has{ color:var(--primary-dark); }
   .cl-dt.vp-memo svg{ vertical-align:middle; }
   .cl-pop-row{ display:flex; gap:4px; flex-wrap:wrap; }
+  /* [2026.11.02] 새 버전 안내 - 화면 정중앙 분홍 창 */
+  .sm-upd-wrap{ z-index:100000; }
+  .sm-upd{ width:min(340px, calc(100vw - 40px)); background:var(--primary); color:#fff; border-radius:22px; padding:26px 22px 20px; text-align:center; box-shadow:0 24px 48px -12px rgba(150,40,90,.5); transform:translateY(8px) scale(.98); transition:transform .15s; }
+  .sm-upd-wrap.show .sm-upd{ transform:none; }
+  .sm-upd-ic{ width:44px; height:44px; margin:0 auto 10px; border-radius:50%; background:#fff; color:var(--primary-dark); display:flex; align-items:center; justify-content:center; font-size:22px; font-weight:800; }
+  .sm-upd-title{ font-size:17px; font-weight:800; margin-bottom:6px; }
+  .sm-upd-msg{ font-size:13px; line-height:1.55; opacity:.95; }
+  .sm-upd-btns{ display:flex; gap:8px; margin-top:18px; }
+  .sm-upd-btns button{ flex:1; height:42px; border-radius:12px; border:none; font:inherit; font-size:14px; font-weight:800; cursor:pointer; }
+  .sm-upd-btns [data-a="later"]{ background:rgba(255,255,255,.22); color:#fff; }
+  .sm-upd-btns [data-a="go"]{ background:#fff; color:var(--primary-dark); }
+  .sm-upd-btns button:focus{ outline:none; }
+  .cl-last-imp{ text-align:right; font-size:11.5px; color:var(--muted-soft); margin:6px 6px 0; }   /* [2026.11.02] 거래처 마지막 가져오기 - 카드 밖 오른쪽 아래 */
   .cl-pop.sm-quick{ width:auto; padding:6px; }   /* [2026.11.02] 오른쪽 클릭 빠른 입력(- / 미해당) - 내용 폭만큼 */
   .cl-pop.sm-quick .cl-pop-row button{ min-width:32px; }
   .cl-pop-row button{ font:inherit; font-size:12px; border:1px solid var(--border); background:var(--bg); color:var(--text); border-radius:7px; padding:4px 8px; cursor:pointer; }
@@ -1525,6 +1555,11 @@ function smTogglePcView(){ try{ localStorage.setItem('sm_pc_view', window.SM_PC_
      표가 화면보다 넓으면 지금처럼 카드 폭 안에서 가로 스크롤 */
   :is(#tab-clients, #tab-pay, #tab-vat, #tab-close, #tab-corp, #tab-indiv, #tab-attend) > .card:has(.table-scroll){ width:fit-content; max-width:100%; margin-left:auto; margin-right:auto; box-sizing:border-box; }   /* 분야별로 표가 여러 개 쌓이는 화면(링크·계정·서식·법령)은 표 폭을 서로 맞춤 */
   table.cl-table{ width:auto; }
+  /* [2026.11.02] "대메뉴 안 하위메뉴끼리 폭이 같게"(요청) - works(거래처~종소세)·근태경비는 카드를 본문 폭 전체로, 표도 카드 폭에 맞게 늘림(넓은 표는 그대로 가로 스크롤).
+     그래서 같은 대메뉴 안에서 하위메뉴를 옮겨 다녀도 카드 테두리가 같은 자리 */
+  :is(#tab-clients, #tab-pay, #tab-vat, #tab-close, #tab-corp, #tab-indiv, #tab-attend) > .card:has(.table-scroll){ width:auto; }
+  :is(#tab-clients, #tab-pay, #tab-vat, #tab-close, #tab-corp, #tab-indiv, #tab-attend) .table-scroll > table,
+  :is(#tab-clients, #tab-pay, #tab-vat, #tab-close, #tab-corp, #tab-indiv, #tab-attend) table.cl-table{ width:100%; }
   table.cl-table th, table.cl-table td{ padding:8px 12px; font-size:13px; white-space:nowrap; }
   /* [2026.10.16] 회사웹 상세구분 칩(본점·지점·성실·면세 등) + 메모 있으면 * (마우스를 올리면 내용) */
   .cl-subtag{ position:relative; display:inline-flex; align-items:center; margin-left:5px; padding:1px 7px; border-radius:8px; font-size:9.5px; font-weight:800; vertical-align:middle; }
@@ -1599,8 +1634,8 @@ function smTogglePcView(){ try{ localStorage.setItem('sm_pc_view', window.SM_PC_
       <button class="quick-btn" onclick="openTrashModal()" title="휴지통" aria-label="휴지통">
         <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/></svg>
       </button>
-      <button class="quick-btn accent" onclick="quickDeploy()" title="퀵배포" aria-label="퀵배포">
-        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l7 4v6c0 5-3 8-7 10-4-2-7-5-7-10V6l7-4z"/><path d="M9 12l2 2 4-4"/></svg>
+      <button class="quick-btn accent" onclick="quickDeploy()" title="퀵배포 (GitHub에 SM.html 올리기)" aria-label="퀵배포">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14.9A7 7 0 1 1 15.7 8h1.8a4.5 4.5 0 0 1 2.5 8.2"/><polyline points="12 12 12 21"/><polyline points="8 16 12 12 16 16"/></svg><!-- [2026.11.02] "퀵배포 아이콘을 직관적으로 - 회사웹과 같은 것"(요청) - 방패 → 구름 업로드 -->
       </button>
     </div>
     <div class="side-nav" id="sidebarNav"></div>
@@ -2162,20 +2197,21 @@ const ICONS = {
 const TABS = [
   {id:'home',     label:'홈'},
   // [2026.10.15] "To do 메뉴 삭제하고 내용을 홈으로"(요청) - To do 메뉴를 없애고 홈을 누르면 To do 화면(체크리스트·Today)이 나옴. 예전 홈(요약·달력)은 안 보임
-  {id:'accounts', label:'계정'},
-  {id:'links',    label:'링크'},
-  {id:'manuals',  label:'매뉴얼'},
-  {id:'forms',    label:'서식'},   // [2026.10.16] 서식·법령 대메뉴(요청)
-  {id:'laws',     label:'법령'},
-  {id:'inner',    label:'내부'},
-  {id:'attend',   label:'근태경비'},
+  // [2026.11.02] "계정은 내부 › 회사정보 위 '개인계정'으로, 법령 대메뉴는 삭제(매뉴얼에서 활용), 검토표는 설정 › 기본설정 위 '검토표 계산식'으로"(요청)
+  //   계정·검토표 화면(tab-accounts·tab-review)과 법령 자료는 그대로 두고 왼쪽 메뉴 자리만 옮김(NAV_PARENT). c = 아이콘 색(옮기기 전 자리 색 그대로)
+  {id:'links',    label:'링크', c:2},
+  {id:'manuals',  label:'매뉴얼', c:3},
+  {id:'forms',    label:'서식', c:4},   // [2026.10.16] 서식·법령 대메뉴(요청)
+  {id:'inner',    label:'내부', c:0},
+  {id:'attend',   label:'근태경비', c:1},
   // [2026.11.02] "원천세·부가세·결산·법인세·종소세·거래처를 works 메뉴로 통합 - 그 안에서 상단에 거래처·결산·원천세·부가세·법인세·종소세 + 각 하위메뉴"(요청)
   //   왼쪽 메뉴에는 works 하나만, 화면 위에 WORKS_TABS 탭과 하위메뉴(worksHeadHtml). 각 화면(tab-pay 등)은 그대로 씀
   {id:'works',    label:'works', c:2},
-  {id:'review',   label:'검토표', c:2},   // c = 아이콘 색(메뉴를 합치기 전 자리 색 그대로)
   {id:'taxj',     label:'Tax.J', c:3},
   {id:'settings', label:'설정', c:4},
 ];
+// 다른 대메뉴의 하위메뉴로 옮긴 화면: 화면 id → [대메뉴 id, 하위메뉴 이름]
+const NAV_PARENT = { accounts:['inner','개인계정'], review:['settings','검토표 계산식'] };
 const WORKS_TABS = [['clients','거래처'], ['close','결산'], ['pay','원천세'], ['vat','부가세'], ['corp','법인세'], ['indiv','종소세']];
 function isWorksTab(id){ return WORKS_TABS.some(x => x[0] === id); }
 let worksLast = (() => { try{ const v = localStorage.getItem('sm_works_last'); return isWorksTab(v) ? v : 'clients'; }catch(e){ return 'clients'; } })();
@@ -2225,6 +2261,7 @@ const NAV_SUBMENUS = {
   ],
   // [2026.10.13] 내부 메뉴(요청 - 회사정보·팀정보·세무일정)
   inner: [
+    {js:"switchTab('accounts')", label:'개인계정'},   // [2026.11.02] 계정 메뉴를 여기로(요청)
     {js:"setInnerView('corp')",  label:'회사정보'},
     {js:"setInnerView('team')",  label:'팀정보'},
     {js:"setInnerView('sched')", label:'세무일정'},
@@ -2256,7 +2293,9 @@ const NAV_SUBMENUS = {
     {js:"setClientsView('terminated')", label:'해지거래처'},
   ],
   settings: [
+    {js:"switchTab('review')", label:'검토표 계산식'},   // [2026.11.02] 검토표 대메뉴를 여기로(요청)
     {anchor:'settings-basic',   label:'기본 설정'},
+    {anchor:'settings-password', label:'비밀번호'},   // [2026.11.02] 보관함 비밀번호 바꾸기(요청)
     {anchor:'settings-google',  label:'Google 연동'},
     {anchor:'settings-deploy',  label:'GitHub 배포'},
     {anchor:'settings-recurring', label:'반복 할 일'},
@@ -2282,12 +2321,12 @@ function goToSettingsSection(anchor){
 let activeTab = 'home';
 
 // [2026.10.22] "매뉴얼 하위메뉴 누르면 변화가 없어"(요청) - 지금 보고 있는 분야를 하위메뉴에서 표시(매뉴얼·서식·법령)
-function subCur(id){ try{ return id === 'works' ? ((WORKS_TABS.find(x => x[0] === activeTab) || [])[1] || null) : id === 'manuals' ? (manualCat || '전체') : (id === 'forms' || id === 'laws') ? (LIB[id].sel || '전체') : null; }catch(e){ return null; } }
+function subCur(id){ try{ if(NAV_PARENT[activeTab] && NAV_PARENT[activeTab][0] === id) return NAV_PARENT[activeTab][1]; if(id === 'inner' && activeTab === 'inner') return (INNER_VIEWS.find(x => x[0] === innerView) || [])[1] || null; return id === 'works' ? ((WORKS_TABS.find(x => x[0] === activeTab) || [])[1] || null) : id === 'manuals' ? (manualCat || '전체') : (id === 'forms' || id === 'laws') ? (LIB[id].sel || '전체') : null; }catch(e){ return null; } }
 function renderNav(){
   const sb = document.getElementById('sidebarNav');
   sb.innerHTML = TABS.map((t, i) => {
     const sub = t.id === 'works' ? WORKS_TABS.map(([k, l]) => ({ js:`switchTab('${k}')`, label:l })) : NAV_SUBMENUS[t.id];
-    const on = t.id === activeTab || (t.id === 'works' && isWorksTab(activeTab));
+    const on = t.id === activeTab || (t.id === 'works' && isWorksTab(activeTab)) || (NAV_PARENT[activeTab] || [])[0] === t.id;
     const btn = `
       <button class="nav-item ${on?'active':''}" data-c="${t.c != null ? t.c : i % 6}"
               title="${t.label}" onclick="switchTab('${t.id}')">
@@ -2329,8 +2368,9 @@ function pageSubtitle(){
 function updatePageHead(){
   const el = document.getElementById('pageHead'); if(!el) return;
   const wt = WORKS_TABS.find(x => x[0] === activeTab);
-  const title = wt ? wt[1] : (TABS.find(t => t.id === activeTab) || {}).label || (TAB_TITLES[activeTab] || [''])[0];
-  const sub = pageSubtitle();
+  const np = NAV_PARENT[activeTab];
+  const title = wt ? wt[1] : np ? (TABS.find(t => t.id === np[0]) || {}).label : (TABS.find(t => t.id === activeTab) || {}).label || (TAB_TITLES[activeTab] || [''])[0];
+  const sub = np ? np[1] : pageSubtitle();
   const html = (wt ? worksHeadHtml() : '') + `<div class="underline-bar"></div><h1>${title}</h1>${sub ? `<div class="page-sub">${taxjEsc(sub)}</div>` : ''}`;   // [2026.11.02] works 화면은 위에 탭·하위메뉴
   if(el._html === html) return;   // [2026.10.16] 깜빡임(요청) - 같은 제목이면 다시 그리지 않음
   el._html = html; el.innerHTML = html;
@@ -2872,6 +2912,8 @@ let chkPickerOpen = false;
 let checklistSearch = '';
 let checklistSearchOpen = false;
 const SEARCH_SVG = '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>';
+// [2026.11.02] Tax.J 불러오기·새로고침 아이콘(거래처·Tax.J 메뉴 등 같은 모양)
+const ICON_TAXJ_LOAD = '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 4v5h-5"/><path d="M12 8v5l3 2"/></svg>';
 const UPLOAD_XLSX_SVG = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v12"/><path d="M7 11l5 5 5-5"/><path d="M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg>';
 function checklistYear(){ return new Date().getFullYear(); }
 function selectWorklistMonth(m){
@@ -2880,6 +2922,7 @@ function selectWorklistMonth(m){
   chkPickerOpen = false;
   renderWorklist();
 }
+function shiftChecklistMonth(d){ const n = parseInt(worklistSelMonth, 10) + d; if(n >= 1 && n <= 12) selectWorklistMonth(`${n}월`); }   // [2026.11.02] 체크리스트는 연도 없이 1월~12월
 function toggleChkPicker(e){ if(e) e.stopPropagation(); chkPickerOpen = !chkPickerOpen; renderWorklist(); }
 document.addEventListener('click', () => { if(chkPickerOpen){ chkPickerOpen = false; renderWorklist(); } });
 
@@ -2954,26 +2997,29 @@ async function deleteChecklistItem(month, idx){
 // 옮긴 항목은 다음 달 목록 끝에 붙고(중요 표시·이력 유지, 이력에 '다음 달로 이월' 기록), 이 달 목록에서는 빠짐.
 // 마스터 시트에서 온 항목은 다시 불러와도 원래 달에 되살아나지 않도록 숨김 처리하고, 다음 달에서는 직접 추가한 항목처럼 유지.
 // 다음 달에 같은 내용이 이미 있으면 중복으로 넣지 않고 이 달에서만 뺌. 체크리스트는 연도 없이 '1월~12월'로만 저장돼서 12월은 이월하지 않음.
+// [2026.11.02] "이월된 건지 표시, 10월에도 11월에도 있는 게 낫나?"(요청) - 이 달 목록에서 빼지 않고 '→ 11월로 이월'로 남김(흐리게, 체크 불가, 진행률·남은 건수에서 뺌).
+//   다음 달에는 '10월에서 이월' 표시. 다음 달에서 체크·수정해도 이 달 기록은 그대로
 async function carryChecklistToNextMonth(month){
   const n = parseInt(month, 10);
   if(isNaN(n) || n >= 12) return;
   const next = `${n + 1}월`;
   const src = worklistChecklist[month] || [];
-  const left = src.filter(x => !x.done);
+  const left = src.filter(x => !x.done && !x.carriedTo);
   if(!left.length) return;
-  if(!(await smConfirm(`남은 ${left.length}건을 ${next}로 이월할까요?`, `${month}에 완료하지 않은 항목이 ${next} 체크리스트로 옮겨지고, ${month} 목록에서는 빠져요.`, { icon:'→', okText:'이월' }))) return;
+  if(!(await smConfirm(`남은 ${left.length}건을 ${next}로 이월할까요?`, `${next} 체크리스트에 '${month}에서 이월'로 넘어가고, ${month}에는 '→ ${next}로 이월'로 남아요.`, { icon:'→', okText:'이월' }))) return;
   const dst = (worklistChecklist[next] = worklistChecklist[next] || []);
   const have = new Set(dst.map(x => (x.text || '').trim()));
   left.forEach(item => {
-    if(item.source !== 'user') hideMasterKey('hiddenMasterChecklist', month + '|' + (item.origText || item.text));
+    item.carriedTo = next;
+    pushHist(item, '다음 달로 이월', [{ label:'월', from:month, to:next }]);
     if(have.has((item.text || '').trim())) return;
-    const moved = Object.assign({}, item, { source:'user', movedFrom: item.movedFrom || month });
-    delete moved.origText;
-    pushHist(moved, '다음 달로 이월', [{ label:'월', from:month, to:next }]);
+    const moved = JSON.parse(JSON.stringify(item));
+    delete moved.carriedTo; delete moved.origText;
+    moved.source = 'user'; moved.movedFrom = month; moved.done = false;
+    if(moved.id != null) moved.id = Date.now() + Math.random();
     dst.push(moved);
     have.add((item.text || '').trim());
   });
-  worklistChecklist[month] = src.filter(x => x.done);
   worklistSelMonth = next;
   renderAll();
 }
@@ -3028,7 +3074,8 @@ function renderWorklist(){
   const selIdx = months.indexOf(worklistSelMonth);
 
   const refSections = months.length ? [worklistSelMonth].map(m => {
-    const items = worklistChecklist[m] || [];
+    const allItems = worklistChecklist[m] || [];
+    const items = allItems.filter(x => !x.carriedTo);   // [2026.11.02] 다음 달로 이월한 항목은 진행률·남은 건수에서 뺌(목록에는 '→ N월로 이월'로 남김)
     const doneN = items.filter(x => x.done).length;
     const sched = worklistSchedule[m] || [];
     return `
@@ -3045,6 +3092,7 @@ function renderWorklist(){
         </div>
       </div>
       <div class="notice-months">
+        <button class="wl-navbtn" onclick="shiftChecklistMonth(-1)" title="이전 달" aria-label="이전 달" ${m === '1월' ? 'disabled' : ''}>‹</button><!-- [2026.11.02] 연월 좌우 화살표(요청) - Today 날짜 화살표와 같은 모양 -->
         <div class="cal-ym-wrap">
           <button class="cal-ym notice-ym" onclick="toggleChkPicker(event)" title="눌러서 다른 달 보기">${checklistYear()}년 ${m}</button>
           ${chkPickerOpen ? `
@@ -3060,20 +3108,21 @@ function renderWorklist(){
             </div>
           </div>` : ''}
         </div>
+        <button class="wl-navbtn" onclick="shiftChecklistMonth(1)" title="다음 달" aria-label="다음 달" ${m === '12월' ? 'disabled' : ''}>›</button>
       </div>
       ${items.length ? `<div class="notice-progress"><span style="width:${Math.round(doneN / items.length * 100)}%"></span></div>
       <div class="notice-count">${doneN} / ${items.length} 완료</div>` : ''}
       <div class="notice-items" id="noticeItems">
-        ${checklistSearch.trim() ? checklistSearchHtml() : items.map((item, idx) => ({ item, idx })).sort((a, b) => (!!b.item.important - !!a.item.important) || (a.idx - b.idx)).map(({ item, idx }) => `
-          <div class="notice-item ${item.done ? 'done' : ''} ${item.important ? 'imp' : ''}">
-            <input type="checkbox" ${item.done ? 'checked' : ''} onchange="toggleWorklistCheck('${m}', ${idx})">
+        ${checklistSearch.trim() ? checklistSearchHtml() : allItems.map((item, idx) => ({ item, idx })).sort((a, b) => (!!a.item.carriedTo - !!b.item.carriedTo) || (!!b.item.important - !!a.item.important) || (a.idx - b.idx)).map(({ item, idx }) => `
+          <div class="notice-item ${item.done ? 'done' : ''} ${item.important ? 'imp' : ''}${item.carriedTo ? ' carried' : ''}">
+            <input type="checkbox" ${item.done ? 'checked' : ''} ${item.carriedTo ? `disabled title="${escapeAttr(item.carriedTo)}로 이월한 항목 - ${escapeAttr(item.carriedTo)}에서 체크해요"` : ''} onchange="toggleWorklistCheck('${m}', ${idx})">
             <button type="button" class="notice-star ${item.important ? 'on' : ''}" onclick="toggleChecklistImportant('${m}', ${idx})" title="${item.important ? '중요 해제' : '중요 - 맨 위로'}" aria-label="중요">${item.important ? '★' : '☆'}</button>
-            <span class="notice-text" onclick="toggleWorklistCheck('${m}', ${idx})">${item.text}</span>
+            <span class="notice-text" onclick="${item.carriedTo ? `selectWorklistMonth('${escapeAttr(item.carriedTo)}')` : `toggleWorklistCheck('${m}', ${idx})`}">${item.text}${item.carriedTo ? ` <span class="notice-carry to" title="눌러서 ${escapeAttr(item.carriedTo)}로">→ ${taxjEsc(item.carriedTo)}로 이월</span>` : item.movedFrom ? ` <span class="notice-carry" title="${escapeAttr(item.movedFrom)}에서 넘어온 항목">${taxjEsc(item.movedFrom)}에서 이월</span>` : ''}</span>
             ${actionIcons(`editChecklistItem('${m}', ${idx})`, `showChecklistHistory('${m}', ${idx})`, `deleteChecklistItem('${m}', ${idx})`)}
           </div>`).join('') || '<div class="empty" style="padding:10px 0;">이 달의 체크리스트가 없어요.</div>'}
       </div>
       ${checklistSearch.trim() ? '' : `<button class="notice-add" onclick="addChecklistItem('${m}')">+ 항목 추가</button>`}
-      ${(!checklistSearch.trim() && m !== '12월' && items.some(x => !x.done)) ? `<button class="notice-add" onclick="carryChecklistToNextMonth('${m}')" title="완료하지 않은 항목을 다음 달 체크리스트로 옮겨요">→ 남은 ${items.filter(x => !x.done).length}건 다음 달로 이월</button>` : ''}
+      ${(!checklistSearch.trim() && m !== '12월' && items.some(x => !x.done)) ? `<button class="notice-add" onclick="carryChecklistToNextMonth('${m}')" title="완료하지 않은 항목을 다음 달 체크리스트로 넘겨요(이 달에는 '→ 다음 달로 이월'로 남아요)">→ 남은 ${items.filter(x => !x.done).length}건 다음 달로 이월</button>` : ''}
       ${sched.length ? `
         <div class="notice-sched">
           <div class="notice-sched-label">주요 세무일정</div>
@@ -3135,9 +3184,10 @@ function renderWorklist(){
 /* [2026.10.20] 플로팅 체크리스트·Today·Memo(요청, 시안 B) - 다른 메뉴에서도 화면 전환 없이 보고 작성.
    홈 화면의 그 카드를 팝업으로 잠깐 옮겨 오고(닫으면 제자리로), 홈이 다시 그려지면 새 카드로 바꿔 끼움 */
 const SM_FAB = [
-  ['check', '체크리스트', '<svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6h11"/><path d="M9 12h11"/><path d="M9 18h11"/><path d="m3.5 6 1.5 1.5L7.5 5"/><path d="m3.5 12 1.5 1.5L7.5 11"/><path d="m3.5 18 1.5 1.5L7.5 17"/></svg>'],
-  ['today', 'Today', '<svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/><path d="m9 16 2 2 4-4"/></svg>'],
-  ['memo', 'Memo', '<svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8"/><path d="M8 17h5"/></svg>']];
+  // [2026.11.02] "플로팅 메뉴가 직관적이지 않음 - 체크리스트 별표, 메모 M"(요청) · Today(할 일)는 체크 표시 네모
+  ['check', '체크리스트', '<svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.2l2.7 5.5 6 .9-4.35 4.25 1.03 6-5.38-2.83-5.38 2.83 1.03-6L3.3 9.6l6-.9z"/></svg>'],
+  ['today', 'Today', '<svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="3.5" width="17" height="17" rx="4"/><path d="m8 12.2 2.8 2.8 5.4-5.6"/></svg>'],
+  ['memo', 'Memo', '<svg viewBox="0 0 24 24" width="19" height="19"><text x="12" y="17.2" text-anchor="middle" font-size="15.5" font-weight="900" font-family="inherit" fill="currentColor">M</text></svg>']];
 let smFabOpenK = '', smFabHome = null;   // smFabHome = { el, mark(제자리 표시) }
 function smFabCardOf(k){
   const root = document.getElementById('tab-worklist');
@@ -5304,7 +5354,7 @@ function renderClose(){
       ${d ? `<button class="sm-tool-ic" onclick="closeBulk()" title="날짜 일괄 입력 - 왼쪽 체크박스로 고른 거래처(없으면 보이는 전체)에 오늘 또는 고른 날짜를 넣어요" aria-label="날짜 일괄 입력">${ICON_BULK}</button>` : ''}
       <button class="sm-tool-ic" onclick="closeAddCol()" title="항목 추가" aria-label="항목 추가">${ICON_PLUS}</button>
       ${d ? `<button class="sm-tool-ic" onclick="closeCarry()" title="다음 회차로 이월 - 항목마다 안 넘김·항목만·항목+내용을 골라 넘겨요(다음 회차가 없으면 새로 만들면서)" aria-label="다음 회차로 이월">${ICON_CARRY}</button>` : ''}
-      <button class="btn ghost xs" onclick="document.getElementById('closeXlsx').click()" title="1행 = 항목 이름인 결산 엑셀을 고른 회차(없으면 새 회차)에 넣어요">엑셀 올리기</button><input type="file" id="closeXlsx" accept=".xlsx,.xls" style="display:none;" onchange="closeImport(this)">
+      <button class="sm-tool-ic" onclick="document.getElementById('closeXlsx').click()" title="엑셀 올리기 - 1행 = 항목 이름인 결산 엑셀을 고른 회차(없으면 새 회차)에 넣어요" aria-label="엑셀 올리기">${UPLOAD_XLSX_SVG}</button><!-- [2026.11.02] 글자 → 아이콘(요청) --><input type="file" id="closeXlsx" accept=".xlsx,.xls" style="display:none;" onchange="closeImport(this)">
       ${d ? '<button class="btn ghost xs danger" onclick="closeDeleteRound()">회차 삭제</button>' : ''}
     </div>
     ${d ? closeTableHtml(docs) : `<div class="empty">${closeYear}년 결산 회차가 아직 없어요.<br>'+ 새 회차'를 누르면 그날 수임 중인 거래처로 만들어요. 엑셀이 있으면 '엑셀 올리기'로 바로 넣어도 돼요.</div>`}
@@ -5895,7 +5945,7 @@ function clSubTagsHtml(c){
 }
 function renderReadonlyClientTable(list, terminated){
   const e = v => String(v == null || v === '' ? '-' : v).replace(/&/g,'&amp;').replace(/</g,'&lt;');
-  if(!list.length) return '<div class="empty">아직 가져온 목록이 없어요. 위의 "Tax.J 엑셀 가져오기"로 전체거래처가 들어 있는 엑셀을 올려주세요.</div>';
+  if(!list.length) return '<div class="empty">아직 가져온 목록이 없어요. 오른쪽 위 엑셀 아이콘(Tax.J 엑셀 가져오기)으로 전체거래처가 들어 있는 엑셀을 올려주세요.</div>';
   const ec = c => c.type === '법인' ? '#0b5a78' : c.type === '개인' ? '#be185d' : 'inherit';
   const na = v => String(v == null ? '' : v).trim() ? '' : 'cl-na';
   return `<div class="table-scroll"><table class="cl-table">
@@ -5984,10 +6034,13 @@ function renderClients(){
           <!-- [2026.10.14] 왼쪽 하위메뉴와 같은 가로 메뉴는 없앰(요청) -->
         </div>
         <div style="text-align:right;">
-          <button class="btn primary xs" onclick="importTaxjLiveClients()" title="회사앱(Tax.J)에 입력된 거래처를 바로 받아와요(조회만)">Tax.J에서 불러오기</button>
-          <button class="btn ghost xs" onclick="document.getElementById('taxjXlsxInput').click()">Tax.J 엑셀 가져오기</button>
+          <!-- [2026.11.02] "Tax.J 불러오기·엑셀 가져오기는 아이콘으로"(요청) - 다른 메뉴 도구 아이콘(sm-tool-ic)과 같은 모양 -->
+          <div style="display:flex; justify-content:flex-end; gap:6px;">
+          <button class="sm-tool-ic" onclick="importTaxjLiveClients()" title="Tax.J에서 불러오기 - 회사앱(Tax.J)에 입력된 거래처를 바로 받아와요(조회만)" aria-label="Tax.J에서 불러오기">${ICON_TAXJ_LOAD}</button>
+          <button class="sm-tool-ic" onclick="document.getElementById('taxjXlsxInput').click()" title="Tax.J 엑셀 가져오기 - Tax.J → 엑셀 일괄 다운로드 파일을 올려주세요" aria-label="Tax.J 엑셀 가져오기">${UPLOAD_XLSX_SVG}</button>
+          </div>
           <input type="file" id="taxjXlsxInput" accept=".xlsx,.xls" style="display:none;" onchange="importTaxjExcel(this)">
-          <div class="hint" style="margin-top:4px;">${settings.taxjImportedAt ? '마지막 가져오기: ' + settings.taxjImportedAt : 'Tax.J → 엑셀 일괄 다운로드 파일을 올려주세요'}</div>
+          <!-- [2026.11.02] "설명은 마우스를 올릴 때, 마지막 가져오기는 표(카드) 밖 오른쪽 아래 작은 글씨로"(요청) - 설명은 엑셀 아이콘 title로 옮김 -->
         </div>
       </div>
       ${clientsView !== 'regular' ? renderReadonlyClientTable(clientsView === 'other' ? clientsOther : clientsTerminated, clientsView === 'terminated') : `
@@ -6034,6 +6087,7 @@ function renderClients(){
       </table>
       </div>`}
     </div>
+    ${settings.taxjImportedAt ? `<div class="cl-last-imp">마지막 가져오기: ${taxjEsc(settings.taxjImportedAt)}</div>` : ''}
   `;
 }
 
@@ -7364,7 +7418,7 @@ function payMonthPeriod(key){
 function taxjPayPanelHtml(){
   const head = `<div style="display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap; margin-bottom:10px;">
       <div style="font-weight:800;">Tax.J 원천세 진행 <span class="hint" style="font-weight:600;">${taxjFull ? '· ' + taxjWhen(taxjFull.at) + ' 기준 · 조회만 돼요' : taxjLive ? '· ' + taxjWhen(taxjLive.at) + ' 기준 · 조회만 돼요' : '· 회사앱에 입력한 날짜를 조회해요'}</span></div>
-      ${taxjFull ? '' : `<button class="btn primary xs" onclick="refreshTaxjPayPanel(this)">${taxjLive && taxjLive.data.itFilingStatus ? '새로고침' : 'Tax.J에서 불러오기'}</button>`}
+      ${taxjFull ? '' : `<button class="sm-tool-ic" onclick="refreshTaxjPayPanel(this)" title="${taxjLive && taxjLive.data.itFilingStatus ? '새로고침' : 'Tax.J에서 불러오기'}" aria-label="${taxjLive && taxjLive.data.itFilingStatus ? '새로고침' : 'Tax.J에서 불러오기'}">${ICON_TAXJ_LOAD}</button>`}
     </div>`;
   const d = taxjFull ? { itFilingStatus: taxjDoc('itFilingStatus') || {}, filingTargets: taxjDoc('filingTargets') || {} } : (taxjLive && taxjLive.data);   // [2026.10.12] 실시간 연결 자료 우선
   if(!d || !d.itFilingStatus) return head;
@@ -8513,6 +8567,7 @@ function payCycleLabelHtml(base, lane){
   if(!lane) return taxjEsc(base);
   return `${taxjEsc(base)}<span style="color:var(--muted); font-weight:600;">/</span><span style="color:${lane === 'sameMonth' ? '#047857' : '#be123c'};">${lane === 'sameMonth' ? '당월' : '익월'}</span>`;
 }
+// [2026.11.02] "원천세 총괄·신고현황 검색은 없어도 됨"(요청) - 두 화면에서 검색칸을 뺌(검색어는 비워 둠). 함수는 남겨 둠
 function paySearchHtml(){ return `<input type="text" placeholder="상호 검색" value="${escapeAttr(payQuery)}" oninput="payQuery=this.value; clearTimeout(window._payQT); window._payQT=setTimeout(()=>{ renderPay(); const s=document.querySelector('#tab-pay input[placeholder="상호 검색"]'); if(s){ s.focus(); s.setSelectionRange(s.value.length, s.value.length); } }, 250);" style="width:170px;">`; }
 
 // ── 1. 총괄 ──
@@ -8540,7 +8595,7 @@ function payOverviewHtml(docs){
       <td>${v(e.wpNo)}</td><td>${v(e.wpNoSpecial)}</td><td>${e.edi ? '✓' : PAY_NA}</td>
       <td>${notes.length ? `<button class="btn ghost xs" onclick="payShowNote('${escapeAttr(c.id)}')" title="${escapeAttr(notes.join('\n'))}">✎${notes.length > 1 ? ' ' + notes.length : ''}</button>` : PAY_NA}</td></tr>`;
   });
-  return `<div class="toolbar">${paySearchHtml()}<div class="spacer"></div><span class="hint" style="margin:0;">기장거래처 ${list.length}곳 · 회사웹 총괄 그대로(조회만)</span></div>
+  return `<div class="toolbar"><div class="spacer"></div><span class="hint" style="margin:0;">기장거래처 ${list.length}곳 · 회사웹 총괄 그대로(조회만)</span></div>
     ${rows.length ? `<div class="table-scroll" style="margin-top:12px;"><table><thead><tr><th class="tx-seq">순번</th><th>상호명</th><th>신고</th><th>신고 지급일</th><th>실 급여일</th><th>급여소통</th><th>급여명세서<br>전달방법</th><th>납부서<br>전달방법</th><th>사업장관리번호<br>(일반)</th><th>사업장관리번호<br>(특고·예술인·기타)</th><th>EDI<br>수임</th><th>비고</th></tr></thead><tbody>${rows.join('')}</tbody></table></div>`
       : `<div class="empty">${q ? '검색 결과가 없어요.' : '기장거래처가 없어요.'}</div>`}`;
 }
@@ -8851,7 +8906,6 @@ function payStatusHtml(docs){
       <div style="display:flex; flex-direction:column; align-items:flex-end; gap:8px;">
         <div style="display:flex; align-items:center; gap:6px;"><!-- [2026.10.16] 일괄 입력·항목 추가는 아이콘으로, 'N줄 선택' 글자는 없앰(요청) -->
         <button class="sm-tool-ic" onclick="payBulk()" title="날짜 일괄 입력 - 왼쪽 체크박스로 고른 거래처(없으면 보이는 전체)에 날짜·완납·미납을 한 번에 넣어요" aria-label="날짜 일괄 입력">${ICON_BULK}</button><button class="sm-tool-ic" onclick="addPayCustomCol()" title="항목 추가" aria-label="항목 추가">${ICON_PLUS}</button><button class="sm-tool-ic" onclick="payCarryCols()" title="다음 달로 이월 - 항목마다 안 넘김·항목만·항목+내용을 골라 넘겨요" aria-label="다음 달로 이월">${ICON_CARRY}</button></div>
-        ${paySearchHtml()}
       </div>
     </div>
     <div class="summary-row">
@@ -9128,7 +9182,7 @@ function renderTaxjFull(){
       <div class="cl-head">
         <div><!-- [2026.10.14] 왼쪽 하위메뉴와 같은 가로 메뉴는 없앰(요청) --></div>
         <div style="text-align:right;">
-          <button class="btn primary xs" onclick="loadTaxjFull()" ${taxjFullBusy ? 'disabled' : ''}>${taxjFullBusy ? '불러오는 중…' : taxjFull ? '새로고침' : 'Tax.J에서 불러오기'}</button>
+          <button class="sm-tool-ic" onclick="loadTaxjFull()" ${taxjFullBusy ? 'disabled' : ''} title="${taxjFullBusy ? '불러오는 중…' : taxjFull ? '새로고침' : 'Tax.J에서 불러오기'}" aria-label="${taxjFull ? '새로고침' : 'Tax.J에서 불러오기'}" style="vertical-align:middle;">${ICON_TAXJ_LOAD}</button><!-- [2026.11.02] 글자 → 아이콘(요청) -->
           ${taxjFull ? `<button class="btn ghost xs" onclick="loadTaxjFull(true)">다른 계정으로</button>` : ''}
           <div class="hint" style="margin-top:4px;">${taxjFull ? `${taxjWhen(taxjFull.at)} 기준${taxjFullSaveMsg ? ' · ' + taxjEsc(taxjFullSaveMsg) : ''}` : `회사 계정(${TAXJ_COMPANY_DOMAIN})으로 로그인해 Tax.J 저장소를 읽고 내 데이터에 저장해요. 회사 원본은 바뀌지 않아요.`}</div>
         </div>
@@ -9142,14 +9196,14 @@ function renderTaxjFull(){
   if(taxjFullView === 'usage'){
     el.innerHTML = `<div class="card">
       <div class="toolbar"><div class="spacer"></div>
-        <button type="button" class="btn primary xs" id="taxjUsageBtn" onclick="loadTaxjUsage()">${taxjUsageHtml ? '새로고침' : '불러오기'}</button>
+        <button type="button" class="sm-tool-ic" id="taxjUsageBtn" onclick="loadTaxjUsage()" title="${taxjUsageHtml ? '새로고침' : '불러오기'}" aria-label="${taxjUsageHtml ? '새로고침' : '불러오기'}">${ICON_TAXJ_LOAD}</button>
         <span class="hint">로그인: 개인계정 (${TAXJ_USAGE_OWNER}) · 한 번 로그인하면 이 기기에 기억돼서 다음부터는 창이 뜨지 않아요. 직원별 접속 기록·기기·알림 허용 상태만 보여요(업무 데이터는 받지 않아요).</span>
       </div>
-      <div id="taxjUsageBox" style="margin-top:10px;">${taxjUsageHtml || '<div class="empty">\'불러오기\'를 누르면 직원별 접속 기록과 허용 상태가 나와요.</div>'}</div>
+      <div id="taxjUsageBox" style="margin-top:10px;">${taxjUsageHtml || '<div class="empty">불러오기 아이콘을 누르면 직원별 접속 기록과 허용 상태가 나와요.</div>'}</div>
     </div>
     <div class="card"><!-- [2026.10.26] "어느 직원에게 무슨 비숑 멘트가 갔는지, 접속기록처럼"(요청) -->
       <div class="toolbar"><b style="font-size:14px;">비숑 멘트 기록</b><div class="spacer"></div>
-        <button type="button" class="btn primary xs" onclick="loadBichonLog()">불러오기</button>
+        <button type="button" class="sm-tool-ic" onclick="loadBichonLog()" title="불러오기" aria-label="불러오기">${ICON_TAXJ_LOAD}</button>
         <span class="hint">회사웹 대시보드 비숑이 직원 화면에 말한 멘트(바뀔 때마다 기록, 최근 7일 · 날짜별로 접어 둠, 오늘만 펼침) · 회사 계정 실시간 연결이 필요해요</span>
       </div>
       <div id="bichonLogBox" style="margin-top:10px;">${bichonLogHtml || '<div class="empty">\'불러오기\'를 누르면 고른 날의 멘트가 시간순으로 나와요.</div>'}</div>
@@ -9159,7 +9213,7 @@ function renderTaxjFull(){
   if(taxjFullView === 'remote'){
     if(!el.querySelector('#taxjRemoteFrame')){
       el.innerHTML = head.replace(/<div style="text-align:right;">[\s\S]*?<\/div>\s*<\/div>\s*<\/div>/, `<div style="text-align:right;">
-          <button class="btn ghost xs" onclick="document.getElementById('taxjRemoteFrame').src = TAXJ_PAGE_URL + '?_=' + Date.now()">새로고침</button>
+          <button class="sm-tool-ic" onclick="document.getElementById('taxjRemoteFrame').src = TAXJ_PAGE_URL + '?_=' + Date.now()" title="새로고침" aria-label="새로고침">${ICON_TAXJ_LOAD}</button>
           <button class="btn ghost xs" onclick="window.open(TAXJ_PAGE_URL, '_blank', 'noopener')">새 창으로</button>
           <div class="hint" style="margin-top:4px;">여기서 고치면 회사 원본이 바뀌어요.</div>
         </div></div></div>`)
@@ -9168,7 +9222,7 @@ function renderTaxjFull(){
     return;
   }
   if(!taxjFullRestoreTried) taxjRestoreFull();
-  if(!taxjFull){ el.innerHTML = head + (taxjFullBusy ? '' : '<div class="card"><div class="empty">오른쪽 위 "Tax.J에서 불러오기"를 누르면 회사 데이터가 여기에 보여요.</div></div>'); return; }
+  if(!taxjFull){ el.innerHTML = head + (taxjFullBusy ? '' : '<div class="card"><div class="empty">오른쪽 위 불러오기 아이콘(Tax.J에서 불러오기)을 누르면 회사 데이터가 여기에 보여요.</div></div>'); return; }
   const docs = taxjFull.docs;
   const g = TAXJ_FULL_GROUPS.find(x => x.id === taxjFullView) || TAXJ_FULL_GROUPS[0];
   let body = g.id === 'filing' ? taxjFilingHtml(docs) : g.keys.map(([k, label]) => taxjSectionHtml(label, docs['s__' + k])).join('');
@@ -9367,7 +9421,7 @@ function renderReview(){
           <h3 style="margin:0 0 4px;">원천세 검토표 계산식</h3>
           <div class="hint"><b>회사 계정 연결 필요</b> · 회사웹 코드에서 계산식 정리만 읽어 와요. Tax.J 계산식이 바뀌면 여기도 최신으로 보여요.</div>
         </div>
-        <button type="button" class="btn primary xs" id="taxjFormulaBtn" onclick="loadTaxjFormula()">새로고침</button>
+        <button type="button" class="sm-tool-ic" id="taxjFormulaBtn" onclick="loadTaxjFormula()" title="새로고침" aria-label="새로고침">${ICON_TAXJ_LOAD}</button>
       </div>
       <div id="taxjFormulaBox" style="margin-top:10px;">${taxjFormulaHtml || '<div class="hint">불러오는 중…</div>'}</div>
     </div>`;
@@ -9431,6 +9485,18 @@ function renderSettings(){
           </div>
           <div class="ctrl">
             <input type="text" value="${settings.displayName}" placeholder="이름 입력" style="width:140px" onchange="updateDisplayName(this.value)">
+          </div>
+        </div>
+      </div>
+
+      <div class="settings-block" id="settings-password"><!-- [2026.11.02] 설정 › 비밀번호(요청) - 내부 › 개인계정 보관함 비밀번호 바꾸기 -->
+        <div class="row">
+          <div>
+            <h3>보관함 비밀번호</h3>
+            <div class="hint">내부 › 개인계정 보관함의 비밀번호를 바꿔요(4자 이상). 잊으면 보관함을 열 수 없어요.</div>
+          </div>
+          <div class="ctrl">
+            <button class="btn" onclick="accChangeMaster()">비밀번호 바꾸기</button>
           </div>
         </div>
       </div>
@@ -10566,7 +10632,7 @@ async function accSave(){
 async function accCreateVault(){
   const p1 = (document.getElementById('accNewPw') || {}).value || '';
   const p2 = (document.getElementById('accNewPw2') || {}).value || '';
-  if(p1.length < 6){ smAlert('6자 이상으로 정해 주세요', '보관함 비밀번호는 6자 이상이어야 해요.'); return; }
+  if(p1.length < 4){ smAlert('4자 이상으로 정해 주세요', '보관함 비밀번호는 4자 이상이어야 해요.'); return; }   // [2026.11.02] 6자 → 4자 이상(요청)
   if(p1 !== p2){ smAlert('두 비밀번호가 달라요', '한 번 더 입력한 비밀번호가 같은지 확인해 주세요.'); return; }
   accountSalt = crypto.getRandomValues(new Uint8Array(16));
   accountKey = await accDeriveKey(p1, accountSalt);
@@ -10591,16 +10657,29 @@ async function accUnlock(){
     smAlert('비밀번호가 맞지 않아요', '보관함 비밀번호를 다시 입력해 주세요.', { tone:'danger' });
   }
 }
+// [2026.11.02] "보관함 비밀번호 변경은 설정 › 비밀번호에서, 4자리 이상"(요청) - 잠겨 있으면 지금 비밀번호로 먼저 풀고 새 비밀번호로 다시 암호화
 async function accChangeMaster(){
-  const r = await smForm('보관함 비밀번호 바꾸기', [
-    { label:'새 비밀번호 (6자 이상)', type:'password', value:'' },
+  if(!accountVault && !accountKey) return smAlert('보관함이 아직 없어요', '내부 › 개인계정에서 보관함을 먼저 만들어 주세요.');
+  const locked = !accountKey;
+  const fields = (locked ? [{ label:'지금 비밀번호', type:'password', value:'' }] : []).concat([
+    { label:'새 비밀번호 (4자 이상)', type:'password', value:'' },
     { label:'새 비밀번호 확인', type:'password', value:'' },
-  ], { okText:'바꾸기', icon:'✎' });
+  ]);
+  const r = await smForm('보관함 비밀번호 바꾸기', fields, { okText:'바꾸기', icon:'✎' });
   if(!r) return;
-  if(r[0].length < 6){ smAlert('6자 이상으로 정해 주세요', '보관함 비밀번호는 6자 이상이어야 해요.'); return; }
-  if(r[0] !== r[1]){ smAlert('두 비밀번호가 달라요', '한 번 더 입력한 비밀번호가 같은지 확인해 주세요.'); return; }
+  const [cur, p1, p2] = locked ? r : [null, r[0], r[1]];
+  if(p1.length < 4){ smAlert('4자 이상으로 정해 주세요', '보관함 비밀번호는 4자 이상이어야 해요.'); return; }
+  if(p1 !== p2){ smAlert('두 비밀번호가 달라요', '한 번 더 입력한 비밀번호가 같은지 확인해 주세요.'); return; }
+  if(locked){
+    try{
+      const salt = accUnB64(accountVault.salt), key = await accDeriveKey(cur, salt);
+      const plain = await crypto.subtle.decrypt({ name:'AES-GCM', iv: accUnB64(accountVault.iv) }, key, accUnB64(accountVault.data));
+      accApplyPlain(JSON.parse(new TextDecoder().decode(plain)));
+      accountKey = key; accountSalt = salt; accountOpenedData = accountVault.data;
+    }catch(e){ smAlert('지금 비밀번호가 맞지 않아요', '보관함 비밀번호를 다시 확인해 주세요.', { tone:'danger' }); return; }
+  }
   accountSalt = crypto.getRandomValues(new Uint8Array(16));
-  accountKey = await accDeriveKey(r[0], accountSalt);
+  accountKey = await accDeriveKey(p1, accountSalt);
   accRememberKey(accountKey, accountSalt);
   await accSave();
   smAlert('바꿨어요', '다른 기기에서 처음 열 때는 새 비밀번호를 입력해 주세요.', { icon:'✓' });
@@ -10750,7 +10829,7 @@ async function accImportTaxjLive(){
   accTouch();
   const docs = (typeof taxjFull !== 'undefined' && taxjFull && taxjFull.docs) || null;
   if(!docs || !docs.s__companyInfo){
-    if(await smConfirm('먼저 Tax.J 자료를 불러와 주세요', 'Tax.J 메뉴에서 "Tax.J에서 불러오기"(또는 새로고침)를 한 번 누르면 회사 계정을 가져올 수 있어요.', { okText:'Tax.J 메뉴로' })) switchTab('taxj');
+    if(await smConfirm('먼저 Tax.J 자료를 불러와 주세요', 'Tax.J 메뉴에서 불러오기 아이콘(Tax.J에서 불러오기·새로고침)을 한 번 누르면 회사 계정을 가져올 수 있어요.', { okText:'Tax.J 메뉴로' })) switchTab('taxj');
     return;
   }
   const r = await smForm('Tax.J 관리비밀번호', [{ label:'회사웹 정보조회(관리) 비밀번호', type:'password', value:'' }], { okText:'가져오기', icon:'🔒' });
@@ -10803,7 +10882,7 @@ function renderAccounts(){
         <div class="acc-lock-ic">${lockIc}</div>
         <h3 style="margin:0 0 6px;">보관함 비밀번호 만들기</h3>
         <div class="hint" style="margin-bottom:14px;">이 비밀번호로 아이디·비밀번호 목록 전체를 암호화해요. 이 비밀번호는 어디에도 저장되지 않아서, <b>잊으면 보관함을 열 수 없어요.</b></div>
-        <input type="password" id="accNewPw" placeholder="보관함 비밀번호 (6자 이상)" autocomplete="new-password">
+        <input type="password" id="accNewPw" placeholder="보관함 비밀번호 (4자 이상)" autocomplete="new-password">
         <input type="password" id="accNewPw2" placeholder="한 번 더 입력" autocomplete="new-password" onkeydown="if(event.key==='Enter') accCreateVault()">
         <button class="btn primary" onclick="accCreateVault()">보관함 만들기</button>
       </div></div>`;
@@ -10862,7 +10941,7 @@ function renderAccounts(){
         <input type="text" id="accSearch" placeholder="항목·ID·메모 검색" value="${escapeAttr(accountSearch)}" oninput="accOnSearch(this.value)" style="flex:1; min-width:200px;">
         <button class="btn" onclick="accEditCats()">분야 관리</button>
         <button class="btn primary" onclick="accAdd()">계정 추가</button>
-        <button class="btn ghost" onclick="accChangeMaster()">보관함 비밀번호 변경</button>
+        <!-- [2026.11.02] 보관함 비밀번호 변경은 설정 › 비밀번호로 옮김(요청) -->
       </div>
       ${!mine.length ? `<div class="empty">아직 보관한 계정이 없어요. '계정 추가'로 넣어 주세요.</div>`
         : !list.length ? `<div class="empty">"${escapeAttr(accountSearch)}" 검색 결과가 없어요.</div>`
@@ -10882,7 +10961,11 @@ function renderAccounts(){
 // [2026.10.27] 신고 메뉴별 중요사항(요청: "신고메뉴마다 중요사항 고정시키고 싶은데" → "위쪽에 항상 펼친 띠")
 // 부가세·원천세·결산·법인세·종소세 화면 맨 위에 띠로 늘 보이게. 마우스를 올리면 ✎ 수정 · ✕ 삭제, 아래 칸에 입력 후 Enter = 추가. works에만 저장
 const MENU_NOTE_TABS = { vat:'tab-vat', pay:'tab-pay', close:'tab-close', corp:'tab-corp', indiv:'tab-indiv' };
-const menuNoteEdit = {};
+const menuNoteEdit = {}, menuNoteOpen = {};
+// 칩을 아래 카드(표 묶음)의 오른쪽 끝에 맞춤 - 카드가 화면보다 좁게 가운데 있을 때도 카드 바로 위 오른쪽에
+function menuNoteAlign(el){ requestAnimationFrame(() => { const band = el.querySelector(':scope > .mn-band'), c = band && band.nextElementSibling; if(!band || !c) return; band.style.paddingRight = ''; const d = band.getBoundingClientRect().right - c.getBoundingClientRect().right; band.style.paddingRight = Math.max(0, Math.round(d)) + 'px'; }); }
+window.addEventListener('resize', () => Object.values(MENU_NOTE_TABS).forEach(id => { const el = document.getElementById(id); if(el && el.offsetParent) menuNoteAlign(el); }));
+document.addEventListener('mousedown', e => { if(e.target.closest && e.target.closest('.mn-wrap')) return; Object.keys(menuNoteOpen).forEach(k => { if(menuNoteOpen[k]){ menuNoteOpen[k] = false; document.querySelectorAll('.mn-wrap.open').forEach(w => w.classList.remove('open')); } }); });
 function menuNoteMount(k){
   const el = document.getElementById(MENU_NOTE_TABS[k]);
   if(!el) return;
@@ -10890,11 +10973,16 @@ function menuNoteMount(k){
   if(!band){ band = document.createElement('div'); band.className = 'mn-band'; el.insertAdjacentElement('afterbegin', band); }
   const items = Array.isArray(menuNotes[k]) ? menuNotes[k] : [];
   const ei = menuNoteEdit[k] == null ? -1 : menuNoteEdit[k];
-  band.innerHTML = `<div class="mn-head">📌 중요사항${items.length ? ` <span class="hint" style="margin:0; display:inline;">${items.length}개</span>` : ''}</div>`
+  // [2026.11.02] "중요사항은 아이콘+제목만 남기고 표(카드) 밖 오른쪽 위로, 내용은 마우스를 올리거나 누르면 창으로 - 수정·삭제 가능"(요청)
+  //   띠 → 오른쪽 위 작은 칩(📌 중요사항 N). 마우스를 올리면 아래로 내용 창이 뜨고, 누르면 고정(다시 누르거나 바깥을 누르면 닫힘). 창 안에서 그대로 추가·수정·삭제
+  band.innerHTML = `<div class="mn-wrap${menuNoteOpen[k] || ei >= 0 ? ' open' : ''}"><button type="button" class="mn-chip" title="중요사항 - 눌러서 고정·닫기">📌 중요사항${items.length ? `<span class="mn-cnt">${items.length}</span>` : ''}</button><div class="mn-pop"><div class="mn-pop-in">`
+    + (items.length ? '' : '<div class="mn-empty">아직 적은 중요사항이 없어요.</div>')
     + items.map((x, i) => `<div class="mn-row cl-memo-row"><span class="mn-no">${i + 1}.</span>${i === ei
       ? `<input type="text" class="mn-edit" value="${escapeAttr(x)}" style="flex:1; min-width:0;">`
       : `<span class="mn-txt">${taxjEsc(x)}</span><button type="button" class="cl-memo-act" data-edit="${i}" title="수정" aria-label="수정">✎</button>`}<button type="button" class="cl-memo-act" data-del="${i}" title="삭제" aria-label="삭제">✕</button></div>`).join('')
-    + `<input type="text" class="mn-add" placeholder="중요사항 입력 후 Enter (추가)">`;
+    + `<input type="text" class="mn-add" placeholder="중요사항 입력 후 Enter (추가)"></div></div></div>`;
+  { const w = band.querySelector('.mn-wrap'); band.querySelector('.mn-chip').onclick = () => { menuNoteOpen[k] = !w.classList.contains('open'); w.classList.toggle('open', menuNoteOpen[k]); if(menuNoteOpen[k]){ const a = w.querySelector('.mn-add'); if(a) a.focus(); } }; }
+  menuNoteAlign(el);
   const save = () => { menuNotes[k] = items; scheduleGoogleSave(); };
   band.querySelectorAll('[data-del]').forEach(b => b.onclick = () => { items.splice(Number(b.dataset.del), 1); menuNoteEdit[k] = -1; save(); menuNoteMount(k); });
   band.querySelectorAll('[data-edit]').forEach(b => b.onclick = () => { menuNoteEdit[k] = Number(b.dataset.edit); menuNoteMount(k); });
@@ -10911,7 +10999,7 @@ function menuNoteMount(k){
     if(e.key !== 'Enter' || e.isComposing) return;
     e.preventDefault();
     const t = add.value.trim(); if(!t) return;
-    items.push(t); save(); menuNoteMount(k);
+    items.push(t); menuNoteOpen[k] = true; save(); menuNoteMount(k);
     const n = document.getElementById(MENU_NOTE_TABS[k]).querySelector(':scope > .mn-band .mn-add'); if(n) n.focus();
   });
 }
@@ -10986,7 +11074,7 @@ function startAppAfterAuth(){
   try{ ensurePayMonths(); const cm = `${new Date().getMonth() + 1}월`; if(payMonths.includes(cm)) currentPayMonth = cm; }catch(e){}
   let last = 'home';
   try{ last = localStorage.getItem('sm_last_tab') || 'home'; }catch(e){}
-  switchTab(TABS.some(t => t.id === last) || isWorksTab(last) ? last : 'home');
+  switchTab(TABS.some(t => t.id === last) || isWorksTab(last) || NAV_PARENT[last] ? last : 'home');
   setTimeout(() => { taxjLiveAutoReady = true; taxjLiveAutoStart(); }, 1200);   // [2026.10.12] 전에 연결했으면 회사웹 실시간 연결 다시 켜기
 }
 
@@ -11039,12 +11127,21 @@ if('serviceWorker' in navigator && location.protocol === 'https:') navigator.ser
   if(location.protocol !== 'https:') return;
   let base = null, shown = false, snoozeUntil = 0;
   const sig = async ()=>{ const r = await fetch(location.pathname + '?_v=' + Date.now(), { method:'HEAD', cache:'no-store' }); if(!r.ok) return null; return r.headers.get('etag') || r.headers.get('last-modified') || null; };
-  // [2026.11.02] "새로고침 팝업도 화면 정중앙에 눈에 띄게"(요청) - 왼쪽 위 작은 띠 대신 다른 확인 창과 같은 가운데 창(뒤 화면 어둡게)
-  async function banner(){
+  // [2026.11.02] "새로고침 팝업도 화면 정중앙에 눈에 띄게, 컬러 바꿔서"(요청) - 왼쪽 위 작은 띠 대신 화면 정중앙에 분홍 바탕 창(뒤 화면 어둡게)
+  function banner(){
     if(shown || Date.now() < snoozeUntil) return; shown = true;
-    const ok = await smDialog({ title:'새 버전이 올라왔어요', message:'새로고침하면 바로 적용돼요.\n입력 중인 내용이 있으면 마치고 눌러 주세요.', icon:'↻', okText:'새로고침', cancelText:'나중에' });
-    if(ok) return location.reload();
-    shown = false; snoozeUntil = Date.now() + 30*60*1000;   // 나중에 = 30분 뒤 다시
+    const w = document.createElement('div');
+    w.className = 'sm-modal-backdrop sm-upd-wrap';
+    w.innerHTML = `<div class="sm-upd" role="dialog" aria-modal="true">
+      <div class="sm-upd-ic">↻</div>
+      <div class="sm-upd-title">새 버전이 올라왔어요</div>
+      <div class="sm-upd-msg">새로고침하면 바로 적용돼요.<br>입력 중인 내용이 있으면 마치고 눌러 주세요.</div>
+      <div class="sm-upd-btns"><button type="button" data-a="later">나중에</button><button type="button" data-a="go">새로고침</button></div></div>`;
+    document.body.appendChild(w);
+    requestAnimationFrame(() => w.classList.add('show'));
+    w.querySelector('[data-a="go"]').onclick = () => location.reload();
+    w.querySelector('[data-a="later"]').onclick = () => { w.remove(); shown = false; snoozeUntil = Date.now() + 30*60*1000; };   // 나중에 = 30분 뒤 다시
+    setTimeout(() => w.querySelector('[data-a="go"]').focus(), 30);
   }
   async function check(){
     try{ const v = await sig(); if(!v) return; if(base === null){ base = v; return; } if(v !== base) banner(); }catch(e){}
