@@ -421,13 +421,17 @@ function smTogglePcView(){ try{ localStorage.setItem('sm_pc_view', window.SM_PC_
   .tj-att.remote{ background:#dcfce7; color:#047857; }
   .tj-att.etc{ background:#f1f5f9; color:#64748b; }
   .tj-att.due{ background:#ffe4e6; color:#be123c; }
-  .tj-att.plan{ background:#fef3c7; color:#a16207; }   /* [2026.11.03] 세무일정 안내 시작 */
+  .tj-att.due, .tj-att.plan{ max-width:100%; white-space:normal; word-break:keep-all; overflow-wrap:anywhere; }   /* 이름이 길면 줄바꿈 */
+  .tj-att.plan{ background:#dbeafe; color:#1d4ed8; }   /* [2026.11.03] 세무일정 안내 시작 */
   .tp-table td, .tp-table th{ padding:6px 8px !important; font-size:12.5px; }
   .tp-table tr.tp-off td{ opacity:.45; }
-  .wl-plan{ border:1px solid #fde68a; background:#fffbeb; border-radius:14px; padding:10px 14px; margin-bottom:12px; font-size:13px; }
-  .wl-plan .wl-due-head{ color:#92400e; }
-  .wl-plan-chip{ font-size:12px; font-weight:700; color:#92400e; background:#fff; border:1px solid #fde68a; border-radius:999px; padding:2px 10px; }
-  .wl-plan-chip span{ color:#b45309; font-weight:800; margin-left:2px; }   /* [2026.11.03] 세무일정 마감일 */
+  .wl-plan{ border:1px solid #bfdbfe; background:#eff6ff; border-radius:14px; padding:10px 14px; margin-bottom:12px; font-size:13px; }   /* [2026.11.03] 못한 일(노랑)과 구분되게 하늘색(요청) */
+  .wl-plan .wl-due-head{ color:#1e3a8a; }
+  .wl-plan-chip{ font-size:12px; font-weight:700; color:#1e40af; background:#fff; border:1px solid #bfdbfe; border-radius:999px; padding:2px 10px; }
+  .wl-plan-chip span{ color:#2563eb; font-weight:800; margin-left:2px; }
+  .wl-tax-rows{ display:flex; flex-direction:column; gap:7px; margin-top:6px; }
+  .wl-tax-row{ display:flex; flex-direction:column; align-items:flex-start; gap:2px; }
+  .wl-tax-desc{ font-size:12px; color:var(--muted); padding-left:10px; }   /* [2026.11.03] 세무일정 마감일 */
   .wl-due{ border:1px solid #fecdd3; background:#fff1f2; border-radius:14px; padding:10px 14px; margin-bottom:12px; font-size:13px; }
   .wl-due-head{ color:#9f1239; }
   .wl-due-list{ display:flex; flex-wrap:wrap; gap:6px; margin-top:6px; }
@@ -462,6 +466,10 @@ function smTogglePcView(){ try{ localStorage.setItem('sm_pc_view', window.SM_PC_
     margin-bottom:12px;
   }
   .settings-block:last-child{ margin-bottom:0; }
+  .set-adv > summary{ cursor:pointer; font-size:13.5px; font-weight:800; color:var(--muted); list-style:none; display:flex; align-items:center; gap:6px; }
+  .set-adv > summary::-webkit-details-marker{ display:none; }
+  .set-adv > summary::before{ content:'▸'; font-size:11px; transition:transform .15s; }
+  .set-adv[open] > summary::before{ transform:rotate(90deg); }
   .settings-block .row{ display:flex; align-items:center; justify-content:space-between; gap:18px; flex-wrap:wrap; }
   .settings-block h3{ font-size:13.5px; font-weight:800; margin-bottom:3px; }
   .settings-block .hint{ font-size:12px; color:var(--muted); line-height:1.5; max-width:420px; }
@@ -863,6 +871,13 @@ function smTogglePcView(){ try{ localStorage.setItem('sm_pc_view', window.SM_PC_
   .notice-sched{ border-top:none; margin-top:14px; padding-top:0; }
   .notice-sched-label{ color:var(--muted); }
   .notice-sched-chip{ background:#f7f1f4; color:var(--text); border:1px solid var(--border); }
+  .notice-sched.notice-sched-top{ margin:12px 0 14px; }
+  .chk-tax{ border:1px solid #bfdbfe; background:#eff6ff; border-radius:14px; padding:10px 14px; margin:12px 0 14px; font-size:13px; display:flex; flex-direction:column; gap:6px; }
+  .chk-tax-head{ font-weight:800; color:#1e3a8a; }
+  .chk-tax-row{ color:#1e3a8a; line-height:1.5; }
+  .chk-tax-row b{ color:#1e40af; }
+  .chk-tax-row .d{ font-weight:800; color:#2563eb; }
+  .chk-tax-row .todo{ display:block; color:var(--muted); font-size:12.5px; }
 
   /* 요청 배경(2026.10.06): To do 화면을 [왼쪽 체크리스트 길게 | 오른쪽 위 할 일 월 달력 + 아래 Today 목록]으로.
      좁은 화면(1000px 이하)에서는 위아래로 쌓임. */
@@ -2353,18 +2368,30 @@ Object.defineProperty(NAV_SUBMENUS, 'manuals', { enumerable:true, get(){
 } });
 Object.defineProperty(NAV_SUBMENUS, 'forms', { enumerable:true, get(){ return [{ js:"setLibCat('forms','')", label:'전체' }].concat(libCatList('forms').map((c, i) => ({ js:`setLibCat('forms', libCatList('forms')[${i}])`, label:c }))); } });
 Object.defineProperty(NAV_SUBMENUS, 'laws', { enumerable:true, get(){ return [{ js:"setLibCat('laws','')", label:'전체' }].concat(libCatList('laws').map((c, i) => ({ js:`setLibCat('laws', libCatList('laws')[${i}])`, label:c }))); } });
+// [2026.11.03] 요청: "설정 하위메뉴는 한 화면에 말고 메뉴를 눌렀을 때 각각 보이게" → 고른 하위메뉴 칸만 보여 줌(settingsView)
+let settingsView = 'settings-basic';
 function goToSettingsSection(anchor){
-  if(activeTab !== 'settings'){ switchTab('settings'); }
-  setTimeout(() => {
-    const target = document.getElementById(anchor);
-    if(target) target.scrollIntoView({behavior:'smooth', block:'start'});
-  }, activeTab === 'settings' ? 0 : 60);
+  settingsView = anchor || 'settings-basic';
+  if(activeTab !== 'settings') switchTab('settings');
+  else { renderSettings(); renderNav(); }
+  try{ window.scrollTo({ top:0 }); }catch(e){}
+}
+function settingsApplyView(el){
+  let grp = null; const shown = [];
+  el.querySelectorAll('.settings-card > .settings-block').forEach(b => {
+    if(b.id) grp = b.id;   // id 없는 칸은 바로 위 하위메뉴에 딸림(표시 이름 → 기본 설정, 데이터 초기화 → 초기화)
+    const on = (grp || 'settings-basic') === settingsView;
+    b.style.display = on ? '' : 'none'; b.style.marginBottom = '';
+    if(on) shown.push(b);
+  });
+  if(shown.length) shown[shown.length - 1].style.marginBottom = '0';
 }
 
 let activeTab = 'home';
 
 // [2026.10.22] "매뉴얼 하위메뉴 누르면 변화가 없어"(요청) - 지금 보고 있는 분야를 하위메뉴에서 표시(매뉴얼·서식·법령)
-function subCur(id){ try{ if(NAV_PARENT[activeTab] && NAV_PARENT[activeTab][0] === id) return NAV_PARENT[activeTab][1]; if(id === 'inner' && activeTab === 'inner') return (INNER_VIEWS.find(x => x[0] === innerView) || [])[1] || null; return id === 'works' ? ((WORKS_TABS.find(x => x[0] === activeTab) || [])[1] || null) : id === 'manuals' ? (manualCat || '전체') : (id === 'forms' || id === 'laws') ? (LIB[id].sel || '전체') : null; }catch(e){ return null; } }
+function subCur(id){ try{ if(NAV_PARENT[activeTab] && NAV_PARENT[activeTab][0] === id) return NAV_PARENT[activeTab][1]; if(id === 'inner' && activeTab === 'inner') return (INNER_VIEWS.find(x => x[0] === innerView) || [])[1] || null; if(id === 'settings' && activeTab === 'settings') return ((NAV_SUBMENUS.settings || []).find(x => x.anchor === settingsView) || {}).label || null;   // [2026.11.03] 보고 있는 설정 하위메뉴 표시
+    return id === 'works' ? ((WORKS_TABS.find(x => x[0] === activeTab) || [])[1] || null) : id === 'manuals' ? (manualCat || '전체') : (id === 'forms' || id === 'laws') ? (LIB[id].sel || '전체') : null; }catch(e){ return null; } }
 function renderNav(){
   const sb = document.getElementById('sidebarNav');
   sb.innerHTML = TABS.map((t, i) => {
@@ -3121,7 +3148,8 @@ function renderWorklist(){
     const items = allItems.filter(x => !x.carriedTo);   // [2026.11.02] 다음 달로 이월한 항목은 진행률·남은 건수에서 뺌(목록에는 '→ N월로 이월'로 남김)
     const doneN = items.filter(x => x.done).length;
     // [2026.11.03] 주요 세무일정 칩 - 직접 적은 것 + 개인웹 세무일정(그달 마감, 날짜 표시) 자동
-    const sched = (worklistSchedule[m] || []).concat((() => { try{ return smTaxMonth(checklistYear(), parseInt(m, 10)).filter(x => x.id !== 'withholding-monthly').map(x => `${taxjEsc(x.title)} ${Number(x.date.slice(8))}일`); }catch(e){ return []; } })());
+    // [2026.11.03] 요청: "체크리스트에는 마감일자 안 나와도 될 것 같아. 세무일정 안내만" → 자동 마감일 칩은 빼고 직접 적은 주요 세무일정만(있을 때)
+    const sched = worklistSchedule[m] || [];
     return `
     <div class="notice-card">
       <div class="notice-top">
@@ -3154,6 +3182,12 @@ function renderWorklist(){
         </div>
         <button class="wl-navbtn" onclick="shiftChecklistMonth(1)" title="다음 달" aria-label="다음 달" ${m === '12월' ? 'disabled' : ''}>›</button>
       </div>
+      ${smTaxChkNoticeHtml(m)}<!-- [2026.11.03] 요청: 세무일정 안내 멘트·주요 세무일정을 체크리스트 위로 -->
+      ${sched.length ? `
+        <div class="notice-sched notice-sched-top">
+          <div class="notice-sched-label">주요 세무일정</div>
+          ${sched.map(x => `<span class="notice-sched-chip">${x}</span>`).join('')}
+        </div>` : ''}
       ${items.length ? `<div class="notice-progress"><span style="width:${Math.round(doneN / items.length * 100)}%"></span></div>
       <div class="notice-count">${doneN} / ${items.length} 완료</div>` : ''}
       <div class="notice-items" id="noticeItems">
@@ -3167,11 +3201,6 @@ function renderWorklist(){
       </div>
       ${checklistSearch.trim() ? '' : `<button class="notice-add" onclick="addChecklistItem('${m}')">+ 항목 추가</button>`}
       ${(!checklistSearch.trim() && m !== '12월' && items.some(x => !x.done)) ? `<button class="notice-add" onclick="carryChecklistToNextMonth('${m}')" title="완료하지 않은 항목을 다음 달 체크리스트로 넘겨요(이 달에는 '→ 다음 달로 이월'로 남아요)">→ 남은 ${items.filter(x => !x.done).length}건 다음 달로 이월</button>` : ''}
-      ${sched.length ? `
-        <div class="notice-sched">
-          <div class="notice-sched-label">주요 세무일정</div>
-          ${sched.map(x => `<span class="notice-sched-chip">${x}</span>`).join('')}
-        </div>` : ''}
     </div>`;
   }).join('') : '';
 
@@ -3516,8 +3545,8 @@ function renderWlMonthCal(){
         return `
         <div class="cal-day ${ds === todayS ? 'today' : ''} ${ds.slice(0,7) !== wlCalYM ? 'other' : ''} ${ds === sel ? 'wl-sel' : ''}" onclick="setWlHistDay('${ds}', true)" title="${list.length ? `${list.length}건 · 남은 일 ${left}건` : ''}">
           <div class="wl-mcal-top"><div class="cal-daynum ${mk && mk.hol ? 'tj-hol' : ''}">${parseInt(ds.slice(8), 10)}${mk && mk.hol ? `<span class="tj-holname">${taxjEsc(mk.hol)}</span>` : ''}</div>${list.length ? `<span class="wl-mcal-cnt ${left ? '' : 'all-done'}">${list.length}</span>` : ''}</div>
-          ${starts.length ? `<div class="tj-atts"><span class="tj-att plan" title="${escapeAttr('안내 시작\n' + starts.map(x => `${x.title} (마감 ${Number(x.date.slice(5, 7))}/${Number(x.date.slice(8))})`).join('\n'))}">안내${starts.length > 1 ? ' ' + starts.length : ''}</span></div>` : ''}
-          ${due.length ? `<div class="tj-atts"><span class="tj-att due" title="${escapeAttr(due.map(x => x.title).join('\n') + '\n→ 납부여부 확인 및 납부마감 멘트 발송')}">납부마감</span></div>` : ''}
+          ${starts.length ? `<div class="tj-atts">${starts.map(x => `<span class="tj-att plan" title="${escapeAttr(`안내 시작 · ${x.title} (마감 ${Number(x.date.slice(5, 7))}/${Number(x.date.slice(8))})\n${smTaxDesc(x)}`)}">${taxjEsc(smTaxShort(x))} 안내</span>`).join('')}</div>` : ''}<!-- [2026.11.03] 무슨 안내·무슨 마감인지 이름으로(요청) -->
+          ${due.length ? `<div class="tj-atts">${due.map(x => `<span class="tj-att due" title="${escapeAttr(`${x.title} 마감\n${smTaxDesc(x)}\n→ 납부여부 확인 및 납부마감 멘트 발송`)}">${taxjEsc(smTaxShort(x))} 마감</span>`).join('')}</div>` : ''}
           ${taxjCalItemsHtml(mk)}
           <div class="cal-tasks" style="max-height:none;">
             ${shown.map(t => `<div class="wl-ct ${t.done ? 'done' : ''}">${escapeAttr(t.text)}</div>`).join('')}
@@ -3587,6 +3616,7 @@ function renderWlHistory(){
       <div class="wl-daynav-label">${worklistDayLabel(date)}${rel ? ` <span class="wl-rel">${rel}</span>` : ''}</div>
       <button class="wl-navbtn" onclick="setWlHistDay(addDaysStr('${date}', 1))" title="다음 날" aria-label="다음 날">›</button>
     </div>
+    ${smTaxBandHtml(date)}
     <div class="wl-agenda wl-hist-agenda">
       ${list.length ? `
         <div class="wl-day-head">${list.length}건 · 완료 ${list.length - left}건 · 못한 일 ${left}건</div>
@@ -3673,12 +3703,7 @@ function renderWorklistBody(){
   // [2026.11.03] "세무일정을 참고해 마감기한날 '납부여부 확인 및 납부마감 멘트 발송' 공지"(요청) - 보고 있는 날이 세무일정 마감일이면 맨 위에 안내
   const dueEl = document.getElementById('worklistDue');
   if(dueEl){
-    const due = smDueOn(date);
-    const on = smTaxAround(date).ongoing;
-    dueEl.innerHTML = (on.length ? `<div class="wl-plan"><div class="wl-due-head">📌 준비할 세무일정 <span class="hint" style="margin:0;">(마감 전 안내 기간)</span></div>
-      <div class="wl-due-list">${on.map(x => `<span class="wl-plan-chip" title="${escapeAttr(x.title + ' · 마감 ' + x.date + ' · 안내 시작 ' + x.from)}">${taxjEsc(x.title)} <b>${Number(x.date.slice(5, 7))}/${Number(x.date.slice(8))}</b> <span>${smDday(x.date, date)}</span></span>`).join('')}</div></div>` : '')
-      + (due.length ? `<div class="wl-due"><div class="wl-due-head">📢 ${date === todayS ? '오늘' : taxjEsc(worklistDayLabel(date).replace(/^\d{4}-/, ''))} 마감 · <b>납부여부 확인 및 납부마감 멘트 발송</b></div>
-      <div class="wl-due-list">${due.map(x => `<span class="wl-due-chip">${taxjEsc(x.title)}</span>`).join('')}</div></div>` : '');
+    dueEl.innerHTML = smTaxBandHtml(date, true);   // [2026.11.03] 준비 안내는 체크리스트 위로 옮김(요청) - Today엔 마감일 안내만
   }
   // 미완료 넘기기 배너: 오늘 화면에서만
   const carryEl = document.getElementById('worklistCarry');
@@ -9666,6 +9691,71 @@ async function taxPlanAdd(){
   const ld = Math.max(0, Math.min(120, parseInt(r[5], 10) || 0)); if(ld !== 7) t.lead[id] = ld;
   taxPlanRefresh();
 }
+// [2026.11.03] 요청: "달력 날짜를 누르면(Today·History) 그날 해당하는 세무일정과 설명이 나오게 - 신고·납부 마감일까지"
+//   안내 기간(안내 시작 ~ 마감 전날) = 📌 준비할 세무일정, 마감일 = 📢 마감 안내. 둘 다 일정마다 무엇을 하는지 한 줄 설명
+const SM_TAX_DESC = {
+  'withholding-monthly':'전월 지급한 급여·사업소득 등의 원천세 신고·납부와 4대보험료 납부',
+  'vat2-final':'7~12월(법인은 10~12월) 매출·매입으로 부가세 확정신고·납부',
+  'vat1-prelim':'법인의 1~3월 매출·매입으로 부가세 예정신고·납부',
+  'vat1-final':'1~6월(법인은 4~6월) 매출·매입으로 부가세 확정신고·납부',
+  'vat2-prelim':'법인의 7~9월 매출·매입으로 부가세 예정신고·납부',
+  'exempt-biz-status':'면세 개인사업자의 전년 수입금액·사업장 현황 신고',
+  'yearend-settle':'전년 근로소득 연말정산 결과 신고와 근로·퇴직·사업소득 지급명세서 제출',
+  'nhis-total-pay':'전년 직원 보수총액을 건강보험공단에 신고',
+  'ei-total-pay':'전년 직원 보수총액을 근로복지공단(고용·산재)에 신고',
+  'corp-tax':'12월 결산법인의 전년 결산·세무조정 후 법인세 신고·납부',
+  'income-tax-final':'개인의 전년 종합소득 신고·납부(지방소득세 포함)',
+  'income-tax-sincere':'성실신고확인대상 사업자의 확인서를 붙인 종합소득세 신고·납부',
+  'corp-tax-midterm':'12월 결산법인의 상반기분 법인세 미리 납부(직전 세액 절반 또는 가결산)',
+  'income-tax-midterm':'개인사업자의 중간예납 고지세액 납부',
+  'x-simple-monthly':'전월 지급한 사업·기타소득의 간이지급명세서 제출',
+  'x-daily-monthly':'전월 지급한 일용근로소득 지급명세서 제출',
+  'x-wh-half1':'반기납부 사업장의 7~12월 원천세 신고·납부', 'x-wh-half2':'반기납부 사업장의 1~6월 원천세 신고·납부',
+  'x-earn-half1':'7~12월 지급한 근로소득 간이지급명세서 제출', 'x-earn-half2':'1~6월 지급한 근로소득 간이지급명세서 제출',
+  'x-int-div':'전년 지급한 이자·배당·기타소득 지급명세서 제출',
+  'x-vat-notice1':'예정고지된 부가세 1기분 납부(개인·소규모 법인)', 'x-vat-notice2':'예정고지된 부가세 2기분 납부(개인·소규모 법인)',
+  'x-corp-local':'12월 결산법인의 법인지방소득세 신고·납부(위택스)',
+  'x-resident-biz':'7월 1일 기준 사업소의 주민세 사업소분 신고·납부',
+};
+const SM_TAX_SHORT = { 'withholding-monthly':'원천세', 'vat2-final':'부가세 2기 확정', 'vat1-prelim':'부가세 1기 예정', 'vat1-final':'부가세 1기 확정', 'vat2-prelim':'부가세 2기 예정',
+  'exempt-biz-status':'면세 사업장현황', 'yearend-settle':'연말정산', 'nhis-total-pay':'건보 보수총액', 'ei-total-pay':'고용·산재 보수총액', 'corp-tax':'법인세', 'income-tax-final':'종소세',
+  'income-tax-sincere':'성실신고', 'corp-tax-midterm':'법인세 중간예납', 'income-tax-midterm':'종소세 중간예납', 'x-simple-monthly':'간이지급명세서', 'x-daily-monthly':'일용지급명세서',
+  'x-wh-half1':'원천세 반기', 'x-wh-half2':'원천세 반기', 'x-earn-half1':'근로 간이지급명세서', 'x-earn-half2':'근로 간이지급명세서', 'x-int-div':'이자·배당 지급명세서',
+  'x-vat-notice1':'부가세 예정고지', 'x-vat-notice2':'부가세 예정고지', 'x-corp-local':'법인지방소득세', 'x-resident-biz':'주민세 사업소분' };
+function smTaxShort(x){ return SM_TAX_SHORT[x.id] || String(x.title || '').replace(/\(.*?\)/g, '').trim(); }
+const SM_TAX_TODO = { 'withholding-monthly':'급여자료를 받아 원천세 신고를 준비하세요!',
+  'vat1-prelim':'안내문 발송과 자료요청(매출·매입·카드·현금영수증)을 하세요!', 'vat2-prelim':'안내문 발송과 자료요청(매출·매입·카드·현금영수증)을 하세요!',
+  'vat1-final':'안내문 발송과 자료요청(매출·매입·카드·현금영수증)을 하세요!', 'vat2-final':'안내문 발송과 자료요청(매출·매입·카드·현금영수증)을 하세요!',
+  'x-vat-notice1':'예정고지 납부 안내를 하세요!', 'x-vat-notice2':'예정고지 납부 안내를 하세요!',
+  'corp-tax':'결산 자료요청과 신고 안내를 하세요!', 'income-tax-final':'안내문 발송과 자료요청을 하세요!', 'income-tax-sincere':'성실신고 대상자에게 자료요청을 하세요!',
+  'corp-tax-midterm':'중간예납 세액을 확인해 안내하세요!', 'income-tax-midterm':'고지세액을 확인해 납부 안내를 하세요!',
+  'yearend-settle':'연말정산 안내와 자료요청을 하세요!', 'nhis-total-pay':'전년 보수 자료를 확인해 신고를 준비하세요!', 'ei-total-pay':'전년 보수 자료를 확인해 신고를 준비하세요!',
+  'exempt-biz-status':'수입금액 자료를 요청하세요!', 'x-wh-half1':'반기 급여자료를 받아 신고를 준비하세요!', 'x-wh-half2':'반기 급여자료를 받아 신고를 준비하세요!',
+  'x-corp-local':'법인세 신고 내용으로 지방소득세 신고를 준비하세요!', 'x-resident-biz':'사업장 현황을 확인해 신고를 준비하세요!' };
+function smJosa(w){ const c = String(w || '').trim().slice(-1).charCodeAt(0); return (c >= 0xAC00 && c <= 0xD7A3 && (c - 0xAC00) % 28) ? '이' : '가'; }   // 받침 있으면 '이', 없으면 '가'
+function smTaxTodo(x){ return SM_TAX_TODO[x.id] || (/지급명세서/.test(x.title) ? '지급 내역을 확인해 제출을 준비하세요!' : '미리 준비하세요!'); }
+// [2026.11.03] 요청: "부가세 신고 있는 달이면 3주 전부터 '이번 달은 부가세 예정신고가 있는 달이에요! 안내문과 자료요청을 하세요!' 같은 멘트를 체크리스트 위에"
+//   이번 달 체크리스트를 볼 때만, 오늘 기준 안내 기간(안내 시작 ~ 마감일)인 일정마다 한 줄
+function smTaxChkNoticeHtml(m){
+  const todayS = todayStr();
+  if(parseInt(m, 10) !== new Date().getMonth() + 1 || checklistYear() !== new Date().getFullYear()) return '';
+  let list = [];
+  try{ const a = smTaxAround(todayS); list = a.ongoing.concat(a.due); }catch(e){}
+  if(!list.length) return '';
+  const md = ds => `${Number(ds.slice(5, 7))}/${Number(ds.slice(8))}`;
+  return `<div class="chk-tax"><div class="chk-tax-head">📣 세무일정 안내</div>${list.map(x => {
+    const when = x.date.slice(0, 7) === todayS.slice(0, 7) ? '이번 달은' : `${Number(x.date.slice(5, 7))}월에`;
+    return `<div class="chk-tax-row" title="${escapeAttr(x.title + ' · ' + smTaxDesc(x))}">${when} <b>${taxjEsc(smTaxShort(x))}</b>${smJosa(smTaxShort(x))}${when === '이번 달은' ? ' 있는 달이에요!' : ' 있어요!'} <span class="d">마감 ${md(x.date)} ${smDday(x.date, todayS)}</span><span class="todo">${taxjEsc(smTaxTodo(x))}</span></div>`;
+  }).join('')}</div>`;
+}
+function smTaxDesc(x){ return SM_TAX_DESC[x.id] || (x.src === '내 일정' ? '내가 넣은 일정' : '회사웹 세무일정'); }
+function smTaxBandHtml(date, dueOnly){
+  const todayS = todayStr(), on = smTaxAround(date).ongoing, due = smDueOn(date);
+  const md = ds => `${Number(ds.slice(5, 7))}/${Number(ds.slice(8))}`;
+  const row = (x, isDue) => `<div class="wl-tax-row"><span class="${isDue ? 'wl-due-chip' : 'wl-plan-chip'}">${taxjEsc(x.title)}${isDue ? '' : ` <b>${md(x.date)}</b> <span>${smDday(x.date, date)}</span>`}</span><span class="wl-tax-desc">${taxjEsc(smTaxDesc(x))}</span></div>`;
+  return (on.length && !dueOnly ? `<div class="wl-plan"><div class="wl-due-head">📌 준비할 세무일정</div><div class="wl-tax-rows">${on.map(x => row(x, false)).join('')}</div></div>` : '')
+    + (due.length ? `<div class="wl-due"><div class="wl-due-head">📢 ${date === todayS ? '오늘' : taxjEsc(worklistDayLabel(date).replace(/^\d{4}-/, ''))} 마감 · <b>납부여부 확인 및 납부마감 멘트 발송</b></div><div class="wl-tax-rows">${due.map(x => row(x, true)).join('')}</div></div>` : '');
+}
 function smDday(ds, from){ const n = Math.round((new Date(ds + 'T00:00:00') - new Date(from + 'T00:00:00')) / 86400000); return n === 0 ? 'D-DAY' : n > 0 ? `D-${n}` : `D+${-n}`; }
 // [2026.11.03] 그날이 세무일정(내부 › 세무일정과 같은 계산 - 회사웹 수정·등록 일정 포함, 주말·공휴일이면 다음 영업일) 마감일인 항목들
 function smDueOn(ds){
@@ -9864,7 +9954,9 @@ function renderSettings(){
       </div>
 
       <div class="settings-block">
-        <div class="row">
+        <!-- [2026.11.03] 요청: "데이터 전체 초기화 같은 버튼은 처음엔 숨기고 고급설정처럼 화살표 열면 보이게" -->
+        <details class="set-adv"><summary>고급 설정</summary>
+        <div class="row" style="margin-top:12px;">
           <div>
             <h3>데이터 초기화</h3>
             <div class="hint">모든 데이터를 지워요. 되돌릴 수 없어요.</div>
@@ -9873,9 +9965,11 @@ function renderSettings(){
             <button class="btn danger ghost" onclick="resetAllData()">전체 초기화</button>
           </div>
         </div>
+        </details>
       </div>
     </div>
   `;
+  settingsApplyView(el);
 }
 
 
