@@ -5289,7 +5289,7 @@ function closeTableHtml(docs){
     }).join('');
     return `<tr${x.gone ? ' class="cl-gone"' : ''}><td class="tx-seq"><input type="checkbox" class="cl-pick" data-cid="${cid}" ${closePicked.has(x.id) ? 'checked' : ''} onchange="closePick(this.dataset.cid, this.checked)"></td><td class="tx-seq cl-lk cl-num">${n + 1}</td>
       <td class="vp-sticky cl-lk" style="${smEntCss(x.c.entityType)}">${taxjEsc(x.c.name || '')}${x.gone ? ' <span class="cl-gone-tag">해지</span>' : ''}</td>
-      ${x.c.entityType === '개인' ? `<td class="cl-lk cl-num cl-off">${t(x.c.corpRegNo)}</td>` : lk(x.c.corpRegNo)}${lk(innerBizNo(x.c.bizNo || ''))}${lk(x.c.openDate)}${smCoMemoTd(closeCoMemo(x.id)).replace('<td', '<td class="vp-div"').replace('class="vp-div" class="', 'class="vp-div ')}${cells}</tr>`;
+      ${x.c.entityType === '개인' ? `<td class="cl-lk cl-num cl-off">${t(x.c.corpRegNo)}</td>` : lk(x.c.corpRegNo)}${lk(innerBizNo(x.c.bizNo || ''))}${lk(x.c.openDate)}${smCoMemoTd(closeCoMemo(x.id), `${x.c.name || ''} · ${closeYear}년 결산 회사 메모`).replace('<td', '<td class="vp-div"').replace('class="vp-div" class="', 'class="vp-div ')}${cells}</tr>`;
   }).join('');
   return `<div class="table-scroll vat-prog" style="margin-top:8px;"><table><thead><tr>${head}</tr></thead>
     <tbody>${body || `<tr><td colspan="${closeCols.length + 6}"><div class="empty" style="padding:18px;">${q ? '검색 결과가 없어요.' : '거래처가 없어요.'}</div></td></tr>`}</tbody></table></div>`;
@@ -5630,7 +5630,7 @@ function renderCorp(){
                   `).join('')}
                 </div>
               </td>
-              ${taxColCellsHtml('corp', c.id, 'co')}<td>${taxjStatusCellHtml('법인세', currentCorpYear, c)}</td>${smCoMemoTd(taxjFsMemo('법인세', currentCorpYear, c))}
+              ${taxColCellsHtml('corp', c.id, 'co')}<td>${taxjStatusCellHtml('법인세', currentCorpYear, c)}</td>${smCoMemoTd(taxjFsMemo('법인세', currentCorpYear, c), `${c.name} · ${currentCorpYear}년 귀속 법인세 회사 메모`)}
               ${taxColCellsHtml('corp', c.id, 'note')}<td class="note-cell"><input type="text" value="${r.note}" onchange="updateCorpNote(${c.id}, this.value)" style="width:100%"></td>
               ${taxColCellsHtml('corp', c.id, 'end')}</tr>`;
           }).join('')}
@@ -5703,7 +5703,7 @@ function renderIndiv(){
                   `).join('')}
                 </div>
               </td>
-              ${taxColCellsHtml('indiv', c.id, 'co')}<td>${taxjStatusCellHtml('종소세', currentIndivYear, c)}</td>${smCoMemoTd(taxjFsMemo('종소세', currentIndivYear, c))}
+              ${taxColCellsHtml('indiv', c.id, 'co')}<td>${taxjStatusCellHtml('종소세', currentIndivYear, c)}</td>${smCoMemoTd(taxjFsMemo('종소세', currentIndivYear, c), `${c.name} · ${currentIndivYear}년 귀속 종소세 회사 메모`)}
               ${taxColCellsHtml('indiv', c.id, 'note')}<td class="note-cell"><input type="text" value="${r.note}" onchange="updateIndivNote(${c.id}, this.value)" style="width:100%"></td>
               ${taxColCellsHtml('indiv', c.id, 'end')}</tr>`;
           }).join('')}
@@ -6017,7 +6017,7 @@ function renderReadonlyClientTable(list, terminated){
       <td style="color:${ec(c)}; font-weight:800;">${e(c.type)}</td>
       <td class="cl-name-cell" style="color:${ec(c)}; font-weight:800;">${e(c.name)}${clSubTagsHtml(c)}</td><td class="${na(c.biz)}">${e(c.biz)}</td><td class="${c.type === '개인' ? 'cl-off' : na(c.corpNo)}">${e(c.corpNo)}</td><td class="${na(c.ceo)}">${e(c.ceo)}</td>${clAddrTd(addrOf(c))}<td class="num ${na(c.fee)}">${e(c.fee)}</td>
       <td class="${na(c.contractDate)}">${e(c.contractDate)}</td><td class="${na(c.start)}">${e(c.start)}</td>
-      ${terminated ? `<td class="${na(c.terminationDate)}">${e(c.terminationDate)}</td><td class="${na(c.terminationMonth)}">${e(c.terminationMonth)}</td><td class="${na(c.terminationReason)}">${e(c.terminationReason)}</td>` : ''}${smCoMemoTd(memoOf(c))}
+      ${terminated ? `<td class="${na(c.terminationDate)}">${e(c.terminationDate)}</td><td class="${na(c.terminationMonth)}">${e(c.terminationMonth)}</td><td class="${na(c.terminationReason)}">${e(c.terminationReason)}</td>` : ''}${smCoMemoTd(memoOf(c), `${c.name} · 거래처 회사 메모`)}
     </tr>`).join('')}</tbody></table></div>`;
 }
 /* ── [2026.10.14] 거래처 › 계정정보(요청: "거래처별 통장비번·홈택스 ID/PW·공인인증서 pw·여신 ID/PW + 판매대행 항목을 한 화면에 조회") ──
@@ -6141,7 +6141,7 @@ function renderClients(){
               <td class="num ${c.taxType === '신고대리' ? 'cl-off' : na('fee', c.fee)}">${cellV('fee', feeTxt)}</td>
               <td class="${na('contractDate', c.contractDate)}">${cellV('contractDate', c.contractDate)}</td>
               <td class="${na('start', c.start)}">${cellV('start', c.start)}</td>
-              ${smCoMemoTd(memoOf(c))}
+              ${smCoMemoTd(memoOf(c), `${c.name} · 거래처 회사 메모`)}
               <td class="cl-actions">
                 <button class="icon-btn" onclick="editClient(${c.id})" title="수정" aria-label="수정">${ICON_EDIT}</button>
                 <button class="icon-btn" onclick="showClientHistory(${c.id})" title="이력" aria-label="이력">${ICON_HISTORY}</button>
@@ -7834,7 +7834,15 @@ function taxjIdOf(c){
 }
 function taxjFsEntry(type, period, cid){ const fs = taxjDoc('filingStatus') || {}; return (((fs[type] || {})[period]) || {})[cid] || null; }
 // [2026.11.03] "works에서 회사웹과 연결된 메뉴의 메모는 필수로 다 연결"(요청) - 회사웹 메모를 마우스를 올려야만 보이던 곳도 '회사 메모' 칸으로 늘 보이게(조회만)
-function smCoMemoTd(memo){ const m = String(memo || '').trim(); return m ? `<td class="sm-co-memo" title="${escapeAttr(m)}">${taxjEsc(m).replace(/\n/g, '<br>')}</td>` : '<td><span style="color:#d4c6cd;">-</span></td>'; }
+// [2026.11.03] "메모·비고는 아이콘으로만, 눌러서 팝업으로"(요청) - 부가세 총괄 메모와 같은 문서 아이콘(여러 줄이면 줄 수), 마우스를 올리면 미리보기, 누르면 창
+const smMemoStore = [];
+function smMemoBtn(memo, title){
+  const m = String(memo || '').trim(); if(!m) return '<span style="color:#d4c6cd;">-</span>';
+  const n = m.split('\n').map(x => x.trim()).filter(Boolean).length, i = smMemoStore.push([title || '메모', m]) - 1;
+  return `<button type="button" class="sm-tool-ic vt-ic" onclick="smMemoShow(${i})" title="${escapeAttr(m)}" aria-label="메모">${ICON_MEMO_DOC}${n > 1 ? `<span class="vt-ic-n">${n}</span>` : ''}</button>`;
+}
+function smMemoShow(i){ const x = smMemoStore[i]; if(x) smAlert(x[0], x[1], { icon:'i' }); }
+function smCoMemoTd(memo, title){ return `<td style="text-align:center;">${smMemoBtn(memo, title || '회사 메모')}</td>`; }
 function taxjFsMemo(type, period, c){ if(!taxjFull || !period) return ''; const cid = taxjIdOf(c); if(cid == null) return ''; return ((taxjFsEntry(type, period, cid) || {}).memo) || ''; }
 const TAXJ_ST_COLOR = { 신고완료:'#059669', 결산완료:'#059669', 기안완료:'#b45309', 검토중:'#b45309', 미대상:'#d4c6cd' };
 // 신고현황(sharedFilingStatus) 한 칸 → '회사 진행' 칸. 글자색만, 완료일은 옆에 작게, 메모는 마우스를 올리면
@@ -8122,7 +8130,7 @@ function renderSubmit(){
         const closeTd = x.st === 'off' && !cv ? `<td>${na}</td>` : `<td>${payDateBtnHtmlS(r.key, it, cv, pk)}</td>`;
         return closeTd + `<td>${cellHtml(x)}</td>`; }).join('')}
       <td><button type="button" class="cl-dt" data-key="${k}" data-pk="${escapeAttr(pk)}" title="${escapeAttr(m.done ? '신고서류 저장 ' + m.done : '신고서류 저장일 입력 (달력·오늘)')}" onclick="submitSavedPop(this)">${payFmtDate(m.done)}</button></td><!-- [2026.10.23] "내 확인 → 신고서류 저장, 아이콘만(눌러서 달력·오늘)"(요청) -->
-      ${smCoMemoTd(r.memo)}
+      ${smCoMemoTd(r.memo, `${r.c.name} · 지급명세서 회사 메모`)}
       <td class="note-cell"><input type="text" value="${escapeAttr(m.note)}" onchange="updateSubmitMine('${k}','note',this.value,'${pk}')" style="width:100%"></td>
     </tr>`; }).join('');
   const prevNote = res.prevCnt ? `<button class="btn ghost xs" onclick="setSubmitView('due')" title="제출월 기준으로 보기" style="color:#b45309;">${Number(res.prevMonth.slice(5,7))}월 귀속 익월지급분 미제출 ${res.prevCnt}칸 ›</button>` : '';
@@ -8661,7 +8669,7 @@ function payOverviewHtml(docs){
       <td style="white-space:nowrap; font-weight:700; color:${app ? 'var(--ink)' : 'var(--muted)'};">${dual ? `${taxjEsc(base)}<span style="color:var(--muted); font-weight:600;">/</span><span style="color:#047857;">당월</span><span style="color:var(--muted); font-weight:600;">·</span><span style="color:#be123c;">익월</span>` : taxjEsc(base)}</td>
       <td>${v(e.reportPayDay)}</td><td>${v(e.actualPayDay)}</td><td>${v(e.payComm)}</td><td>${v(e.payslipVia)}</td><td>${v(e.billVia)}</td>
       <td>${v(e.wpNo)}</td><td>${v(e.wpNoSpecial)}</td><td>${e.edi ? '✓' : PAY_NA}</td>
-      <td>${notes.length ? `<button class="btn ghost xs" onclick="payShowNote('${escapeAttr(c.id)}')" title="${escapeAttr(notes.join('\n'))}">✎${notes.length > 1 ? ' ' + notes.length : ''}</button>` : PAY_NA}</td></tr>`;
+      <td>${notes.length ? `<button type="button" class="sm-tool-ic vt-ic" onclick="payShowNote('${escapeAttr(c.id)}')" title="${escapeAttr(notes.join('\n'))}" aria-label="비고">${ICON_MEMO_DOC}${notes.length > 1 ? `<span class="vt-ic-n">${notes.length}</span>` : ''}</button>` : PAY_NA}</td></tr>`;   // [2026.11.03] 메모와 같은 아이콘(요청)
   });
   return `<div class="toolbar"><div class="spacer"></div><span class="hint" style="margin:0;">기장거래처 ${list.length}곳 · 회사웹 총괄 그대로(조회만)</span></div>
     ${rows.length ? `<div class="table-scroll" style="margin-top:12px;"><table><thead><tr><th class="tx-seq">순번</th><th>상호명</th><th>신고</th><th>신고 지급일</th><th>실 급여일</th><th>급여소통</th><th>급여명세서<br>전달방법</th><th>납부서<br>전달방법</th><th>사업장관리번호<br>(일반)</th><th>사업장관리번호<br>(특고·예술인·기타)</th><th>EDI<br>수임</th><th>비고</th></tr></thead><tbody>${rows.join('')}</tbody></table></div>`
@@ -8670,7 +8678,23 @@ function payOverviewHtml(docs){
 
 // ── 2. 신고현황 ──
 // payCustomCols·payCustomVals(내가 만든 항목)는 다른 저장 항목과 함께 위쪽에 선언
-const PAY_COL_TYPES = [['date','날짜'], ['check','체크'], ['text','글자']];
+const PAY_COL_TYPES = [['date','날짜'], ['check','체크'], ['text','글자'], ['paystate','완납·미납']];   // [2026.11.03] 완납·미납 = 예전 고정 '납부마감' 칸 모양(상태 + 확인일, 미납이면 멘트 발송일)
+// [2026.11.03] "신고서류·납부마감은 고정 안 해도 됨"(요청) - works에만 있던 고정 칸 두 개를 내 항목(이름·입력 방식 수정, 삭제, 끌기, 이월 가능)으로 바꿈.
+//   값은 예전 그대로(_billSent·_payState·_payCheck·_payMsg)를 써서 이미 적은 내용이 이어짐. 귀속월마다 처음 열 때 한 번만 넣고(settings.payBillSeeded), 지우면 다시 안 생김
+const PAY_BILL_COLS = [{ id:'_billSent', label:'신고서류', type:'date', pos:'paid' }, { id:'_payState', label:'납부마감', type:'paystate', pos:'memo' }];
+function payEnsureBillCols(month){
+  const seeded = settings.payBillSeeded = settings.payBillSeeded || {};
+  if(!month || seeded[month]) return;
+  seeded[month] = 1;
+  const cols = smColsAt(payColsBy, month);
+  const ORD = ['cycle','payslip','payroll','close','filed','bill','paid','memo','end'], rk = c => ORD.indexOf(c.pos || 'end');
+  PAY_BILL_COLS.forEach(d => {
+    if(cols.some(c => c.id === d.id)) return;
+    const i = cols.findIndex(c => rk(c) >= rk(d));
+    cols.splice(i < 0 ? cols.length : i, 0, Object.assign({}, d));   // 그 자리 묶음 맨 앞 = 예전 고정 칸 자리(목록 순서도 화면 순서와 같게)
+  });
+  scheduleGoogleSave();
+}
 // [2026.10.15] "항목 추가하면 위치도 조정 가능? 예: 급여명세서 전달 왼쪽"(요청) - 내 항목마다 pos(어느 칸 앞에 둘지) 저장. 없으면 맨 끝
 const PAY_COL_POS = [['end','맨 끝 (메모 뒤)'], ['cycle','신고 앞'], ['payslip','급여명세서 전달 앞'], ['payroll','급여마감 앞'], ['close','신고서 마감 앞'], ['filed','신고일자 앞'], ['bill','신고서류 앞'], ['paid','납부마감 앞'], ['memo','메모 앞']];
 function payPosKey(label){ return (PAY_COL_POS.find(x => x[1] === label) || PAY_COL_POS[0])[0]; }
@@ -8761,6 +8785,7 @@ function payCustomCellHtml(key, col){
   const k = escapeAttr(key);
   // [2026.10.23] "신고서류가 해당없음이면 납부마감·신고서 저장 둘 다 비활성화"(요청) - '신고서 저장' 내 항목도 "-"만
   if(/신고서\s*저장/.test(col.label || '') && smIsNA(((payCustomVals[payMonth] || {})[key] || {})._billSent)) return `<td><span style="color:#d4c6cd;" title="신고서류 미해당 - 신고서 저장 없음">-</span></td>`;
+  if(col.type === 'paystate') return payBillCellsHtml(key)[1];   // [2026.11.03] 완납·미납(신고서류가 미해당이면 '-')
   if(col.type === 'check') return `<td><input type="checkbox" ${v ? 'checked' : ''} onchange="setPayCustomVal('${k}','${col.id}',this.checked)"></td>`;
   if(col.type === 'text') return `<td class="note-cell"><input type="text" value="${escapeAttr(v || '')}" onchange="setPayCustomVal('${k}','${col.id}',this.value)" style="width:100%"></td>`;
   return `<td><div class="date-cell">${payDateBtnHtml(key, col.id, v)}</div></td>`;   // [2026.10.23] ✓로 바꿔서 '완료' 칩은 뺌(요청)
@@ -8808,8 +8833,13 @@ function payPickAll(on){ document.querySelectorAll('#tab-pay .pay-pick').forEach
 //   체크 기본값 = 표에서 고른 줄이 있으면 그 줄, 없으면 그 항목이 비어 있는 줄. 납부마감 완납·미납은 날짜 = 확인일
 let payRowsShown = [];   // 신고현황 표에 지금 보이는 줄 [{ key, name, lane }] - payStatusHtml에서 채움
 function payBulkItems(){
-  return [['_billSent', '신고서류'], ['__paid', '납부마감 · 완납'], ['__unpaid', '납부마감 · 미납'], ['_payMsg', '납부마감 · 미납 멘트 발송'],
-    ...payCustomCols.filter(c => c.type === 'date').map(c => [c.id, c.label])];
+  // [2026.11.03] 신고서류·납부마감도 내 항목이 됨 - 이 달에 있는 항목만(날짜 항목 + 완납·미납 항목이면 완납·미납·멘트)
+  const out = [];
+  payCustomCols.forEach(c => {
+    if(c.type === 'date') out.push([c.id, c.label]);
+    else if(c.type === 'paystate') out.push(['__paid', `${c.label} · 완납`], ['__unpaid', `${c.label} · 미납`], ['_payMsg', `${c.label} · 미납 멘트 발송`]);
+  });
+  return out;
 }
 function payBulkCur(key, item){
   const v = (payCustomVals[payMonth] || {})[key] || {};
@@ -8903,6 +8933,7 @@ function payBillCellsHtml(key){
 }
 function payStatusHtml(docs){
   if(!payMonth) payMonth = payFocusMonth(docs);
+  payEnsureBillCols(payMonth);
   const p = payMonth, [yy, mm] = p.split('-').map(Number);
   const idx = taxjClientIndex(docs), st = (docs.s__itFilingStatus || {})[p] || {}, ov = docs.s__itOverview || {};
   const q = payQuery.trim().toLowerCase();
@@ -8955,7 +8986,7 @@ function payStatusHtml(docs){
       // [2026.10.14] "같은 거래처라 한 표에 나오게"(요청) - 당월·익월 두 줄이면 순번·상호명 칸을 합치고(rowspan) 두 줄 사이 선을 옅게
       const span = dual ? ` rowspan="${lanes.length}"` : '';
       const cc = pos => payCustomCols.filter(col => (col.pos || 'end') === pos).map(col => payCustomCellHtml(key, col)).join('');
-      const [billTd, paidTd] = payBillCellsHtml(key);
+
       payRowsShown.push({ key, name: c.name, lane: dual ? k : '' });
       const trCls = [dual ? (li ? 'pay-lane-2' : 'pay-lane-1') : '', offMonth ? 'pay-off' : ''].filter(Boolean).join(' ');
       rows.push(`<tr${trCls ? ` class="${trCls}"` : ''}${offMonth ? ` title="${mm}월 급여 없음 - ${yy}년 다른 달에 급여가 있어서 보여요"` : ''}>
@@ -8964,8 +8995,8 @@ function payStatusHtml(docs){
         ${li ? '' : `<td style="white-space:nowrap;"${span}>${(ov[c.id] || {}).actualPayDay ? taxjEsc(ov[c.id].actualPayDay) : PAY_NA}</td>`}<!-- [2026.10.23] "신고 오른쪽에 총괄의 실지급일"(요청) - 회사웹 원천세 › 총괄의 실 급여일(s__itOverview.actualPayDay), 거래처당 한 칸 -->
         ${cc('payslip')}<td>${slip}</td>${cc('payroll')}<td>${taxjChk(v.payroll)}</td>
         ${cc('close')}${taxTds(v.returnClose, v.returnCloseLocal, '신고서 마감')}${cc('filed')}${taxTds(v.national, v.local, '신고')}
-        ${cc('bill')}${billTd}${cc('paid')}${paidTd}
-        ${cc('memo')}<td style="text-align:left; white-space:pre-wrap; min-width:140px; font-size:12.5px;">${v.memo ? taxjEsc(v.memo) : PAY_NA}</td>
+        ${cc('bill')}${cc('paid')}
+        ${cc('memo')}<td>${smMemoBtn(v.memo, `${c.name} · ${mm}월 귀속 메모`)}</td><!-- [2026.11.03] 아이콘 + 팝업(요청) -->
         ${cc('end')}</tr>`);
     });
   });
@@ -8981,7 +9012,7 @@ function payStatusHtml(docs){
       </div>
     </div>
     <!-- [2026.11.03] 진행현황 칩 줄(신고대상~진행률)은 뺌(요청) -->
-    ${rows.length ? `<div class="table-scroll" style="margin-top:8px;"><table><thead><tr><th class="tx-seq" rowspan="2">순번</th><th rowspan="2" data-smdrag="pay" data-smfix="cycle,cycle">상호명</th>${ch('cycle')}<th rowspan="2" data-smdrag="pay" data-smfix="cycle,payslip">신고</th><th rowspan="2" data-smdrag="pay" data-smfix="payslip,payslip">실 급여일</th>${ch('payslip')}<th rowspan="2" data-smdrag="pay" data-smfix="payslip,payroll">급여명세서 전달</th>${ch('payroll')}<th rowspan="2" data-smdrag="pay" data-smfix="payroll,close">급여마감</th>${ch('close')}<th colspan="2" data-smdrag="pay" data-smfix="close,filed">신고서 마감</th>${ch('filed')}<th colspan="2" data-smdrag="pay" data-smfix="filed,bill">신고일자</th>${ch('bill')}<th rowspan="2" data-smdrag="pay" data-smfix="bill,paid">신고서류</th>${ch('paid')}<th rowspan="2" data-smdrag="pay" data-smfix="paid,memo">납부마감</th>${ch('memo')}<th rowspan="2" data-smdrag="pay" data-smfix="memo,end">메모</th>
+    ${rows.length ? `<div class="table-scroll" style="margin-top:8px;"><table><thead><tr><th class="tx-seq" rowspan="2">순번</th><th rowspan="2" data-smdrag="pay" data-smfix="cycle,cycle">상호명</th>${ch('cycle')}<th rowspan="2" data-smdrag="pay" data-smfix="cycle,payslip">신고</th><th rowspan="2" data-smdrag="pay" data-smfix="payslip,payslip">실 급여일</th>${ch('payslip')}<th rowspan="2" data-smdrag="pay" data-smfix="payslip,payroll">급여명세서 전달</th>${ch('payroll')}<th rowspan="2" data-smdrag="pay" data-smfix="payroll,close">급여마감</th>${ch('close')}<th colspan="2" data-smdrag="pay" data-smfix="close,filed">신고서 마감</th>${ch('filed')}<th colspan="2" data-smdrag="pay" data-smfix="filed,bill">신고일자</th>${ch('bill')}${ch('paid')}${ch('memo')}<th rowspan="2" data-smdrag="pay" data-smfix="memo,end">메모</th>
       ${ch('end')}</tr><tr><th>국세</th><th>지방세</th><th>국세</th><th>지방세</th></tr></thead><tbody>${rows.join('')}</tbody></table></div>`
       : `<div class="empty">${q ? '검색 결과가 없어요.' : `${yy}년 ${mm}월 귀속 신고대상이 없어요.`}</div>`}`;
 }
@@ -11121,6 +11152,7 @@ function menuNoteMount(k){
 });
 
 function renderAllNoSave(){
+  if(smMemoStore.length > 5000) smMemoStore.length = 0;
   try{ ensurePayMonths(); ensureTaxRows(); generateRecurringTasks(); }catch(e){ console.warn(e); }
   renderHome(); renderWorklist(); renderAccounts(); renderLinks(); renderManuals(); renderLib('forms'); renderLib('laws'); renderVat(); renderClose(); renderPay(); renderCorp(); renderIndiv(); renderClients(); renderSettings();
   if(activeTab === 'review') renderReview();
