@@ -1137,7 +1137,9 @@ function smTogglePcView(){ try{ localStorage.setItem('sm_pc_view', window.SM_PC_
   /* [2026.10.13] 원천세 메뉴 2단(요청 - "메뉴구성 스타일이 이상하다"): 윗줄(총괄·신고현황·일용직·제출)은 큰 탭 + 아래 구분선,
      아랫줄(매월·반기·연간)은 옆 선택칸과 같은 높이의 작은 칸 묶음으로 구분 */
   .pay-prog .cl-subtab{ cursor:default; }
-  #tab-pay tr.pay-off > td{ opacity:.45; }   /* [2026.11.02] 이 달 급여 없는 거래처(올해 다른 달엔 있음) */   /* [2026.11.02] 원천세 진행현황 칩(누르는 버튼 아님) */
+  #tab-pay tr.pay-off > td{ opacity:.45; }   /* [2026.11.02] 이 달 급여 없는 거래처(올해 다른 달엔 있음) */
+  #tab-pay td.pay-yr{ min-width:44px; }   /* [2026.11.03] 급여현황 연간 표 */
+  #tab-pay .pay-yr-cur{ background:var(--primary-soft) !important; }   /* [2026.11.02] 원천세 진행현황 칩(누르는 버튼 아님) */
   .pay-maintabs{ border-bottom:1px solid var(--border); padding-bottom:10px; margin-bottom:14px !important; }
   /* [2026.11.02] works 위 탭(거래처~종소세)·하위메뉴 - 가운데 */
   .page-head .works-tabs, .page-head .works-subtabs{ justify-content:center; }
@@ -1213,6 +1215,7 @@ function smTogglePcView(){ try{ localStorage.setItem('sm_pc_view', window.SM_PC_
   .sm-upd-btns [data-a="later"]{ background:rgba(255,255,255,.22); color:#fff; }
   .sm-upd-btns [data-a="go"]{ background:#fff; color:var(--primary-dark); }
   .sm-upd-btns button:focus{ outline:none; }
+  #attendYearBody .table-scroll > table{ width:100%; }   /* [2026.11.03] "연간 전체보기 요약·상세 표가 왼쪽으로 치우침"(요청) - 창 폭 전체로(월 머리띠와 같은 폭) */
   .cl-last-imp{ text-align:right; font-size:11.5px; color:var(--muted-soft); margin:6px 6px 0; }   /* [2026.11.02] 거래처 마지막 가져오기 - 카드 밖 오른쪽 아래 */
   .cl-pop.sm-quick{ width:auto; padding:6px; }   /* [2026.11.02] 오른쪽 클릭 빠른 입력(- / 미해당) - 내용 폭만큼 */
   .cl-pop.sm-quick .cl-pop-row button{ min-width:32px; }
@@ -2292,6 +2295,7 @@ const NAV_SUBMENUS = {
   // [2026.10.13] 원천세를 회사웹처럼 총괄·신고현황·일용직·제출(매월·반기·연간)로 나눔(요청). 따로 있던 제출 메뉴는 여기로 옮김
   pay: [
     {js:"setPayView('overview')", label:'총괄'},
+    {js:"setPayView('payroll')",  label:'급여현황'},   // [2026.11.03] 올해 급여가 한 번이라도 있었던 거래처 × 1~12월(요청)
     {js:"setPayView('status')",   label:'신고현황'},
     {js:"setPayView('submit')",   label:'지급명세서'},   // [2026.11.02] 신고현황 안의 지급명세서 칩을 하위메뉴로(요청) - 총괄·신고현황·지급명세서·일용직
     {js:"setPayView('daily')",    label:'일용직'},
@@ -7347,7 +7351,7 @@ async function taxjUsageFromCompany(){
   const people = (docs.profiles || []).filter(p => p && p.email).map(p => {
     const em = String(p.email).toLowerCase(), k = key(em);
     const presence = [pres[k], pres[k + '__alt']].filter(Boolean).map(v => ({ online: now - (v.at || 0) < 90000, device: v.device || (v.mob ? '휴대폰' : 'PC'), screen: v.label || '', at: v.at || 0, lastAt: v.lastAt || 0 }));
-    const devices = toks.filter(t => t && String(t.email || '').toLowerCase() === em).map(t => ({ dev: t.deviceName || (t.mob ? '휴대폰' : 'PC'), mob: t.mob, notif: 'granted', at: t.updatedAt }));
+    const devices = toks.filter(t => t && String(t.email || '').toLowerCase() === em).map(t => ({ dev: t.deviceName || (t.mob ? '휴대폰' : 'PC'), mob: t.mob, notif: 'granted', at: t.updatedAt, first: taxjIdTime(t.id) }));   // [2026.11.03] first = 이 기기 알림 등록 시각(회사웹 genId 앞부분 = 만든 시각)
     // [2026.10.16] "등록기기·마지막 접속·알림 허용·출퇴근 알림·권한까지 다 보이게"(요청) - 알림 분류별 켬/끔(prefs, 값이 없으면 켬)과 관리자 여부(s__adminEmails)도 같이
     return { name: p.name || em, position: p.position || p.title || '', status: p.status || '', presence, devices, clockReminder: !!(prefs[em] && prefs[em].clockReminder), clock: [],
       prefs: prefs[em] || {}, admin: (Array.isArray(docs.s__adminEmails) ? docs.s__adminEmails : []).map(x => String(x).toLowerCase()).includes(em) };
@@ -8599,7 +8603,7 @@ function renderAttend(){
    회사 값은 읽기만(고치려면 회사웹에서). 내가 만든 항목·값은 payCustomCols·payCustomVals(works)에만 저장.
    예전 내 원천세 표(급여유형·지급일·원천세 신고일·납부서 발송일·비고 = payData)는 지우지 않고 저장된 채로 둠 */
 let payView = 'status', payQuery = '', payMonth = '', dwYear = '', dwClient = '', dwShowLeft = false;
-const PAY_VIEWS = [['overview','총괄'], ['status','신고현황'], ['submit','지급명세서'], ['daily','일용직']];
+const PAY_VIEWS = [['overview','총괄'], ['payroll','급여현황'], ['status','신고현황'], ['submit','지급명세서'], ['daily','일용직']];
 function setPayView(v){ payView = v; if(activeTab !== 'pay') switchTab('pay'); else renderPay(); }
 function payViewTabsHtml(){ return ''; }   // [2026.10.14] 왼쪽 하위메뉴와 같은 가로 메뉴는 없앰(요청) - 이동은 왼쪽 메뉴 원천세 › 총괄·신고현황·일용직·제출
 const PAY_NA = '<span style="color:#d4c6cd;">-</span>';
@@ -8904,18 +8908,9 @@ function payStatusHtml(docs){
     const own = payTarget(docs, c.id, p);
     // [2026.10.26] "신고현황은 급여가 있는 모든 거래처가 나오게 - 반기 상관없이"(요청) - 그 달 신고구분이 반기(대상)인 거래처는 그 달 신고대상 표시가 없어도 매달 보여줌
     const halfOn = !!(rec && payRecApp(rec) && rec.cycle === '반기' && recs.length && p >= recs[0].effectiveFrom);
-    // [2026.11.02] "그 귀속연도에 한 번이라도 급여가 있었던 곳은 다 나와야"(요청) - 이 달 신고대상이 아니어도 같은 해 다른 달에 신고대상(급여)이 있었으면
-    //   흐린 줄로 보여줌(이 달 신고대상·완료 건수에는 안 셈)
-    const monthOn = halfOn || !!(own && own.applicable && (own.sameMonthPay || own.nextMonthPay));
-    // 그 달 신고구분이 미대상이거나 신고구분 시작 전이면 신고대상 표시가 남아 있어도 급여 있는 달로 안 셈(이 달 판단과 같은 기준)
-    const yearOn = monthOn || Array.from({ length:12 }, (_, i) => `${yy}-${pad2(i + 1)}`).some(pp => {
-      const o = payTarget(docs, c.id, pp); if(!(o && o.applicable && (o.sameMonthPay || o.nextMonthPay))) return false;
-      return !recs.length || (pp >= recs[0].effectiveFrom && payRecApp(payCycleAt(docs, c.id, pp)));
-    });
-    if(!yearOn) return;
-    const offMonth = !monthOn;
-    // [2026.10.15] "미대상도 나온다. 그 달 귀속 급여가 있는 거래처만"(요청) - 회사웹 filingApplicableAt과 같게 그 달 신고구분이 미대상이거나
-    // 신고구분 시작 전 달이면 신고대상 표시가 남아 있어도 뺌(신고구분 이력이 없으면 신고대상 등록만으로 판단)
+    // [2026.11.03] "신고현황 = 이번 달 급여가 있는 거래처, 올해 급여 있던 곳은 급여현황에서"(요청) - 11/2에 넣은 흐린 줄(올해 다른 달 급여)은 급여현황 메뉴로 옮김
+    if(!halfOn && !(own && own.applicable && (own.sameMonthPay || own.nextMonthPay))) return;
+    const offMonth = false;
     if(!offMonth && recs.length && !(p >= recs[0].effectiveFrom && payRecApp(rec))) return;
     // [2026.10.14] "노아하우징쿱은 26.9월에 급여가 없는데도 나온다"(요청) - 반기 신고 거래처는 그 달에 급여(그 달 신고대상 등록)가 있거나
     // 이 달에 적은 기록이 있을 때만 보여줌(예전엔 신고구분만 보고 반기 안의 모든 달에 나왔음). 매월 거래처는 그대로
@@ -8969,13 +8964,48 @@ function payStatusHtml(docs){
         <button class="sm-tool-ic" onclick="payBulk()" title="날짜 일괄 입력 - 왼쪽 체크박스로 고른 거래처(없으면 보이는 전체)에 날짜·완납·미납을 한 번에 넣어요" aria-label="날짜 일괄 입력">${ICON_BULK}</button><button class="sm-tool-ic" onclick="addPayCustomCol()" title="항목 추가" aria-label="항목 추가">${ICON_PLUS}</button><button class="sm-tool-ic" onclick="payCarryCols()" title="다음 달로 이월 - 항목마다 안 넘김·항목만·항목+내용을 골라 넘겨요" aria-label="다음 달로 이월">${ICON_CARRY}</button></div>
       </div>
     </div>
-    <!-- [2026.11.02] "원천세 진행현황도 부가세처럼 - 자리 차지가 너무 큼"(요청) - 큰 숫자 카드·진행 막대 대신 부가세 총괄 구분 칩과 같은 모양의 한 줄 -->
-    <div class="toolbar" style="margin-bottom:8px;"><div class="cl-subtabs pay-prog">
-      <span class="cl-subtab on">신고대상 ${total}</span><span class="cl-subtab">급여마감 ${cntPayroll}</span><span class="cl-subtab">신고서 마감 ${cntClose}</span><span class="cl-subtab">신고 완료 ${cntFiled}</span><span class="cl-subtab" title="급여마감 완료 ÷ 신고대상">진행률 ${pct}%</span>
-    </div></div>
+    <!-- [2026.11.03] 진행현황 칩 줄(신고대상~진행률)은 뺌(요청) -->
     ${rows.length ? `<div class="table-scroll" style="margin-top:8px;"><table><thead><tr><th class="tx-seq" rowspan="2">순번</th><th rowspan="2" data-smdrag="pay" data-smfix="cycle,cycle">상호명</th>${ch('cycle')}<th rowspan="2" data-smdrag="pay" data-smfix="cycle,payslip">신고</th><th rowspan="2" data-smdrag="pay" data-smfix="payslip,payslip">실 급여일</th>${ch('payslip')}<th rowspan="2" data-smdrag="pay" data-smfix="payslip,payroll">급여명세서 전달</th>${ch('payroll')}<th rowspan="2" data-smdrag="pay" data-smfix="payroll,close">급여마감</th>${ch('close')}<th colspan="2" data-smdrag="pay" data-smfix="close,filed">신고서 마감</th>${ch('filed')}<th colspan="2" data-smdrag="pay" data-smfix="filed,bill">신고일자</th>${ch('bill')}<th rowspan="2" data-smdrag="pay" data-smfix="bill,paid">신고서류</th>${ch('paid')}<th rowspan="2" data-smdrag="pay" data-smfix="paid,memo">납부마감</th>${ch('memo')}<th rowspan="2" data-smdrag="pay" data-smfix="memo,end">메모</th>
       ${ch('end')}</tr><tr><th>국세</th><th>지방세</th><th>국세</th><th>지방세</th></tr></thead><tbody>${rows.join('')}</tbody></table></div>`
       : `<div class="empty">${q ? '검색 결과가 없어요.' : `${yy}년 ${mm}월 귀속 신고대상이 없어요.`}</div>`}`;
+}
+
+// ── 2-1. 급여현황 ── [2026.11.03] "올해 한 번이라도 급여가 있었던 거래처를 연간 표로"(요청)
+//   줄 = 그해 어느 달이든 신고대상(급여, 당월·익월 지급)으로 등록되고 그 달 신고구분이 대상인 기장거래처. 칸 = 1~12월:
+//   ✓ = 그 달 급여마감 완료(당월·익월 줄 모두), 당월/익월/당·익 = 급여 있음(급여마감 전), - = 급여 없음. 보고 있는 귀속월 칸은 강조. 회사웹 값 조회만
+let payGridYear = '';
+function payGridShift(n){ payGridYear = String(Number(payGridYear) + n); renderPay(); }
+function payPayrollHtml(docs){
+  if(!payMonth) payMonth = payFocusMonth(docs);
+  if(!payGridYear) payGridYear = payMonth.slice(0, 4);
+  const y = payGridYear, idx = taxjClientIndex(docs), stAll = docs.s__itFilingStatus || {}, months = Array.from({ length:12 }, (_, i) => `${y}-${pad2(i + 1)}`);
+  const cellOf = (c, recs, pp) => {
+    const o = payTarget(docs, c.id, pp);
+    if(!(o && o.applicable && (o.sameMonthPay || o.nextMonthPay))) return null;
+    if(recs.length && !(pp >= recs[0].effectiveFrom && payRecApp(payCycleAt(docs, c.id, pp)))) return null;
+    const lanes = [o.sameMonthPay ? 'sameMonth' : null, o.nextMonthPay ? 'nextMonth' : null].filter(Boolean), e = (stAll[pp] || {})[c.id] || {};
+    return { lanes, done: lanes.every(k => (e[k] || {}).payroll), dates: lanes.map(k => (e[k] || {}).payroll).filter(Boolean) };
+  };
+  let n = 0;
+  const rows = idx.sorted.filter(payIsReg).map(c => {
+    const recs = payCycleRecs(docs, c.id), cells = months.map(pp => cellOf(c, recs, pp));
+    if(!cells.some(Boolean)) return '';
+    const rec = payCycleAt(docs, c.id, months.includes(payMonth) ? payMonth : months[11]);
+    const base = !rec ? '미등록' : payRecApp(rec) ? (rec.cycle || '매월') : '미대상';
+    n++;
+    return `<tr><td class="tx-seq">${n}</td><td class="tx-name" style="${smEntCss(c.entityType)}">${taxjEsc(c.name)}</td><td style="white-space:nowrap; font-weight:700;">${taxjEsc(base)}</td>`
+      + cells.map((x, i) => {
+        const cur = months[i] === payMonth ? ' pay-yr-cur' : '';
+        if(!x) return `<td class="pay-yr${cur}"><span style="color:#d4c6cd;">-</span></td>`;
+        if(x.done) return `<td class="pay-yr${cur}" title="급여마감 ${escapeAttr(x.dates.join(', '))}"><span class="pay-chk">✓</span></td>`;
+        const lab = x.lanes.length > 1 ? '당·익' : x.lanes[0] === 'sameMonth' ? '당월' : '익월';
+        return `<td class="pay-yr${cur}" title="급여 있음 - 급여마감 전"><span style="font-weight:700; color:${x.lanes.length > 1 ? 'var(--text)' : x.lanes[0] === 'sameMonth' ? '#047857' : '#be123c'};">${lab}</span></td>`;
+      }).join('') + '</tr>';
+  }).filter(Boolean);
+  return `<div class="toolbar" style="justify-content:center;"><button class="btn ghost xs" onclick="payGridShift(-1)" title="이전 해">‹</button><span style="font-weight:800;">${y}년 귀속</span><button class="btn ghost xs" onclick="payGridShift(1)" title="다음 해">›</button></div>
+    ${rows.length ? `<div class="table-scroll" style="margin-top:8px;"><table><thead><tr><th class="tx-seq">순번</th><th>상호명</th><th>신고</th>${months.map(pp => `<th class="${pp === payMonth ? 'pay-yr-cur' : ''}">${Number(pp.slice(5))}월</th>`).join('')}</tr></thead><tbody>${rows.join('')}</tbody></table></div>
+    <div class="hint" style="margin-top:8px; text-align:right;">✓ 급여마감 완료 · 당월/익월 급여 있음(마감 전) · - 급여 없음</div>`
+      : `<div class="empty">${y}년에 급여가 있었던 거래처가 없어요.</div>`}`;
 }
 
 // ── 3. 일용직 ── (Tax.J dwInEmploy / dwSuggest와 같은 기준)
@@ -9045,7 +9075,7 @@ function renderPay(){
   if(payView === 'submit') return renderSubmit();
   const docs = taxjFull && taxjFull.docs;
   const body = !docs ? '<div class="empty">Tax.J에 연결하면 회사웹 원천세 화면이 여기에 채워져요.</div>'
-    : payView === 'overview' ? payOverviewHtml(docs) : payView === 'daily' ? payDailyHtml(docs) : payStatusHtml(docs);
+    : payView === 'overview' ? payOverviewHtml(docs) : payView === 'daily' ? payDailyHtml(docs) : payView === 'payroll' ? payPayrollHtml(docs) : payStatusHtml(docs);
   el.innerHTML = `<div class="card">${taxjLiveBarHtml()}${payViewTabsHtml()}${body}</div>`;
 }
 
@@ -9488,6 +9518,8 @@ function renderReview(){
 
 // [2026.10.16] "등록기기 / 마지막 접속 / 알림 허용 / 출퇴근 알림 / 권한이 다 나오게"(요청) - 칸을 나눠서 보여줌. 최근 출퇴근 알림(7일)은 서버 보고서에 기록이 있을 때만
 const TAXJ_NOTIF_CATS = [['notice','공지'], ['approvalNew','결재 요청'], ['approvalDecision','결재 결과'], ['teamSchedule','팀일정']];
+// 회사웹 genId(Date.now().toString(36) + 무작위 4자리)에서 만든 시각을 읽음 - 알 수 없으면 0
+function taxjIdTime(id){ const s = String(id || ''); if(s.length < 9) return 0; const n = parseInt(s.slice(0, -4), 36); return n > 1.5e12 && n < 4e12 ? n : 0; }
 function taxjUsageTableHtml(rep){
   const people = ((rep && rep.people) || []).filter(p=> p.status !== '퇴사');
   const notifTxt = { granted:'허용', denied:'차단', default:'안 정함', unsupported:'미지원' };
@@ -9498,19 +9530,23 @@ function taxjUsageTableHtml(rep){
     const last = Math.max(0, ...(p.presence||[]).map(x=> Math.max(x.at||0, x.lastAt||0)));
     const nowTxt = online.length ? `<b style="color:var(--ok, #16a34a);">접속 중</b><div class="hint" style="margin:0;">${online.map(x=> taxjEsc((x.device||'기기') + (x.screen ? ' · ' + x.screen : ''))).join('<br>')}</div>` : mute(rep && rep.noLive ? '-' : '접속 안 함');
     const lastTxt = online.length ? '지금' : last ? taxjWhen(last) : mute('-');
-    const devs = (p.devices||[]).map(d=> `${taxjEsc(d.dev || (d.mob ? '휴대폰' : '기기'))} ${mute('마지막 접속기록 ' + taxjWhen(d.at))}`).join('<br>') || mute('없음');
+    // [2026.11.03] "등록기기·처음 접속기록·마지막 접속기록을 구분해서"(요청) - 한 칸에 이어 쓰던 것을 세 칸으로(기기마다 같은 줄)
+    const dl = p.devices || [];
+    const devs = dl.map(d=> taxjEsc(d.dev || (d.mob ? '휴대폰' : '기기'))).join('<br>') || mute('없음');
+    const devFirst = dl.length ? dl.map(d=> d.first ? taxjWhen(d.first) : mute('-')).join('<br>') : mute('-');
+    const devLast = dl.length ? dl.map(d=> d.at ? taxjWhen(d.at) : mute('-')).join('<br>') : mute('-');
     const devNotif = (p.devices||[]).length ? (p.devices||[]).map(d=> taxjEsc(notifTxt[d.notif] || '-')).join('<br>') : mute('-');
     const pf = p.prefs || {}, offs = TAXJ_NOTIF_CATS.filter(([k])=> pf[k] === false);
     const cats = !hasPrefs ? '' : offs.length === TAXJ_NOTIF_CATS.length ? mute('모두 끔') : offs.length ? `${TAXJ_NOTIF_CATS.filter(([k])=> pf[k] !== false).map(([,l])=> l).join('·')}<div class="hint" style="margin:0;">끔: ${offs.map(([,l])=> l).join('·')}</div>` : '모두 켬';
     const clk = (p.clock||[]).slice(0,7).map(c=> `${c.date.slice(5).replace('-','/')} ${c.checkIn ? (c.checkIn === 'done' ? '출근✓' : c.checkIn === 'leave' ? '휴가' : '출근알림') : ''}${c.checkIn && c.checkOut ? ' · ' : ''}${c.checkOut ? (c.checkOut === 'done' ? '퇴근✓' : c.checkOut === 'leave' ? '휴가' : '퇴근알림') : ''}`).join('<br>') || '-';
     return `<tr><td style="white-space:nowrap;"><b>${taxjEsc(p.name)}</b>${p.position ? `<div class="hint" style="margin:0;">${taxjEsc(p.position)}</div>` : ''}</td>`
       + (hasAdmin ? `<td style="white-space:nowrap;">${p.admin ? '<b>관리자</b>' : '일반'}</td>` : '')
-      + `<td>${nowTxt}</td><td style="white-space:nowrap;">${lastTxt}</td><td style="white-space:nowrap;">${devs}</td><td style="white-space:nowrap;">${devNotif}</td>`
+      + `<td>${nowTxt}</td><td style="white-space:nowrap;">${lastTxt}</td><td style="white-space:nowrap;">${devs}</td><td style="white-space:nowrap;">${devFirst}</td><td style="white-space:nowrap;">${devLast}</td><td style="white-space:nowrap;">${devNotif}</td>`
       + (hasPrefs ? `<td>${cats}</td>` : '')
       + `<td style="white-space:nowrap;">${p.clockReminder ? '켬' : mute('끔')}</td>`
       + (hasClock ? `<td style="white-space:nowrap; font-size:12px;">${clk}</td>` : '') + `</tr>`;
   }).join('');
-  const heads = ['직원'].concat(hasAdmin ? ['권한'] : [], ['지금','마지막 접속','등록 기기','기기 알림 권한'], hasPrefs ? ['받는 알림'] : [], ['출퇴근 알림'], hasClock ? ['최근 출퇴근 알림(7일)'] : []);
+  const heads = ['직원'].concat(hasAdmin ? ['권한'] : [], ['지금','마지막 접속','등록 기기','처음 접속기록','마지막 접속기록','기기 알림 권한'], hasPrefs ? ['받는 알림'] : [], ['출퇴근 알림'], hasClock ? ['최근 출퇴근 알림(7일)'] : []);
   return `<div class="hint" style="margin-bottom:6px;">${taxjWhen(rep && rep.at)} 기준${rep && rep.noLive ? ' · 지금 접속·마지막 접속은 회사웹 실시간 연결(회사 계정) 중일 때만 보여요' : ''}</div>
     <div style="overflow-x:auto;"><table style="width:100%; border-collapse:collapse; font-size:12.5px;">
       <thead><tr>${heads.map(h=>`<th style="text-align:left; padding:6px 8px; border-bottom:1px solid var(--line, #eee); white-space:nowrap;">${h}</th>`).join('')}</tr></thead>
