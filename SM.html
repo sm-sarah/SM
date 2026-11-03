@@ -403,6 +403,8 @@ function smTogglePcView(){ try{ localStorage.setItem('sm_pc_view', window.SM_PC_
   .wl-carry{ border:1px solid var(--amber-soft); background:#fffaf0; border-radius:14px; padding:10px 14px; margin-bottom:12px; }
   .wl-carry-head{ display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; font-size:13px; }
   .wl-carry .task-list li{ padding:8px 0; }
+  .wl-carry .wl-done-btn{ flex:none; color:#059669; border-color:#bbf7d0; background:#f0fdf4; }   /* [2026.11.03] 못한 일 목록의 완료 버튼 */
+  .wl-carry .wl-done-btn:hover{ background:#dcfce7; color:#047857; }
   .wl-moved{ display:inline-block; margin-left:6px; padding:1px 7px; border-radius:999px; font-size:10.5px; font-weight:700; background:var(--amber-soft); color:#b45309; }
   .wl-day .task-list li{ padding:8px 0; }
   /* 요청 배경: '10/5에서 넘어옴' 글자 대신 노란 점으로(마우스를 올리면 날짜). 내일로 미룬 일은 분홍 점으로 구분 */
@@ -418,6 +420,11 @@ function smTogglePcView(){ try{ localStorage.setItem('sm_pc_view', window.SM_PC_
   .tj-att.leave{ background:#e0f2fe; color:#0369a1; }
   .tj-att.remote{ background:#dcfce7; color:#047857; }
   .tj-att.etc{ background:#f1f5f9; color:#64748b; }
+  .tj-att.due{ background:#ffe4e6; color:#be123c; }   /* [2026.11.03] 세무일정 마감일 */
+  .wl-due{ border:1px solid #fecdd3; background:#fff1f2; border-radius:14px; padding:10px 14px; margin-bottom:12px; font-size:13px; }
+  .wl-due-head{ color:#9f1239; }
+  .wl-due-list{ display:flex; flex-wrap:wrap; gap:6px; margin-top:6px; }
+  .wl-due-chip{ font-size:12px; font-weight:700; color:#be123c; background:#fff; border:1px solid #fecdd3; border-radius:999px; padding:2px 10px; }
   /* 요청 배경(2026.10.08): 브라우저 기본 말풍선(title)이 마우스 물음표 커서와 겹쳐서, 점의 왼쪽(커서 반대쪽)에 직접 그린 말풍선으로 바꿈 */
   .wl-dot[data-tip]{ position:relative; }
   .wl-dot[data-tip]:hover::after{ content:attr(data-tip); position:absolute; right:calc(100% + 8px); top:50%; transform:translateY(-50%);
@@ -3180,6 +3187,7 @@ function renderWorklist(){
         </div>
         <button class="wl-navbtn" onclick="shiftWorklistDay(1)" title="다음 날 (키보드 →)" aria-label="다음 날">›</button>
       </div>
+      <div id="worklistDue"></div><!-- [2026.11.03] 세무일정 마감일 안내(요청) -->
       <div id="worklistCarry"></div>
       <div class="wl-agenda" id="worklistAgenda"></div>
       <div class="toolbar" style="margin-top:12px;">
@@ -3445,6 +3453,7 @@ function wlTaskItem(t, opts = {}){
       ${opts.carryPick ? `<input type="checkbox" class="carry-pick" ${carryPicked.has(t.id) ? 'checked' : ''} onchange="toggleCarryPick(${t.id})" title="넘길 일로 고르기">` : `<input type="checkbox" ${t.done ? 'checked' : ''} onchange="toggleTask(${t.id})">`}
       ${opts.showDate ? `<span class="task-date" style="cursor:pointer;" onclick="setWorklistDay('${t.date}')" title="이 날짜로 이동">${shortDate(t.date)}</span>` : ''}
       <span class="task-text">${t.text}${t.movedFrom ? `<span class="wl-dot moved" data-tip="${shortDate(t.movedFrom)}에서 넘어옴"></span>` : ''}${t.postponedFrom ? `<span class="wl-dot postponed" data-tip="${shortDate(t.postponedFrom)}에서 미룸"></span>` : ''}${t.note ? `<span class="task-note">${escapeAttr(t.note)}</span>` : ''}</span>
+      ${opts.carryPick ? `<button class="icon-btn wl-done-btn" onclick="toggleTask(${t.id})" title="완료 - 원래 날짜(${shortDate(t.date)})에 한 일로 표시하고 목록에서 빼요" aria-label="완료"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></button>` : ''}<!-- [2026.11.03] "못한 일 목록에서 체크 누락분을 바로 완료"(요청) - 이 목록의 동그라미는 '넘길 일 고르기'라 완료 버튼을 따로 둠 -->
       ${canCarry ? `<button class="btn xs" onclick="carryTaskToToday(${t.id})" title="오늘 할 일로 옮기기">오늘로 →</button>` : ''}
       ${actionIcons(`editTask(${t.id})`, `showTaskHistory(${t.id})`, `deleteTask(${t.id})`).replace('<span class="row-actions">', '<span class="row-actions">' + ((!t.done && t.date >= todayS) ? `<button class="icon-btn" onclick="postponeTask(${t.id})" title="다음 날로 미루기" aria-label="다음 날로 미루기">${ICON_POSTPONE}</button>` : ''))}
     </li>`;
@@ -3487,10 +3496,11 @@ function renderWlMonthCal(){
         const list = (byDate[ds] || []).slice().sort((a, b) => (a.done - b.done));
         const left = list.filter(t => !t.done).length;
         const shown = list.slice(0, 2);   // 칸을 낮게(3단 배치) - 제목 2건까지
-        const mk = (tjMarks || {})[ds];
+        const mk = (tjMarks || {})[ds], due = smDueOn(ds);
         return `
         <div class="cal-day ${ds === todayS ? 'today' : ''} ${ds.slice(0,7) !== wlCalYM ? 'other' : ''} ${ds === sel ? 'wl-sel' : ''}" onclick="setWlHistDay('${ds}', true)" title="${list.length ? `${list.length}건 · 남은 일 ${left}건` : ''}">
           <div class="wl-mcal-top"><div class="cal-daynum ${mk && mk.hol ? 'tj-hol' : ''}">${parseInt(ds.slice(8), 10)}${mk && mk.hol ? `<span class="tj-holname">${taxjEsc(mk.hol)}</span>` : ''}</div>${list.length ? `<span class="wl-mcal-cnt ${left ? '' : 'all-done'}">${list.length}</span>` : ''}</div>
+          ${due.length ? `<div class="tj-atts"><span class="tj-att due" title="${escapeAttr(due.map(x => x.title).join('\n') + '\n→ 납부여부 확인 및 납부마감 멘트 발송')}">납부마감</span></div>` : ''}
           ${taxjCalItemsHtml(mk)}
           <div class="cal-tasks" style="max-height:none;">
             ${shown.map(t => `<div class="wl-ct ${t.done ? 'done' : ''}">${escapeAttr(t.text)}</div>`).join('')}
@@ -3643,6 +3653,13 @@ function renderWorklistBody(){
   const slot = document.getElementById('wlTodayBtnSlot');
   if(slot) slot.innerHTML = `<button class="wl-today-btn ${date === todayS ? 'on' : ''}" onclick="setWorklistDay(todayStr())" title="오늘로 이동">오늘</button>`;
 
+  // [2026.11.03] "세무일정을 참고해 마감기한날 '납부여부 확인 및 납부마감 멘트 발송' 공지"(요청) - 보고 있는 날이 세무일정 마감일이면 맨 위에 안내
+  const dueEl = document.getElementById('worklistDue');
+  if(dueEl){
+    const due = smDueOn(date);
+    dueEl.innerHTML = due.length ? `<div class="wl-due"><div class="wl-due-head">📢 ${date === todayS ? '오늘' : taxjEsc(worklistDayLabel(date).replace(/^\d{4}-/, ''))} 마감 · <b>납부여부 확인 및 납부마감 멘트 발송</b></div>
+      <div class="wl-due-list">${due.map(x => `<span class="wl-due-chip">${taxjEsc(x.title)}</span>`).join('')}</div></div>` : '';
+  }
   // 미완료 넘기기 배너: 오늘 화면에서만
   const carryEl = document.getElementById('worklistCarry');
   if(carryEl){
@@ -9540,6 +9557,13 @@ function taxjCalMarks(){
   (att.remoteEntries || []).forEach(r => { if(r && r.date && !r.deleted) add(r.date, 'item', { cls:'remote', label: r.bonus ? '특별재택' : r.half === 'am' ? '오전재택' : r.half === 'pm' ? '오후재택' : '재택', title: [r.bonus ? '특별재택' : r.half ? '반일재택' : '정기재택', r.memo].filter(Boolean).join(' · ') }); });
   taxjCalMarks.cache = { at: full.at, map };
   return map;
+}
+// [2026.11.03] 그날이 세무일정(내부 › 세무일정과 같은 계산 - 회사웹 수정·등록 일정 포함, 주말·공휴일이면 다음 영업일) 마감일인 항목들
+function smDueOn(ds){
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(ds || '')) return [];
+  const docs = (taxjFull && taxjFull.docs) || {}, ym = ds.slice(0, 7), c = smDueOn.cache = (smDueOn.cache && smDueOn.cache.at === (taxjFull && taxjFull.at)) ? smDueOn.cache : { at: taxjFull && taxjFull.at, m:{} };
+  if(!c.m[ym]){ try{ c.m[ym] = innerTaxMonth(docs, Number(ym.slice(0, 4)), Number(ym.slice(5))); }catch(e){ c.m[ym] = []; } }
+  return c.m[ym].filter(x => x.date === ds);
 }
 function taxjCalItemsHtml(mk){
   return mk && mk.items.length ? `<div class="tj-atts">${mk.items.map(i => `<span class="tj-att ${i.cls}" title="${escapeAttr(i.title || i.label)}">${taxjEsc(i.label)}</span>`).join('')}</div>` : '';
