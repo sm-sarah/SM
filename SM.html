@@ -420,7 +420,14 @@ function smTogglePcView(){ try{ localStorage.setItem('sm_pc_view', window.SM_PC_
   .tj-att.leave{ background:#e0f2fe; color:#0369a1; }
   .tj-att.remote{ background:#dcfce7; color:#047857; }
   .tj-att.etc{ background:#f1f5f9; color:#64748b; }
-  .tj-att.due{ background:#ffe4e6; color:#be123c; }   /* [2026.11.03] 세무일정 마감일 */
+  .tj-att.due{ background:#ffe4e6; color:#be123c; }
+  .tj-att.plan{ background:#fef3c7; color:#a16207; }   /* [2026.11.03] 세무일정 안내 시작 */
+  .tp-table td, .tp-table th{ padding:6px 8px !important; font-size:12.5px; }
+  .tp-table tr.tp-off td{ opacity:.45; }
+  .wl-plan{ border:1px solid #fde68a; background:#fffbeb; border-radius:14px; padding:10px 14px; margin-bottom:12px; font-size:13px; }
+  .wl-plan .wl-due-head{ color:#92400e; }
+  .wl-plan-chip{ font-size:12px; font-weight:700; color:#92400e; background:#fff; border:1px solid #fde68a; border-radius:999px; padding:2px 10px; }
+  .wl-plan-chip span{ color:#b45309; font-weight:800; margin-left:2px; }   /* [2026.11.03] 세무일정 마감일 */
   .wl-due{ border:1px solid #fecdd3; background:#fff1f2; border-radius:14px; padding:10px 14px; margin-bottom:12px; font-size:13px; }
   .wl-due-head{ color:#9f1239; }
   .wl-due-list{ display:flex; flex-wrap:wrap; gap:6px; margin-top:6px; }
@@ -1015,6 +1022,12 @@ function smTogglePcView(){ try{ localStorage.setItem('sm_pc_view', window.SM_PC_
   .cl-edited{ color:var(--primary-dark); font-weight:700; border-bottom:1px dashed var(--primary); }
   .sm-modal.wide{ max-width:460px; }
   .sm-modal-field select{ width:100%; border-radius:12px; padding:10px 12px; }
+  .sm-refs-rows{ display:flex; flex-direction:column; gap:6px; }
+  .sm-refs-row{ display:grid; grid-template-columns:minmax(0, 1fr) minmax(0, 1.6fr) 30px; gap:6px; align-items:center; }
+  .sm-refs-row input{ width:100%; border-radius:12px; padding:10px 12px; box-sizing:border-box; }
+  .sm-refs-del{ width:30px; height:30px; border:none; background:transparent; color:var(--muted); cursor:pointer; border-radius:8px; }
+  .sm-refs-del:hover{ background:#ffe4e6; color:#e2445c; }
+  .sm-refs-add{ margin-top:6px; font:inherit; font-size:12.5px; font-weight:700; color:var(--primary-dark); background:transparent; border:1px dashed var(--border); border-radius:10px; padding:6px 10px; cursor:pointer; width:100%; }
   .sm-modal-html{ text-align:left; max-height:50vh; overflow:auto; }
   .sm-modal-html #attendYearBody{ font-size:13px; }
   /* [2026.10.16] 연간 전체보기 상세내역(근태·휴가·재택·경비) */
@@ -1962,6 +1975,7 @@ function smColDragClear(){ document.querySelectorAll('.sm-drop-l, .sm-drop-r, .s
 //   표마다 순서를 smColOrders['화면:보기:표번호'] = [칸 키...]로 저장(works에만). 그린 뒤 DOM에서 칸을 다시 배열(smOrdApply) - 회사웹 값·계산은 그대로.
 //   칸 키: 내 항목 = 'c:항목id', 묶음 머리글 = 'g:이름', 나머지 = 't:머리글 글자'. 순번·체크박스·왼쪽 고정(상호) 칸은 그 자리에 고정
 let smColOrders = {};
+let taxPlan = { lead:{}, off:{}, custom:[] };   // [2026.11.03] 세무일정 안내 - 아래 smTaxMonth 참고
 const SM_ORD_VIEW = { pay: () => payView, vat: () => vatView, clients: () => clientsView, close: () => '', corp: () => '', indiv: () => '' };
 function smOrdKeyOf(th){
   if(th.dataset.ordk) return th.dataset.ordk;
@@ -2323,6 +2337,7 @@ const NAV_SUBMENUS = {
   settings: [
     {js:"switchTab('review')", label:'검토표 계산식'},   // [2026.11.02] 검토표 대메뉴를 여기로(요청)
     {anchor:'settings-basic',   label:'기본 설정'},
+    {anchor:'settings-taxplan', label:'세무일정 안내'},   // [2026.11.03]
     {anchor:'settings-password', label:'비밀번호'},   // [2026.11.02] 보관함 비밀번호 바꾸기(요청)
     {anchor:'settings-google',  label:'Google 연동'},
     {anchor:'settings-deploy',  label:'GitHub 배포'},
@@ -3105,7 +3120,8 @@ function renderWorklist(){
     const allItems = worklistChecklist[m] || [];
     const items = allItems.filter(x => !x.carriedTo);   // [2026.11.02] 다음 달로 이월한 항목은 진행률·남은 건수에서 뺌(목록에는 '→ N월로 이월'로 남김)
     const doneN = items.filter(x => x.done).length;
-    const sched = worklistSchedule[m] || [];
+    // [2026.11.03] 주요 세무일정 칩 - 직접 적은 것 + 개인웹 세무일정(그달 마감, 날짜 표시) 자동
+    const sched = (worklistSchedule[m] || []).concat((() => { try{ return smTaxMonth(checklistYear(), parseInt(m, 10)).filter(x => x.id !== 'withholding-monthly').map(x => `${taxjEsc(x.title)} ${Number(x.date.slice(8))}일`); }catch(e){ return []; } })());
     return `
     <div class="notice-card">
       <div class="notice-top">
@@ -3496,10 +3512,11 @@ function renderWlMonthCal(){
         const list = (byDate[ds] || []).slice().sort((a, b) => (a.done - b.done));
         const left = list.filter(t => !t.done).length;
         const shown = list.slice(0, 2);   // 칸을 낮게(3단 배치) - 제목 2건까지
-        const mk = (tjMarks || {})[ds], due = smDueOn(ds);
+        const mk = (tjMarks || {})[ds], due = smDueOn(ds), starts = smTaxAround(ds).starts;
         return `
         <div class="cal-day ${ds === todayS ? 'today' : ''} ${ds.slice(0,7) !== wlCalYM ? 'other' : ''} ${ds === sel ? 'wl-sel' : ''}" onclick="setWlHistDay('${ds}', true)" title="${list.length ? `${list.length}건 · 남은 일 ${left}건` : ''}">
           <div class="wl-mcal-top"><div class="cal-daynum ${mk && mk.hol ? 'tj-hol' : ''}">${parseInt(ds.slice(8), 10)}${mk && mk.hol ? `<span class="tj-holname">${taxjEsc(mk.hol)}</span>` : ''}</div>${list.length ? `<span class="wl-mcal-cnt ${left ? '' : 'all-done'}">${list.length}</span>` : ''}</div>
+          ${starts.length ? `<div class="tj-atts"><span class="tj-att plan" title="${escapeAttr('안내 시작\n' + starts.map(x => `${x.title} (마감 ${Number(x.date.slice(5, 7))}/${Number(x.date.slice(8))})`).join('\n'))}">안내${starts.length > 1 ? ' ' + starts.length : ''}</span></div>` : ''}
           ${due.length ? `<div class="tj-atts"><span class="tj-att due" title="${escapeAttr(due.map(x => x.title).join('\n') + '\n→ 납부여부 확인 및 납부마감 멘트 발송')}">납부마감</span></div>` : ''}
           ${taxjCalItemsHtml(mk)}
           <div class="cal-tasks" style="max-height:none;">
@@ -3657,8 +3674,11 @@ function renderWorklistBody(){
   const dueEl = document.getElementById('worklistDue');
   if(dueEl){
     const due = smDueOn(date);
-    dueEl.innerHTML = due.length ? `<div class="wl-due"><div class="wl-due-head">📢 ${date === todayS ? '오늘' : taxjEsc(worklistDayLabel(date).replace(/^\d{4}-/, ''))} 마감 · <b>납부여부 확인 및 납부마감 멘트 발송</b></div>
-      <div class="wl-due-list">${due.map(x => `<span class="wl-due-chip">${taxjEsc(x.title)}</span>`).join('')}</div></div>` : '';
+    const on = smTaxAround(date).ongoing;
+    dueEl.innerHTML = (on.length ? `<div class="wl-plan"><div class="wl-due-head">📌 준비할 세무일정 <span class="hint" style="margin:0;">(마감 전 안내 기간)</span></div>
+      <div class="wl-due-list">${on.map(x => `<span class="wl-plan-chip" title="${escapeAttr(x.title + ' · 마감 ' + x.date + ' · 안내 시작 ' + x.from)}">${taxjEsc(x.title)} <b>${Number(x.date.slice(5, 7))}/${Number(x.date.slice(8))}</b> <span>${smDday(x.date, date)}</span></span>`).join('')}</div></div>` : '')
+      + (due.length ? `<div class="wl-due"><div class="wl-due-head">📢 ${date === todayS ? '오늘' : taxjEsc(worklistDayLabel(date).replace(/^\d{4}-/, ''))} 마감 · <b>납부여부 확인 및 납부마감 멘트 발송</b></div>
+      <div class="wl-due-list">${due.map(x => `<span class="wl-due-chip">${taxjEsc(x.title)}</span>`).join('')}</div></div>` : '');
   }
   // 미완료 넘기기 배너: 오늘 화면에서만
   const carryEl = document.getElementById('worklistCarry');
@@ -6344,6 +6364,7 @@ const GOOGLE_DATA_KEYS = [
   'closeColsBy','closeData',   // [2026.10.14] 결산 ([2026.11.02] 항목은 회차마다 따로 - 예전 'closeCols')
   'taxColsBy','taxColVals',   // [2026.11.02] 법인세·종소세 내 항목
   'smColOrders',   // [2026.11.02] works 표 칸 순서(끌어서 옮긴 대로)
+  'taxPlan',   // [2026.11.03] 세무일정 안내(안내 일수·숨김·내 일정)
   'quickMemos','nextMemoId',   // [2026.10.15] 홈 빠른 메모
   'menuNotes',   // [2026.10.27] 신고 메뉴별 중요사항
   'accountVault',   // [2026.10.08] 계정 보관함이 Google 시트에 저장되지 않아 다시 열면 "보관함 만들기"가 다시 뜨던 문제 수정(요청)
@@ -6362,7 +6383,7 @@ function collectGoogleSnapshot(){
     links, nextLinkId, linkCats, forms, nextFormId, formCats, laws, nextLawId, lawCats,
     manuals, nextManualId, manualCats,
     accountVault, submitMine, attendMine, payColsBy: smColsPrune(payColsBy), payCustomVals, vatCustomCols, vatCustomVals, vatProgColsBy: smColsPrune(vatProgColsBy), vatProg, vatProgView, closeColsBy: smColsPrune(closeColsBy), closeData,
-    taxColsBy: { corp: smColsPrune(taxColsBy.corp), indiv: smColsPrune(taxColsBy.indiv) }, taxColVals, smColOrders, quickMemos, nextMemoId, menuNotes,
+    taxColsBy: { corp: smColsPrune(taxColsBy.corp), indiv: smColsPrune(taxColsBy.indiv) }, taxColVals, smColOrders, taxPlan, quickMemos, nextMemoId, menuNotes,
   };
 }
 
@@ -6440,6 +6461,7 @@ async function loadFromGoogleSheet(){
     if(map.taxColsBy) taxColsBy = Object.assign({ corp:{}, indiv:{} }, JSON.parse(map.taxColsBy));
     if(map.taxColVals) taxColVals = Object.assign({ corp:{}, indiv:{} }, JSON.parse(map.taxColVals));
     if(map.smColOrders) smColOrders = JSON.parse(map.smColOrders) || {};
+    if(map.taxPlan) taxPlan = JSON.parse(map.taxPlan) || {};
     if(smMigrateCols()) needsResaveAfterLoad = true;
     if(smNaUnify()) needsResaveAfterLoad = true;   // [2026.11.02] 예전 공통 항목 → 모든 회차에 복사하고 새 형식으로 다시 저장
     if(map.links)         links        = JSON.parse(map.links);
@@ -6704,6 +6726,7 @@ function applySnapshot(o){
   if(o.taxColsBy) taxColsBy = Object.assign({ corp:{}, indiv:{} }, o.taxColsBy);
   if(o.taxColVals) taxColVals = Object.assign({ corp:{}, indiv:{} }, o.taxColVals);
   if(o.smColOrders) smColOrders = o.smColOrders;
+  if(o.taxPlan) taxPlan = o.taxPlan;
   smMigrateCols(); smNaUnify();
   if(o.links) links = o.links;
   if(o.nextLinkId) nextLinkId = o.nextLinkId;
@@ -7335,7 +7358,7 @@ async function resetAllData(){
   clients = [];
   tasks = [];
   vatData = {}; payData = {}; corpData = {}; indivData = {};
-  submitMine = {}; attendMine = {}; payColsBy = {}; payCustomVals = {}; quickMemos = []; nextMemoId = 1; vatCustomCols = []; vatCustomVals = {}; vatProgColsBy = {}; vatProg = {}; closeColsBy = {}; closeData = {}; taxColsBy = { corp:{}, indiv:{} }; taxColVals = { corp:{}, indiv:{} }; smColOrders = {}; menuNotes = {};
+  submitMine = {}; attendMine = {}; payColsBy = {}; payCustomVals = {}; quickMemos = []; nextMemoId = 1; vatCustomCols = []; vatCustomVals = {}; vatProgColsBy = {}; vatProg = {}; closeColsBy = {}; closeData = {}; taxColsBy = { corp:{}, indiv:{} }; taxColVals = { corp:{}, indiv:{} }; smColOrders = {}; taxPlan = { lead:{}, off:{}, custom:[] }; menuNotes = {};
   worklistChecklist = {}; worklistSchedule = {};
   events = [];
   clientsOther = []; clientsTerminated = [];
@@ -9243,7 +9266,7 @@ function innerTaxMonth(docs, y, m){
     let title = it.title;
     if(it.id === INNER_TAX_MONTHLY.id){ const ay = m === 1 ? y - 1 : y, am = m === 1 ? 12 : m - 1; title = title.replace('(전월분)', `(${String(ay).slice(2)}년 ${pad2(am)}월 귀속)`); }
     const date = o || innerBizDay(docs, raw);
-    return { title, date, shifted: !o && date !== raw, overridden: !!o, custom:false };
+    return { id: it.id, title, date, shifted: !o && date !== raw, overridden: !!o, custom:false };
   });
   (docs.s__taxScheduleCustomItems || []).forEach(it => {
     let raw = null, shift = false;
@@ -9252,7 +9275,7 @@ function innerTaxMonth(docs, y, m){
     else if(it.recurrence === 'annual' && it.month === m){ raw = `${y}-${mm}-${pad2(Math.min(it.day, last))}`; shift = true; }
     if(!raw) return;
     const o = ov[key('custom:' + it.id)], date = o || (shift ? innerBizDay(docs, raw) : raw);
-    out.push({ title: it.title, date, shifted: !o && shift && date !== raw, overridden: !!o, custom:true });
+    out.push({ id: 'custom:' + it.id, title: it.title, date, shifted: !o && shift && date !== raw, overridden: !!o, custom:true });
   });
   return out.sort((a, b) => a.date.localeCompare(b.date));
 }
@@ -9558,11 +9581,97 @@ function taxjCalMarks(){
   taxjCalMarks.cache = { at: full.at, map };
   return map;
 }
+// [2026.11.03] "월별 주요 세무일정을 미리 안내 - 마감 전부터 알려주고, 개인웹에서 일정을 더하거나 조정"(요청)
+//   일정 = 회사웹 세무일정(innerTaxMonth: 기본 일정 + 회사웹에서 고친 날짜·등록 일정) + 개인웹 추가 기본 일정(SM_TAX_EXTRA) + 내가 넣은 일정(taxPlan.custom)
+//   안내 시작 = 마감일 - 안내 일수(SM_TAX_LEAD 기본값, taxPlan.lead로 바꿈). 숨김 = taxPlan.off. 모두 works에만 저장(회사웹은 읽기만)
+// taxPlan(세무일정 안내)은 저장 항목이라 맨 위 선언부에 둠
+const SM_TAX_EXTRA = [
+  { id:'x-simple-monthly', monthly:'last', title:'간이지급명세서(사업·기타) 제출(전월분)' },
+  { id:'x-daily-monthly', monthly:'last', title:'일용근로 지급명세서 제출(전월분)' },
+  { id:'x-wh-half1', month:1, day:10, title:'원천세 반기납부(하반기분)' }, { id:'x-wh-half2', month:7, day:10, title:'원천세 반기납부(상반기분)' },
+  { id:'x-earn-half1', month:1, day:31, title:'근로소득 간이지급명세서(하반기)' }, { id:'x-earn-half2', month:7, day:31, title:'근로소득 간이지급명세서(상반기)' },
+  { id:'x-int-div', month:2, day:'last', title:'이자·배당·기타소득 지급명세서 제출' },
+  { id:'x-vat-notice1', month:4, day:25, title:'부가세 1기 예정고지 납부(개인·소규모 법인)' }, { id:'x-vat-notice2', month:10, day:25, title:'부가세 2기 예정고지 납부(개인·소규모 법인)' },
+  { id:'x-corp-local', month:4, day:30, title:'법인지방소득세 신고·납부' },
+  { id:'x-resident-biz', month:8, day:31, title:'주민세 사업소분 신고·납부' },
+];
+// 안내 일수 기본값(마감 며칠 전부터) - 회사웹 일정 id와 위 추가 일정 id
+const SM_TAX_LEAD = { 'withholding-monthly':9, 'vat2-final':21, 'vat1-prelim':21, 'vat1-final':21, 'vat2-prelim':21, 'x-vat-notice1':24, 'x-vat-notice2':24,
+  'corp-tax':28, 'income-tax-final':30, 'income-tax-sincere':30, 'corp-tax-midterm':30, 'income-tax-midterm':29, 'yearend-settle':65, 'nhis-total-pay':10, 'ei-total-pay':14,
+  'exempt-biz-status':14, 'x-simple-monthly':7, 'x-daily-monthly':7, 'x-wh-half1':9, 'x-wh-half2':9, 'x-earn-half1':10, 'x-earn-half2':10, 'x-int-div':14, 'x-corp-local':14, 'x-resident-biz':14 };
+function taxPlanObj(){ if(!taxPlan || typeof taxPlan !== 'object') taxPlan = {}; taxPlan.lead = taxPlan.lead || {}; taxPlan.off = taxPlan.off || {}; taxPlan.custom = Array.isArray(taxPlan.custom) ? taxPlan.custom : []; return taxPlan; }
+function smTaxLead(id){ const t = taxPlanObj(); return t.lead[id] != null ? Number(t.lead[id]) || 0 : (SM_TAX_LEAD[id] != null ? SM_TAX_LEAD[id] : 7); }
+// 그 달 일정 전부(숨긴 것 포함, off 표시) - 회사웹 + 추가 + 내가 넣은 일정
+function smTaxMonth(y, m, withOff){
+  const docs = (taxjFull && taxjFull.docs) || {}, mm = pad2(m), last = new Date(y, m, 0).getDate(), t = taxPlanObj();
+  let out = [];
+  try{ out = innerTaxMonth(docs, y, m).map(x => Object.assign({ src:'회사웹' }, x)); }catch(e){}
+  const dayOf = d => d === 'last' ? last : Math.min(Number(d) || 1, last);
+  SM_TAX_EXTRA.concat(t.custom.map(c => Object.assign({ mine:true }, c))).forEach(it => {
+    let raw = null;
+    if(it.monthly) raw = `${y}-${mm}-${pad2(it.monthly === 'last' ? last : dayOf(it.day))}`;
+    else if(it.recurrence === 'once'){ if(it.date && it.date.slice(0, 7) === `${y}-${mm}`) raw = it.date; }
+    else if(it.recurrence === 'monthly') raw = `${y}-${mm}-${pad2(dayOf(it.day))}`;
+    else if(Number(it.month) === m) raw = `${y}-${mm}-${pad2(dayOf(it.day))}`;
+    if(!raw) return;
+    let title = it.title;
+    if(/\(전월분\)/.test(title)){ const ay = m === 1 ? y - 1 : y, am = m === 1 ? 12 : m - 1; title = title.replace('(전월분)', `(${String(ay).slice(2)}년 ${pad2(am)}월분)`); }
+    const date = it.recurrence === 'once' ? raw : innerBizDay(docs, raw);
+    out.push({ id: it.id, title, date, shifted: date !== raw, src: it.mine ? '내 일정' : '개인웹 기본' });
+  });
+  out.forEach(x => { x.lead = smTaxLead(x.id); x.from = addDaysStr(x.date, -x.lead); x.off = !!t.off[x.id]; });
+  return out.filter(x => withOff || !x.off).sort((a, b) => a.date.localeCompare(b.date));
+}
+// ds 기준 안내 중인 일정(안내 시작 ≤ ds < 마감일)과 그날 안내가 시작되는 일정
+function smTaxAround(ds){
+  const c = smTaxAround.cache = (smTaxAround.cache && smTaxAround.cache.at === (taxjFull && taxjFull.at) && smTaxAround.cache.v === smTaxAround.ver) ? smTaxAround.cache : { at: taxjFull && taxjFull.at, v: smTaxAround.ver, m:{} };
+  const [y, m] = ds.split('-').map(Number), list = [];
+  for(let k = 0; k < 4; k++){ const d = new Date(y, m - 1 + k, 1), key = `${d.getFullYear()}-${d.getMonth() + 1}`; if(!c.m[key]) c.m[key] = smTaxMonth(d.getFullYear(), d.getMonth() + 1); list.push(...c.m[key]); }
+  return { ongoing: list.filter(x => x.from <= ds && ds < x.date), starts: list.filter(x => x.from === ds && x.lead > 0), due: list.filter(x => x.date === ds) };
+}
+smTaxAround.ver = 0;
+function smTaxChanged(){ smTaxAround.ver++; smDueOn.cache = null; scheduleGoogleSave(); }
+// 설정 › 세무일정 안내 표 - 올해 일정을 한 줄씩(매월 일정은 한 번만)
+function taxPlanTableHtml(){
+  const y = new Date().getFullYear(), seen = {}, rows = [];
+  const monthlyIds = new Set(['withholding-monthly'].concat(SM_TAX_EXTRA.filter(x => x.monthly).map(x => x.id), taxPlanObj().custom.filter(c => c.recurrence === 'monthly').map(c => c.id)));
+  for(let m = 1; m <= 12; m++) smTaxMonth(y, m, true).forEach(x => { if(seen[x.id]) return; seen[x.id] = 1; rows.push(x); });
+  rows.sort((a, b) => (monthlyIds.has(b.id) - monthlyIds.has(a.id)) || a.date.localeCompare(b.date));
+  const mine = id => taxPlanObj().custom.some(c => c.id === id);
+  return `<div class="table-scroll" style="margin-top:10px;"><table class="tp-table"><thead><tr><th>일정</th><th>마감</th><th>구분</th><th>안내 시작</th><th>보이기</th><th></th></tr></thead><tbody>${rows.map(x => {
+    const md = x.id === 'withholding-monthly' ? 10 : ((SM_TAX_EXTRA.find(e => e.id === x.id) || {}).monthly || (taxPlanObj().custom.find(c => c.id === x.id) || {}).day);
+    const id = escapeAttr(x.id), when = monthlyIds.has(x.id) ? `매월 ${md === 'last' ? '말일' : md + '일'}` : `${Number(x.date.slice(5, 7))}/${Number(x.date.slice(8))}`;
+    return `<tr${x.off ? ' class="tp-off"' : ''}><td style="text-align:left; font-weight:700;">${taxjEsc(x.title.replace(/\(\d{2}년 \d{2}월(분| 귀속)\)/, '(전월분)'))}</td><td style="white-space:nowrap;">${when}</td><td class="hint" style="margin:0;">${taxjEsc(x.src)}</td>
+      <td style="white-space:nowrap;">마감 <input type="number" min="0" max="120" value="${x.lead}" style="width:64px; text-align:center;" onchange="taxPlanSetLead('${id}', this.value)"> 일 전</td>
+      <td><input type="checkbox" ${x.off ? '' : 'checked'} onchange="taxPlanSetOff('${id}', !this.checked)"></td>
+      <td>${mine(x.id) ? `<button class="icon-btn danger" onclick="taxPlanDel('${id}')" title="삭제" aria-label="삭제">${ICON_TRASH}</button>` : ''}</td></tr>`;
+  }).join('')}</tbody></table></div>`;
+}
+function taxPlanRefresh(){ smTaxChanged(); const b = document.getElementById('taxPlanBox'); if(b) b.innerHTML = taxPlanTableHtml(); try{ renderWorklist(); }catch(e){} }
+function taxPlanSetLead(id, v){ const n = Math.max(0, Math.min(120, parseInt(v, 10) || 0)); const t = taxPlanObj(); if(n === (SM_TAX_LEAD[id] != null ? SM_TAX_LEAD[id] : 7)) delete t.lead[id]; else t.lead[id] = n; taxPlanRefresh(); }
+function taxPlanSetOff(id, off){ const t = taxPlanObj(); if(off) t.off[id] = 1; else delete t.off[id]; taxPlanRefresh(); }
+async function taxPlanDel(id){ const t = taxPlanObj(), c = t.custom.find(x => x.id === id); if(!c) return; if(!(await smConfirm(`'${c.title}' 일정을 지울까요?`, '내가 넣은 일정만 지워져요.', { tone:'danger', icon:'!', okText:'삭제' }))) return; t.custom = t.custom.filter(x => x.id !== id); delete t.lead[id]; delete t.off[id]; taxPlanRefresh(); }
+async function taxPlanAdd(){
+  const r = await smForm('세무일정 추가', [{ label:'일정 이름', placeholder:'예: 재산세 납부 안내' }, { label:'반복', options:['매년','매월','한 번'], value:'매년' },
+    { label:'월 (매년일 때)', options: Array.from({ length:12 }, (_, i) => `${i + 1}월`), value:`${new Date().getMonth() + 1}월` }, { label:'일 (매년·매월일 때, 말일이면 말일)', placeholder:'예: 31 또는 말일' },
+    { label:'날짜 (한 번일 때)', type:'date', value: todayStr() }, { label:'안내 시작 (마감 며칠 전)', type:'number', value:'7' }], { okText:'추가', wide:true });
+  if(!r || !r[0].trim()) return;
+  const rec = r[1] === '매월' ? 'monthly' : r[1] === '한 번' ? 'once' : 'annual', dayIn = String(r[3] || '').trim();
+  const day = /말/.test(dayIn) ? 'last' : parseInt(dayIn, 10);
+  if(rec !== 'once' && !(day === 'last' || (day >= 1 && day <= 31))) return smAlert('날짜를 확인해 주세요', '일은 1~31 숫자나 "말일"로 적어 주세요.');
+  if(rec === 'once' && !/^\d{4}-\d{2}-\d{2}$/.test(r[4] || '')) return smAlert('날짜를 골라 주세요');
+  const id = 'u' + Date.now().toString(36), c = { id, title: r[0].trim(), recurrence: rec };
+  if(rec === 'once') c.date = r[4]; else { c.day = day; if(rec === 'annual') c.month = parseInt(r[2], 10); }
+  const t = taxPlanObj(); t.custom.push(c);
+  const ld = Math.max(0, Math.min(120, parseInt(r[5], 10) || 0)); if(ld !== 7) t.lead[id] = ld;
+  taxPlanRefresh();
+}
+function smDday(ds, from){ const n = Math.round((new Date(ds + 'T00:00:00') - new Date(from + 'T00:00:00')) / 86400000); return n === 0 ? 'D-DAY' : n > 0 ? `D-${n}` : `D+${-n}`; }
 // [2026.11.03] 그날이 세무일정(내부 › 세무일정과 같은 계산 - 회사웹 수정·등록 일정 포함, 주말·공휴일이면 다음 영업일) 마감일인 항목들
 function smDueOn(ds){
   if(!/^\d{4}-\d{2}-\d{2}$/.test(ds || '')) return [];
   const docs = (taxjFull && taxjFull.docs) || {}, ym = ds.slice(0, 7), c = smDueOn.cache = (smDueOn.cache && smDueOn.cache.at === (taxjFull && taxjFull.at)) ? smDueOn.cache : { at: taxjFull && taxjFull.at, m:{} };
-  if(!c.m[ym]){ try{ c.m[ym] = innerTaxMonth(docs, Number(ym.slice(0, 4)), Number(ym.slice(5))); }catch(e){ c.m[ym] = []; } }
+  if(!c.m[ym]){ try{ c.m[ym] = smTaxMonth(Number(ym.slice(0, 4)), Number(ym.slice(5))); }catch(e){ c.m[ym] = []; } }   // [2026.11.03] 개인웹 추가 일정·숨김 반영
   return c.m[ym].filter(x => x.date === ds);
 }
 function taxjCalItemsHtml(mk){
@@ -9653,6 +9762,17 @@ function renderSettings(){
             <input type="text" value="${settings.displayName}" placeholder="이름 입력" style="width:140px" onchange="updateDisplayName(this.value)">
           </div>
         </div>
+      </div>
+
+      <div class="settings-block" id="settings-taxplan"><!-- [2026.11.03] 설정 › 세무일정 안내(요청: "기본 세팅 + 개인웹에서 일정 추가·조정") -->
+        <div class="row">
+          <div>
+            <h3>세무일정 안내</h3>
+            <div class="hint">마감 며칠 전부터 홈(Today 안내띠·Month '안내' 칩)에 알려줄지 정해요. 회사웹 세무일정은 읽기만 하고, 여기서 바꾼 건 개인웹에만 저장돼요.</div>
+          </div>
+          <div class="ctrl"><button class="btn" onclick="taxPlanAdd()">+ 일정 추가</button></div>
+        </div>
+        <div id="taxPlanBox">${taxPlanTableHtml()}</div>
       </div>
 
       <div class="settings-block" id="settings-password"><!-- [2026.11.02] 설정 › 비밀번호(요청) - 내부 › 개인계정 보관함 비밀번호 바꾸기 -->
@@ -9786,7 +9906,7 @@ function manualFields(x){
   return [
     { label:'분야', options: cats, value: x.cat || manualCat || cats[0] },
     { label:'제목', value:x.title || '', placeholder:'예: 원천세 반기 신고 순서' },
-    { label:'참고 사이트 (한 줄에 하나 · "이름 | 주소" 또는 주소만)', type:'textarea', value:(x.refs || []).map(r => r.name && r.name !== r.url ? `${r.name} | ${r.url}` : r.url).join('\n'), rows:3, placeholder:'홈택스 | hometax.go.kr\nhttps://www.wehago.com' },
+    { label:'참고 사이트 (이름은 비워도 돼요)', type:'refs', value:(x.refs || []).map(r => r.name && r.name !== r.url ? `${r.name} | ${r.url}` : r.url).join('\n') },
     { label:'내용 (# 제목, - 목록, 1. 순서, **굵게** · Enter 줄바꿈, Ctrl+Enter 저장)', type:'textarea', value:x.body || '', rows:16, placeholder:'# 준비물\n- 급여대장\n- 지급명세서\n\n# 순서\n1. 홈택스 로그인\n2. 원천세 신고 메뉴' },
   ];
 }
@@ -11361,6 +11481,7 @@ function smDialog(opts){
         ${o.fields ? `<div class="sm-modal-fields">${o.fields.map((f,i) => `
           <label class="sm-modal-field"><span>${esc(f.label)}</span>
             ${f.options ? `<select data-i="${i}">${f.options.map(op => `<option ${op === f.value ? 'selected' : ''}>${esc(op)}</option>`).join('')}</select>`
+              : f.type === 'refs' ? `<div class="sm-refs" data-refs="${i}"><div class="sm-refs-rows"></div><button type="button" class="sm-refs-add">+ 사이트 추가</button><input type="hidden" data-i="${i}" value="${esc(f.value)}"></div>`   // [2026.11.03] 이름·주소 칸 따로(요청)
               : f.type === 'textarea' ? `<textarea data-i="${i}" rows="${f.rows || 3}" placeholder="${esc(f.placeholder)}">${esc(f.value)}</textarea>`
               : `<input type="${f.type || 'text'}" data-i="${i}" value="${esc(f.value)}" placeholder="${esc(f.placeholder)}">`}</label>`).join('')}</div>` : ''}
         <div class="sm-modal-btns">
@@ -11370,7 +11491,20 @@ function smDialog(opts){
       </div>`;
     document.body.appendChild(wrap);
     requestAnimationFrame(() => wrap.classList.add('show'));
-    const inputs = Array.from(wrap.querySelectorAll('input, select, textarea'));
+    const inputs = Array.from(wrap.querySelectorAll('[data-i]')).sort((a, b) => a.dataset.i - b.dataset.i);   // [2026.11.03] 칸마다 하나씩(이름·주소 줄 칸 등 안쪽 입력칸은 빼고)
+    // [2026.11.03] 참고 사이트 칸: [이름][주소][✕] 줄을 더하고 빼며 적음 → 숨은 칸에 "이름 | 주소" 줄로 모아 둠(예전 저장 형식 그대로)
+    wrap.querySelectorAll('.sm-refs').forEach(box => {
+      const hid = box.querySelector('input[type=hidden]'), rowsEl = box.querySelector('.sm-refs-rows');
+      const sync = () => { hid.value = [...rowsEl.querySelectorAll('.sm-refs-row')].map(r => { const n = r.querySelector('.n').value.trim(), u = r.querySelector('.u').value.trim(); return u ? (n ? `${n} | ${u}` : u) : ''; }).filter(Boolean).join('\n'); };
+      const addRow = (n, u) => { const r = document.createElement('div'); r.className = 'sm-refs-row';
+        r.innerHTML = `<input type="text" class="n" placeholder="이름 (예: 홈택스)" value="${esc(n)}"><input type="text" class="u" placeholder="주소 (예: hometax.go.kr)" value="${esc(u)}"><button type="button" class="sm-refs-del" title="이 줄 지우기" aria-label="이 줄 지우기">✕</button>`;
+        r.querySelector('.sm-refs-del').onclick = () => { r.remove(); if(!rowsEl.children.length) addRow('', ''); sync(); };
+        r.addEventListener('input', sync); rowsEl.appendChild(r); return r; };
+      const lines = String(hid.value || '').split('\n').map(x => x.trim()).filter(Boolean);
+      lines.forEach(x => { const k = x.lastIndexOf('|'); addRow(k >= 0 ? x.slice(0, k).trim() : '', (k >= 0 ? x.slice(k + 1) : x).trim()); });
+      if(!lines.length) addRow('', '');
+      box.querySelector('.sm-refs-add').onclick = () => { addRow('', '').querySelector('.n').focus(); };
+    });
     const done = ok => {
       document.removeEventListener('keydown', onKey, true);
       wrap.classList.remove('show');
