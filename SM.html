@@ -877,6 +877,7 @@ function smTogglePcView(){ try{ localStorage.setItem('sm_pc_view', window.SM_PC_
   .chk-tax-row{ color:#1e3a8a; line-height:1.5; }
   .chk-tax-row b{ color:#1e40af; }
   .chk-tax-row .d{ font-weight:800; color:#2563eb; }
+  .chk-tax-row .dchip{ display:inline-block; font-size:11px; font-weight:800; line-height:18px; padding:0 8px; border-radius:999px; background:#fff1f2; color:#e11d48; border:1px solid #fecdd3; vertical-align:1px; }   /* [2026.11.03] 디데이는 다른 색 칩으로(요청) */
   .chk-tax-row .todo{ display:block; color:var(--muted); font-size:12.5px; }
 
   /* 요청 배경(2026.10.06): To do 화면을 [왼쪽 체크리스트 길게 | 오른쪽 위 할 일 월 달력 + 아래 Today 목록]으로.
@@ -3616,8 +3617,7 @@ function renderWlHistory(){
       <div class="wl-daynav-label">${worklistDayLabel(date)}${rel ? ` <span class="wl-rel">${rel}</span>` : ''}</div>
       <button class="wl-navbtn" onclick="setWlHistDay(addDaysStr('${date}', 1))" title="다음 날" aria-label="다음 날">›</button>
     </div>
-    ${smTaxBandHtml(date)}
-    <div class="wl-agenda wl-hist-agenda">
+    <div class="wl-agenda wl-hist-agenda"><!-- [2026.11.03] 요청: History엔 세무일정 빼기(달력에서 확인) -->
       ${list.length ? `
         <div class="wl-day-head">${list.length}건 · 완료 ${list.length - left}건 · 못한 일 ${left}건</div>
         <ul class="task-list">${list.map(t => wlTaskItem(t)).join('')}</ul>`
@@ -6414,11 +6414,13 @@ function collectGoogleSnapshot(){
 
 let needsResaveAfterLoad = false;
 let sheetLoadedOnce = false;
-async function loadFromGoogleSheet(){
+async function loadFromGoogleSheet(guard){
   const res = await gapi.client.sheets.spreadsheets.values.get({
     spreadsheetId: googleSpreadsheetId,
     range: 'data!A2:B1000',
   });
+  // [2026.11.03] 요청: "저장이 바로 안 돼서 두 번 입력" - 시트를 읽는 사이(네트워크 대기)에 내가 입력·저장한 게 있으면 읽은 걸로 덮지 않고 버림
+  if(guard && !guard()) return false;
   const rows = res.result.values || [];
   const map = {};
   // 셀 하나에 5만 자까지만 들어가서, 긴 값은 "tasks", "tasks__2", "tasks__3"… 여러 줄로 나눠 저장함 → 다시 이어붙임
@@ -6656,10 +6658,23 @@ async function saveToGoogleSheet(){
     const remote = await readRemoteVersion();
     if(remote && remote !== lastSyncedVersion){
       // 다른 창/기기에서 먼저 저장함 → 덮어쓰지 않고 최신 내용을 불러옴
+      // [2026.11.03] 요청: "저장이 바로 안 돼서 두 번 입력" - 예전엔 이때 방금 입력한 걸 버리고 "한 번 더 해주세요"였음
+      //   → 마지막으로 맞춘 내용(기준) · 이 기기 · 시트 세 가지를 비교해, 이 기기에서 바꾼 부분은 살리고 다른 곳에서 바꾼 부분도 받아서 합친 뒤 다시 저장
+      const baseSnap = lastSyncedContent ? JSON.parse(lastSyncedContent) : null;
+      const localSnap = JSON.parse(JSON.stringify(collectGoogleSnapshot()));
       await loadFromGoogleSheet();
+      const remoteSnap = JSON.parse(JSON.stringify(collectGoogleSnapshot()));
+      if(baseSnap && JSON.stringify(localSnap) !== JSON.stringify(baseSnap)){
+        const merged = smMergeSnap(baseSnap, localSnap, remoteSnap);
+        applySnapshot(merged);
+        renderAllNoSave();
+        savingNow = false;
+        setSyncStatus('다른 곳에서 바뀐 내용과 합쳐서 저장하는 중...');
+        scheduleGoogleSave();
+        return;
+      }
       renderAllNoSave();
       setSyncStatus('다른 곳에서 바뀐 내용을 불러왔어요');
-      smAlert('최신 내용을 불러왔어요', '다른 창이나 기기에서 먼저 저장된 내용이 있어서, 덮어쓰지 않고 새로 불러왔어요. 방금 바꾼 내용이 안 보이면 한 번 더 해주세요.');
       savingNow = false;
       return;
     }
@@ -6718,6 +6733,57 @@ async function saveToGoogleSheet(){
 // 다시 연결됐을 때, 그 사이 다른 기기에서 저장한 게 없으면 이 변경을 올리고,
 // 다른 기기에서 더 나중에 저장한 게 있으면(=그쪽이 최신 저장본) 그걸 따름.
 const PENDING_KEY = 'sm_pending_changes';
+// [2026.11.03] 세 갈래 합치기: b = 마지막으로 시트와 맞춘 내용, l = 이 기기, r = 시트 최신
+//   한쪽만 바뀐 곳은 바뀐 쪽, 둘 다 바뀐 곳은: id 있는 목록(할 일·거래처 등)은 항목별로 합치고, 묶음(객체)은 안으로 들어가 칸별로, 그 밖엔 이 기기(방금 입력한 것)
+function smMerge3(b, l, r, d){
+  const js = x => JSON.stringify(x), eq = (x, y) => js(x) === js(y);
+  if(eq(l, b)) return r;
+  if(eq(r, b) || eq(l, r)) return l;
+  if(typeof l === 'number' && typeof r === 'number') return Math.max(l, r);   // 다음 번호(nextTaskId 등)
+  const idArr = a => Array.isArray(a) && a.every(x => x && typeof x === 'object' && x.id != null);
+  if(Array.isArray(l) && Array.isArray(r) && idArr(l) && idArr(r) && (b == null || idArr(b))){
+    const bm = new Map((b || []).map(x => [String(x.id), x])), lm = new Map(l.map(x => [String(x.id), x])), rm = new Map(r.map(x => [String(x.id), x]));
+    const out = [];
+    r.forEach(ri => {
+      const k = String(ri.id), bi = bm.get(k), li = lm.get(k);
+      if(li) out.push(bi && !eq(li, bi) ? (eq(ri, bi) ? li : smMerge3(bi, li, ri, (d || 0) + 1)) : (bi ? ri : (eq(li, ri) ? ri : ri)));
+      else if(bi && eq(ri, bi)) return;   // 이 기기에서 지움(시트 쪽은 그대로) → 지움
+      else out.push(ri);                  // 시트 쪽에서 새로 생겼거나 고침 → 살림
+    });
+    const used = new Set(out.map(x => String(x.id)));
+    let maxId = Math.max(0, ...out.map(x => Number(x.id)).filter(n => !isNaN(n)), ...l.map(x => Number(x.id)).filter(n => !isNaN(n)));
+    l.forEach(li => {
+      const k = String(li.id);
+      if(bm.has(k)) return;               // 원래 있던 항목은 위에서 처리
+      if(!rm.has(k)){ out.push(li); return; }   // 이 기기에서 새로 만든 항목
+      if(!eq(li, rm.get(k)) && !bm.has(k)){ // 양쪽에서 같은 번호로 다른 항목을 새로 만듦 → 이 기기 것을 새 번호로 살림
+        const c = Object.assign({}, li); c.id = typeof li.id === 'number' ? ++maxId : `${li.id}-${Date.now().toString(36)}`;
+        if(!used.has(String(c.id))) out.push(c);
+      }
+    });
+    return out;
+  }
+  const plain = x => x && typeof x === 'object' && !Array.isArray(x);
+  if(plain(l) && plain(r) && (b == null || plain(b)) && (d || 0) < 6){
+    const out = {}, bb = b || {};
+    new Set([...Object.keys(bb), ...Object.keys(l), ...Object.keys(r)]).forEach(k => {
+      const v = smMerge3(bb[k], l[k], r[k], (d || 0) + 1);
+      if(v !== undefined) out[k] = v;
+    });
+    return out;
+  }
+  return l === undefined ? r : l;
+}
+function smMergeSnap(b, l, r){
+  const out = {};
+  GOOGLE_DATA_KEYS.forEach(k => { const v = smMerge3(b[k], l[k], r[k], 0); if(v !== undefined) out[k] = v; });
+  // 다음 번호가 목록 안 가장 큰 번호보다 작지 않게
+  [['tasks','nextTaskId'], ['clients','nextClientId'], ['events','nextEventId'], ['links','nextLinkId'], ['manuals','nextManualId'], ['quickMemos','nextMemoId'], ['forms','nextFormId'], ['laws','nextLawId'], ['trashBin','nextTrashId']].forEach(([a, n]) => {
+    const ids = (Array.isArray(out[a]) ? out[a] : []).map(x => Number(x && x.id)).filter(x => !isNaN(x));
+    if(ids.length && typeof out[n] === 'number') out[n] = Math.max(out[n], Math.max(...ids) + 1);
+  });
+  return out;
+}
 function recordPendingChanges(){
   if(!sheetLoadedOnce || lastSyncedContent == null) return;
   const snapStr = JSON.stringify(collectGoogleSnapshot());
@@ -6806,7 +6872,10 @@ function resolvePendingAfterLoad(){
   }
 }
 
+let smEditSeq = 0;   // [2026.11.03] 변경할 때마다 +1 - 자동 새로고침이 그 사이 변경을 덮지 않게 비교용
+function smModalOpen(){ return !!document.querySelector('.sm-modal-backdrop'); }
 function scheduleGoogleSave(){
+  smEditSeq++;
   recordPendingChanges();
   if(!googleAccessToken || !googleSpreadsheetId || !sheetLoadedOnce){ vpSaveSet('local'); return; }
   vpSaveSet('pending');
@@ -9645,6 +9714,8 @@ function smTaxMonth(y, m, withOff){
     out.push({ id: it.id, title, date, shifted: date !== raw, src: it.mine ? '내 일정' : '개인웹 기본' });
   });
   out.forEach(x => { x.lead = smTaxLead(x.id); x.from = addDaysStr(x.date, -x.lead); x.off = !!t.off[x.id]; });
+  // [2026.11.03] 요청: "지급명세서 마감기한은 남기고 달력의 '지급명세서 안내'만 빼줘" → 지급명세서 일정은 안내(미리 알림) 없이 마감만
+  out.forEach(x => { if(x.src !== '내 일정' && x.id !== 'yearend-settle' && /지급명세서/.test(x.title || '')) x.noNotice = true; });
   return out.filter(x => withOff || !x.off).sort((a, b) => a.date.localeCompare(b.date));
 }
 // ds 기준 안내 중인 일정(안내 시작 ≤ ds < 마감일)과 그날 안내가 시작되는 일정
@@ -9652,7 +9723,7 @@ function smTaxAround(ds){
   const c = smTaxAround.cache = (smTaxAround.cache && smTaxAround.cache.at === (taxjFull && taxjFull.at) && smTaxAround.cache.v === smTaxAround.ver) ? smTaxAround.cache : { at: taxjFull && taxjFull.at, v: smTaxAround.ver, m:{} };
   const [y, m] = ds.split('-').map(Number), list = [];
   for(let k = 0; k < 4; k++){ const d = new Date(y, m - 1 + k, 1), key = `${d.getFullYear()}-${d.getMonth() + 1}`; if(!c.m[key]) c.m[key] = smTaxMonth(d.getFullYear(), d.getMonth() + 1); list.push(...c.m[key]); }
-  return { ongoing: list.filter(x => x.from <= ds && ds < x.date), starts: list.filter(x => x.from === ds && x.lead > 0), due: list.filter(x => x.date === ds) };
+  return { ongoing: list.filter(x => !x.noNotice && x.from <= ds && ds < x.date), starts: list.filter(x => !x.noNotice && x.from === ds && x.lead > 0), due: list.filter(x => x.date === ds) };
 }
 smTaxAround.ver = 0;
 function smTaxChanged(){ smTaxAround.ver++; smDueOn.cache = null; scheduleGoogleSave(); }
@@ -9740,12 +9811,12 @@ function smTaxChkNoticeHtml(m){
   const todayS = todayStr();
   if(parseInt(m, 10) !== new Date().getMonth() + 1 || checklistYear() !== new Date().getFullYear()) return '';
   let list = [];
-  try{ const a = smTaxAround(todayS); list = a.ongoing.concat(a.due); }catch(e){}
+  try{ const a = smTaxAround(todayS); list = a.ongoing.concat(a.due.filter(x => !x.noNotice)); }catch(e){}
   if(!list.length) return '';
   const md = ds => `${Number(ds.slice(5, 7))}/${Number(ds.slice(8))}`;
   return `<div class="chk-tax"><div class="chk-tax-head">📣 세무일정 안내</div>${list.map(x => {
     const when = x.date.slice(0, 7) === todayS.slice(0, 7) ? '이번 달은' : `${Number(x.date.slice(5, 7))}월에`;
-    return `<div class="chk-tax-row" title="${escapeAttr(x.title + ' · ' + smTaxDesc(x))}">${when} <b>${taxjEsc(smTaxShort(x))}</b>${smJosa(smTaxShort(x))}${when === '이번 달은' ? ' 있는 달이에요!' : ' 있어요!'} <span class="d">마감 ${md(x.date)} ${smDday(x.date, todayS)}</span><span class="todo">${taxjEsc(smTaxTodo(x))}</span></div>`;
+    return `<div class="chk-tax-row" title="${escapeAttr(x.title + ' · ' + smTaxDesc(x))}">${when} <b>${taxjEsc(smTaxShort(x))}</b>${smJosa(smTaxShort(x))}${when === '이번 달은' ? ' 있는 달이에요!' : ' 있어요!'} <span class="d">마감 ${md(x.date)}</span> <span class="dchip">${smDday(x.date, todayS)}</span><span class="todo">${taxjEsc(smTaxTodo(x))}</span></div>`;
   }).join('')}</div>`;
 }
 function smTaxDesc(x){ return SM_TAX_DESC[x.id] || (x.src === '내 일정' ? '내가 넣은 일정' : '회사웹 세무일정'); }
@@ -11417,12 +11488,14 @@ async function pollGoogleSheetForUpdates(){
   if(!googleAccessToken || !googleSpreadsheetId) return;
   if(saveTimer || savingNow) return;
   if(isEditingNow()) return;
+  if(smModalOpen()) return;   // [2026.11.03] 팝업에 입력하는 중에는 다시 읽지 않음(열린 팝업이 고치는 항목이 바뀌어 저장이 사라지던 문제)
   if(window.smUploadingN > 0) return;   // [2026.10.21] 파일을 올리는 동안은 시트를 다시 읽지 않음(아래 libUpload 주석 참고)
   if(hasUnsavedChanges()){ scheduleGoogleSave(); return; }   // 저장 안 된 변경이 있으면 덮어쓰지 않고 먼저 저장 시도
   try {
     // [2026.10.16] "개인웹 깜빡임이 심하다"(요청) - 20초마다 시트를 읽고 바뀐 게 없어도 모든 화면을 다시 그려 깜빡였음 → 내용이 바뀐 때만 다시 그림
-    const before = JSON.stringify(collectGoogleSnapshot());
-    await loadFromGoogleSheet();
+    const before = JSON.stringify(collectGoogleSnapshot()), seq0 = smEditSeq;
+    const ok = await loadFromGoogleSheet(() => smEditSeq === seq0 && !saveTimer && !savingNow && !smModalOpen() && !isEditingNow());
+    if(ok === false) return;   // 읽는 사이 입력이 있었음 → 이번 새로고침은 건너뜀(그 입력은 곧 저장됨)
     if(JSON.stringify(collectGoogleSnapshot()) === before) return;
     renderAllNoSave();
   } catch(e){
