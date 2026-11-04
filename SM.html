@@ -9018,7 +9018,7 @@ function payBulk(){
       <div class="sm-modal-fields">
         <label class="sm-modal-field"><span>항목</span><select class="pb-item">${items.map(x => `<option value="${x[0]}">${taxjEsc(x[1])}</option>`).join('')}</select></label>
         <label class="sm-modal-field"><span>날짜 (완납·미납은 확인일)</span><div style="display:flex; gap:6px;"><input type="date" class="pb-date" value="${todayStr()}" style="flex:1;"><button type="button" class="btn xs pb-today">오늘</button></div></label>
-        <div class="sm-modal-field"><span style="display:flex; align-items:center; gap:6px;"><input type="checkbox" class="pb-all" style="width:auto; margin:0;"> 거래처 <b class="pb-cnt" style="margin-left:auto; font-weight:700;"></b></span>
+        <div class="sm-modal-field"><span style="display:flex; align-items:center; gap:6px;"><input type="checkbox" class="pb-all" style="width:auto; margin:0;"> 거래처${payRowsShown.some(r => r.half) ? ' <button type="button" class="btn xs pb-nohalf" title="반기 신고 거래처(이 달 신고 없음)는 빼고 나머지를 모두 골라요" style="margin-left:6px; background:#fff;">반기 빼고 모두</button>' : ''}<!-- [2026.11.04] 요청: 반기 제외 일괄선택 --> <b class="pb-cnt" style="margin-left:auto; font-weight:700;"></b></span>
           <div class="pb-list" style="max-height:300px; overflow:auto; border:1px solid var(--border); border-radius:12px; padding:2px 10px;"></div></div>
       </div>
       <div class="sm-modal-btns"><button type="button" class="sm-modal-cancel">취소</button><button type="button" class="sm-modal-ok">입력</button></div>
@@ -9039,7 +9039,7 @@ function payBulk(){
     list.innerHTML = payRowsShown.map((r, i) => (item === '_payMsg' && !isUnpaid(r)) || (['__paid','__unpaid','_payMsg'].includes(item) && billNA(r)) ? '' : (() => { const cur = payBulkCur(r.key, item), on = usePicked ? payPicked.has(r.key) : !cur;
       return `<label style="display:flex; align-items:center; gap:8px; padding:7px 0; border-bottom:1px dashed var(--border); font-size:12.5px; cursor:pointer;">
         <input type="checkbox" class="pb-chk" data-i="${i}" ${on ? 'checked' : ''} style="width:auto; margin:0;">
-        <span style="margin:0; font-size:12.5px; color:var(--text); font-weight:700; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${taxjEsc(r.name)}${r.lane ? ` <span style="display:inline; margin:0; font-size:11px; color:${r.lane === 'sameMonth' ? '#059669' : '#e11d48'};">${r.lane === 'sameMonth' ? '당월' : '익월'}</span>` : ''}</span>
+        <span style="margin:0; font-size:12.5px; color:var(--text); font-weight:700; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${taxjEsc(r.name)}${r.half ? ' <span style="display:inline; margin:0; font-size:11px; color:var(--muted);">반기</span>' : ''}${r.lane ? ` <span style="display:inline; margin:0; font-size:11px; color:${r.lane === 'sameMonth' ? '#059669' : '#e11d48'};">${r.lane === 'sameMonth' ? '당월' : '익월'}</span>` : ''}</span>
         <span class="hint" style="display:inline; margin:0; white-space:nowrap;">${taxjEsc(cur)}</span></label>`; })()).join('') || '<div class="hint" style="margin:10px 0;">미납으로 표시한 거래처가 없어요. 먼저 납부마감 · 미납을 넣어 주세요.</div>';
     list.querySelectorAll('.pb-chk').forEach(x => x.addEventListener('change', sync));
     sync();
@@ -9062,6 +9062,7 @@ function payBulk(){
   document.addEventListener('keydown', onKey, true);
   itemSel.addEventListener('change', draw);
   $('.pb-today').onclick = () => { dateIn.value = todayStr(); };
+  { const nh = $('.pb-nohalf'); if(nh) nh.onclick = e => { e.preventDefault(); list.querySelectorAll('.pb-chk').forEach(x => { x.checked = !payRowsShown[Number(x.dataset.i)].half; }); sync(); }; }
   $('.pb-all').addEventListener('change', e => { list.querySelectorAll('.pb-chk').forEach(x => { x.checked = e.target.checked; }); sync(); });
   $('.sm-modal-x').onclick = close; $('.sm-modal-cancel').onclick = close; $('.sm-modal-ok').onclick = apply;
   wrap.addEventListener('mousedown', e => { if(e.target === wrap) close(); });
@@ -9147,7 +9148,7 @@ function payStatusHtml(docs){
       const span = dual ? ` rowspan="${lanes.length}"` : '';
       const cc = pos => payCustomCols.filter(col => (col.pos || 'end') === pos).map(col => payCustomCellHtml(key, col)).join('');
 
-      payRowsShown.push({ key, name: c.name, lane: dual ? k : '' });
+      payRowsShown.push({ key, name: c.name, lane: dual ? k : '', half: ho });   // [2026.11.04] half = 이 달이 반기 신고라 신고 없는 줄
       const trCls = [dual ? (li ? 'pay-lane-2' : 'pay-lane-1') : '', offMonth ? 'pay-off' : ''].filter(Boolean).join(' ');
       rows.push(`<tr${trCls ? ` class="${trCls}"` : ''}${offMonth ? ` title="${mm}월 급여 없음 - ${yy}년 다른 달에 급여가 있어서 보여요"` : ''}>
         ${li ? '' : `<td class="tx-seq"${span}>${n}</td><td class="tx-name"${span} style="${smEntCss(c.entityType)}">${taxjEsc(c.name)}</td>`}
