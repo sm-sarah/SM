@@ -472,6 +472,18 @@ function smTogglePcView(){ try{ localStorage.setItem('sm_pc_view', window.SM_PC_
     margin-bottom:12px;
   }
   .settings-block:last-child{ margin-bottom:0; }
+  /* [2026.11.04] 결산 칸 입력 기록 */
+  td.cl-has-h{ position:relative; }
+  .cl-hn{ position:absolute; top:2px; right:3px; min-width:14px; height:14px; padding:0 3px; border-radius:999px; background:var(--primary-soft); color:var(--primary-dark); font-size:9.5px; font-weight:800; line-height:14px; text-align:center; cursor:pointer; }
+  .cl-hist{ border-bottom:1px dashed var(--border); padding-bottom:6px; margin-bottom:6px; display:flex; flex-direction:column; gap:3px; }
+  .cl-hist-h{ font-size:12px; font-weight:800; }
+  .cl-hist-h span{ color:var(--muted); font-weight:700; margin-left:4px; }
+  .cl-hist-row{ display:grid; grid-template-columns:30px 1fr auto 18px; gap:6px; align-items:center; font-size:12px; color:var(--muted); }
+  .cl-hist-row.last{ color:var(--text); }
+  .cl-hist-row .v{ font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .cl-hist-row .at{ font-size:11px; }
+  .cl-hist-row button{ border:none; background:transparent; color:var(--muted); cursor:pointer; font-size:11px; padding:0; }
+  .cl-hist-row button:hover{ color:#e2445c; }
   .set-adv > summary{ cursor:pointer; font-size:13.5px; font-weight:800; color:var(--muted); list-style:none; display:flex; align-items:center; gap:6px; }
   .set-adv > summary::-webkit-details-marker{ display:none; }
   .set-adv > summary::before{ content:'▸'; font-size:11px; transition:transform .15s; }
@@ -5041,12 +5053,109 @@ function closeLatestKey(){ return Object.keys(closeData).sort(closeKeyCmp).pop()
 function closeUid(p){ return p + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
 function closeSnapOf(c){ return { name: c.name || '', bizNo: c.bizNo || '', corpRegNo: c.corpRegNo || '', openDate: c.openDate || '', entityType: c.entityType || '' }; }
 function closeGet(cid, colId){ const d = closeData[closeKey()]; return d && d.v[cid] ? d.v[cid][colId] : undefined; }
+// [2026.11.04] 요청: "결산 1차·2차 대신, 칸에 입력할 때마다 1회·2회·3회 기록이 쌓이고 표에는 마지막 값" → 연도마다 표 하나
+//   d.v[거래처][항목] = 마지막 값(예전처럼 화면·일괄·엑셀이 그대로 읽음), d.h[거래처][항목] = [{ v, at, r }] 기록(at = 입력 시각, r = 예전 회차 이름)
+//   체크·메모(목록) 항목은 기록을 쌓지 않음(메모는 원래 목록). '지우기' = 마지막 기록만 지우고 그 전 값으로 돌아감
+function closeTracks(colId){ const c = closeCols.find(x => x.id === colId); return !!c && c.type !== 'check' && c.type !== 'memo'; }
+function closeHist(cid, colId){ const d = closeData[closeKey()]; return (((d && d.h) || {})[cid] || {})[colId] || []; }
 function closeSetVal(cid, colId, val){
   const d = closeData[closeKey()]; if(!d) return;
   const r = d.v[cid] = d.v[cid] || {};
-  if(val === '' || val == null || val === false) delete r[colId]; else r[colId] = val;
+  const empty = val === '' || val == null || val === false, prev = r[colId];
+  if(closeTracks(colId)){
+    const H = d.h = d.h || {}, hr = H[cid] = H[cid] || {}, L = hr[colId] = hr[colId] || [];
+    if(empty){
+      if(L.length) L.pop();   // 마지막 기록 지우기 → 그 전 기록이 다시 보임
+      if(L.length){ r[colId] = L[L.length - 1].v; val = r[colId]; }
+      else delete r[colId];
+    }else if(JSON.stringify(prev) !== JSON.stringify(val)){
+      if(!L.length && prev != null && prev !== '') L.push({ v: prev, at: '' });   // 기록이 생기기 전 값 = 1회
+      L.push({ v: val, at: wlMemoNow() });
+      r[colId] = val;
+    }
+    if(!L.length) delete hr[colId];
+    if(!Object.keys(hr).length) delete H[cid];
+  }else if(empty) delete r[colId]; else r[colId] = val;
   if(!Object.keys(r).length) delete d.v[cid];
   scheduleGoogleSave();
+}
+// 기록 한 줄 지우기(i번째). 마지막 기록을 지우면 그 전 값이 칸에 보임
+function closeHistDel(cid, colId, i){
+  const d = closeData[closeKey()]; if(!d) return;
+  const L = closeHist(cid, colId); if(!L[i]) return;
+  L.splice(i, 1);
+  const r = d.v[cid] = d.v[cid] || {};
+  if(L.length) r[colId] = L[L.length - 1].v; else { delete r[colId]; delete ((d.h || {})[cid] || {})[colId]; }
+  if(!Object.keys(r).length) delete d.v[cid];
+  scheduleGoogleSave();
+}
+function closeHistFmt(colId, v){ const c = closeCols.find(x => x.id === colId) || {}; return c.type === 'range' ? closeFmtRange(v) : c.type === 'date' ? closeFmtDate(v) : typeof v === 'number' ? v.toLocaleString('ko-KR') : String(v == null ? '' : v); }
+function closeHistBadge(cid, colId){ const n = closeHist(cid, colId).length; return n > 1 ? `<span class="cl-hn" title="${n}회 기록 - 눌러서 보기">${n}</span>` : ''; }
+function closeHistListHtml(cid, colId){
+  const L = closeHist(cid, colId);
+  if(L.length < 2) return '';
+  return `<div class="cl-hist"><div class="cl-hist-h">입력 기록 <span>${L.length}회</span></div>${L.map((x, i) => `<div class="cl-hist-row${i === L.length - 1 ? ' last' : ''}"><b>${i + 1}회</b><span class="v">${taxjEsc(closeHistFmt(colId, x.v))}</span><span class="at">${taxjEsc(x.r ? x.r : x.at ? x.at.slice(5).replace('-', '/') : '')}</span><button type="button" data-hdel="${i}" title="이 기록 지우기" aria-label="이 기록 지우기">✕</button></div>`).join('')}</div>`;
+}
+function closeHistWire(pop, cid, colId){
+  pop.querySelectorAll('[data-hdel]').forEach(b => b.onclick = e => { e.stopPropagation(); closeHistDel(cid, colId, Number(b.dataset.hdel)); closeDatePopClose(); renderClose(); });
+}
+// 글자·숫자 칸의 기록 보기(칸 옆 숫자를 누름)
+function closeHistPop(el){
+  closeDatePopClose();
+  const { cid, col } = el.dataset;
+  const pop = document.createElement('div');
+  pop.id = 'closeDatePop'; pop.className = 'cl-pop'; pop.style.width = '280px';
+  pop.innerHTML = closeHistListHtml(cid, col) || '<div class="hint" style="margin:0;">기록이 없어요.</div>';
+  document.body.appendChild(pop);
+  const r = el.getBoundingClientRect(), pw = pop.offsetWidth, ph = pop.offsetHeight;
+  pop.style.left = Math.max(8, Math.min(window.innerWidth - pw - 8, r.left)) + 'px';
+  pop.style.top = (r.bottom + ph + 8 > window.innerHeight ? r.top - ph - 4 : r.bottom + 4) + 'px';
+  closeHistWire(pop, cid, col);
+  setTimeout(() => document.addEventListener('mousedown', closeDatePopOutside, true), 0);
+}
+// [2026.11.04] 한 번만: 한 해에 회차가 여러 개면 첫 회차 하나로 합침 - 칸마다 1차 값 = 1회, 2차 값 = 2회 …(같은 값이 이어지면 한 번), 마지막 값이 보임
+//   항목은 id가 같거나 이름이 같으면 같은 항목, 아니면 뒤에 덧붙임. 거래처 목록은 합침. 메모(목록)는 줄을 합치고 체크는 마지막 회차 값
+//   합치기 전 자료는 이 기기에 한 번 보관(sm_close_before_merge)
+function closeMergeRounds(){
+  const byY = {};
+  Object.keys(closeData).forEach(k => { const y = k.split('-')[0]; (byY[y] = byY[y] || []).push(k); });
+  const ys = Object.keys(byY).filter(y => byY[y].length > 1);
+  if(!ys.length) return false;
+  try{ if(!localStorage.getItem('sm_close_before_merge')) localStorage.setItem('sm_close_before_merge', JSON.stringify({ at: wlMemoNow(), closeData, closeColsBy })); }catch(e){}
+  ys.forEach(y => {
+    const keys = byY[y].sort(closeKeyCmp), k0 = keys[0], d0 = closeData[k0], cols0 = smColsAt(closeColsBy, k0);
+    d0.h = d0.h || {}; d0.roster = d0.roster || []; d0.snap = d0.snap || {}; d0.v = d0.v || {};
+    const tracks = id => { const c = cols0.find(x => x.id === id); return !!c && c.type !== 'check' && c.type !== 'memo'; };
+    const addH = (cid, colId, v, rl) => {
+      if(!tracks(colId) || v == null || v === '') return;
+      const hr = d0.h[cid] = d0.h[cid] || {}, L = hr[colId] = hr[colId] || [];
+      if(L.length && JSON.stringify(L[L.length - 1].v) === JSON.stringify(v)) return;
+      L.push({ v, at: '', r: rl });
+    };
+    const r0l = `${k0.split('-')[1]}차`;
+    Object.entries(d0.v).forEach(([cid, r]) => Object.entries(r).forEach(([cl, v]) => addH(cid, cl, v, r0l)));
+    keys.slice(1).forEach(k => {
+      const d = closeData[k] || {}, cols = smColsAt(closeColsBy, k), idMap = {}, rl = `${k.split('-')[1]}차`;
+      cols.forEach(c => {
+        let t = cols0.find(x => x.id === c.id) || cols0.find(x => String(x.label).trim() === String(c.label).trim());
+        if(!t){ t = Object.assign({}, c); cols0.push(t); }
+        idMap[c.id] = t.id;
+      });
+      (d.roster || []).forEach(id => { if(!d0.roster.includes(id)) d0.roster.push(id); });
+      Object.entries(d.snap || {}).forEach(([id, sn]) => { d0.snap[id] = sn; });
+      Object.entries(d.v || {}).forEach(([cid, r]) => Object.entries(r).forEach(([cl, v]) => {
+        const tid = idMap[cl] || cl, r0 = d0.v[cid] = d0.v[cid] || {}, col = cols0.find(x => x.id === tid);
+        if(col && col.type === 'memo'){ const L = closeMemoLines(r0[tid]); closeMemoLines(v).forEach(x => { if(!L.includes(x)) L.push(x); }); r0[tid] = L.join('\n'); return; }
+        r0[tid] = v; addH(cid, tid, v, rl);
+      }));
+      if(d.date && (!d0.date || d.date > d0.date)) d0.date = d.date;
+      delete closeData[k]; delete closeColsBy[k];
+    });
+    // 기록이 한 번뿐인 칸은 기록을 따로 두지 않음(숫자 표시 없음)
+    Object.keys(d0.h).forEach(cid => { Object.keys(d0.h[cid]).forEach(cl => { if(d0.h[cid][cl].length < 2) delete d0.h[cid][cl]; }); if(!Object.keys(d0.h[cid]).length) delete d0.h[cid]; });
+  });
+  scheduleGoogleSave();
+  return true;
 }
 function closeFmtDate(v){
   if(v == null || v === '') return '';
@@ -5119,12 +5228,13 @@ function closeRows(docs){
 async function closeNewRound(fromKey){
   const docs = taxjFull && taxjFull.docs;
   if(!docs) return smAlert('회사웹 연결이 필요해요', '결산하는 날 수임 중인 거래처를 회사웹에서 가져와서, 먼저 Tax.J에 연결해 주세요.');
-  const y = closeYear || String(new Date().getFullYear()), next = String((closeRounds(y).map(Number).pop() || 0) + 1), key = `${y}-${next}`;
+  const y = closeYear || String(new Date().getFullYear());
+  if(closeRounds(y).length) return;   // [2026.11.04] 연도마다 표 하나
+  const next = '1', key = `${y}-${next}`;
   const prev = fromKey || closeLatestKey(), src = prev ? smColsAt(closeColsBy, prev).slice() : [];
-  const r = await smForm(`${y}년 ${next}차 결산 만들기`, [{ label:'결산일', type:'date', value: todayStr() }], { okText: src.length ? '다음' : '만들기' });
-  if(!r) return;
+  const r = [todayStr()];
   // [2026.11.02] "모든 항목을 다음으로 이월 - 항목만/항목+내용 항목마다 선택"(요청) - 앞 회차 항목을 골라 넘김(기본: 이어받기(↻) 항목은 항목+내용, 나머지는 항목만)
-  const picks = src.length ? await smCarryPick(`${closeKeyLabel(prev)} → ${y}년 ${next}차 이월`, src, c => c.carry ? 'vals' : 'cols') : {};
+  const picks = src.length ? await smCarryPick(`${prev.split('-')[0]}년 결산 → ${y}년 결산 이월`, src, c => c.carry ? 'vals' : 'cols') : {};
   if(!picks) return;
   const active = taxjClientIndex(docs).sorted.filter(payIsReg), snap = {}, v = {};
   active.forEach(c => { snap[c.id] = closeSnapOf(c); });
@@ -5225,15 +5335,17 @@ async function closeImport(input){
     const exists = !!closeData[key];
     const msg = [`'${sn}' 시트 · 거래처 ${n}곳 · 항목 ${map.length}개${newCols.length ? `(새 항목 ${newCols.length}개)` : ''}`,
       ext.length ? `회사웹 거래처에 없는 ${ext.length}곳은 엑셀 정보로 보관해요: ${ext.slice(0, 6).join(', ')}${ext.length > 6 ? ' 외' : ''}` : '',
-      exists ? '이 회차에 적어 둔 값은 엑셀 내용으로 바뀌어요.' : '새 회차(결산일 오늘)로 만들어요.'].filter(Boolean).join('\n');
-    if(!(await smConfirm(`${closeKeyLabel(key)} 결산에 넣을까요?`, msg, { okText:'넣기', icon:'↑' }))) return;
+      exists ? '엑셀 값은 칸마다 새 기록으로 쌓여요(예전 값은 기록에 남음). 엑셀에 빈 칸은 그대로 둬요.' : `${year}년 결산을 새로 만들어요.`].filter(Boolean).join('\n');
+    if(!(await smConfirm(`${year}년 결산에 넣을까요?`, msg, { okText:'넣기', icon:'↑' }))) return;
     smColsAt(closeColsBy, key).push(...newCols);
     const d = closeData[key] = closeData[key] || { date: todayStr(), roster: [], snap: {}, v: {} };
     taxjClientIndex(docs).sorted.filter(payIsReg).forEach(c => { if(!d.roster.includes(c.id)){ d.roster.push(c.id); d.snap[c.id] = closeSnapOf(c); } });
     const idx = taxjClientIndex(docs);
     Object.keys(vals).forEach(id => { if(!d.roster.includes(id)) d.roster.push(id); d.snap[id] = idx.byId[id] ? closeSnapOf(idx.byId[id]) : snapX[id]; });
-    d.v = vals;
-    [closeYear, closeRound] = key.split('-'); closePicked = new Set();
+    // [2026.11.04] 예전엔 d.v = vals로 통째로 바꿨음 → 칸마다 closeSetVal로 넣어 기록이 쌓이게(빈 칸은 그대로)
+    [closeYear, closeRound] = key.split('-');
+    Object.entries(vals).forEach(([id, v]) => Object.entries(v).forEach(([colId, x]) => closeSetVal(id, colId, x)));
+    closePicked = new Set();
     renderClose(); scheduleGoogleSave();
   }catch(e){
     console.error('결산 엑셀 가져오기 실패', e);
@@ -5248,14 +5360,15 @@ function closeDatePop(btn){
   const { cid, col } = btn.dataset, cur = closeGet(cid, col), iso = CLOSE_ISO_RE.test(cur || '');
   const pop = document.createElement('div');
   pop.id = 'closeDatePop'; pop.className = 'cl-pop';
-  pop.innerHTML = `<input type="date" class="cl-pop-date" value="${iso ? cur : ''}">
-    <div class="cl-pop-row"><button type="button" data-v="__today">오늘</button>${CLOSE_QUICK.map(q => `<button type="button" data-v="${q}">${q}</button>`).join('')}<button type="button" data-v="__clear" class="del">지우기</button></div>
+  pop.innerHTML = `${closeHistListHtml(cid, col)}<input type="date" class="cl-pop-date" value="${iso ? cur : ''}">
+    <div class="cl-pop-row"><button type="button" data-v="__today">오늘</button>${CLOSE_QUICK.map(q => `<button type="button" data-v="${q}">${q}</button>`).join('')}<button type="button" data-v="__clear" class="del" title="마지막 기록을 지워요(그 전 기록이 있으면 그 값이 보여요)">지우기</button></div>
     <input type="text" class="cl-pop-text" placeholder="직접 입력 후 Enter" value="${iso || cur == null ? '' : escapeAttr(String(cur))}">`;
   document.body.appendChild(pop);
   const r = btn.getBoundingClientRect(), pw = pop.offsetWidth, ph = pop.offsetHeight;
   pop.style.left = Math.max(8, Math.min(window.innerWidth - pw - 8, r.left)) + 'px';
   pop.style.top = (r.bottom + ph + 8 > window.innerHeight ? r.top - ph - 4 : r.bottom + 4) + 'px';
-  const set = v => { closeSetVal(cid, col, v); btn.textContent = closeFmtDate(v); btn.title = v || ''; btn.classList.toggle('txt', !!v && !CLOSE_ISO_RE.test(v)); closeDatePopClose(); };
+  const set = v => { closeSetVal(cid, col, v); closeDatePopClose(); renderClose(); };
+  closeHistWire(pop, cid, col);
   const di = pop.querySelector('.cl-pop-date');
   di.addEventListener('change', () => { if(di.value) set(di.value); });
   pop.querySelectorAll('[data-v]').forEach(b => b.onclick = () => set(b.dataset.v === '__today' ? todayStr() : b.dataset.v === '__clear' ? '' : b.dataset.v));
@@ -5270,18 +5383,19 @@ function closeRangePop(btn){
   const [a0, b0] = ok ? String(cur).split('~') : ['', ''];
   const pop = document.createElement('div');
   pop.id = 'closeDatePop'; pop.className = 'cl-pop'; pop.style.width = '300px';
-  pop.innerHTML = `<div class="cl-pop-range"><input type="date" class="cl-r-a" value="${a0}" title="시작일"><span>~</span><input type="date" class="cl-r-b" value="${b0}" title="끝 날짜"></div>
+  pop.innerHTML = `${closeHistListHtml(cid, col)}<div class="cl-pop-range"><input type="date" class="cl-r-a" value="${a0}" title="시작일"><span>~</span><input type="date" class="cl-r-b" value="${b0}" title="끝 날짜"></div>
     <!-- [2026.10.15] "메뉴 위치가 정리 안 돼 있다"(요청) - 날짜 채우기 / 글자 값 / 직접 입력 / 지우기·저장 순서로 줄을 나눔 -->
     <div class="cl-pop-row"><button type="button" data-v="__ystart">1/1부터</button><button type="button" data-v="__today">끝 = 오늘</button></div>
     <div class="cl-pop-row">${CLOSE_QUICK.map(q => `<button type="button" data-v="${q}">${q}</button>`).join('')}</div>
     <input type="text" class="cl-pop-text" placeholder="직접 입력 후 Enter (예: 26.01~09.29)" value="${ok || cur == null ? '' : escapeAttr(String(cur))}">
-    <div class="cl-pop-row" style="justify-content:space-between;"><button type="button" data-v="__clear" class="del">지우기</button><button type="button" data-v="__ok" style="font-weight:800; color:var(--primary-dark); border-color:var(--primary);">저장</button></div>`;
+    <div class="cl-pop-row" style="justify-content:space-between;"><button type="button" data-v="__clear" class="del" title="마지막 기록을 지워요(그 전 기록이 있으면 그 값이 보여요)">지우기</button><button type="button" data-v="__ok" style="font-weight:800; color:var(--primary-dark); border-color:var(--primary);">저장</button></div>`;
   document.body.appendChild(pop);
   const r = btn.getBoundingClientRect(), pw = pop.offsetWidth, ph = pop.offsetHeight;
   pop.style.left = Math.max(8, Math.min(window.innerWidth - pw - 8, r.left)) + 'px';
   pop.style.top = (r.bottom + ph + 8 > window.innerHeight ? r.top - ph - 4 : r.bottom + 4) + 'px';
   const ia = pop.querySelector('.cl-r-a'), ib = pop.querySelector('.cl-r-b');
-  const set = v => { closeSetVal(cid, col, v); btn.textContent = closeFmtRange(v); btn.title = v || ''; btn.classList.toggle('txt', !!v && !closeIsRange(v)); closeDatePopClose(); };
+  const set = v => { closeSetVal(cid, col, v); closeDatePopClose(); renderClose(); };
+  closeHistWire(pop, cid, col);
   const save = () => { if(ia.value || ib.value) set(`${ia.value}~${ib.value}`); else closeDatePopClose(); };
   pop.querySelectorAll('[data-v]').forEach(b => b.onclick = () => {
     const v = b.dataset.v;
@@ -5307,7 +5421,7 @@ async function closeBulk(){
   const targets = [];
   if(picked.length) targets.push(`체크한 거래처 ${picked.length}곳`);
   targets.push(`지금 보이는 거래처 전체 ${shown.length}곳`);
-  const r = await smForm('날짜 일괄 입력', [{ label:'항목', options: dcols.map(c => c.label.replace(/\s+/g, ' ')), value: dcols[0].label.replace(/\s+/g, ' ') }, { label:'날짜 (기본 오늘)', type:'date', value: todayStr() }, { label:'대상', options: targets, value: targets[0] }, { label:'이미 적힌 칸', options:['빈 칸만 채우기','모두 바꾸기'], value:'빈 칸만 채우기' }], { okText:'입력', icon:'✓' });
+  const r = await smForm('날짜 일괄 입력', [{ label:'항목', options: dcols.map(c => c.label.replace(/\s+/g, ' ')), value: dcols[0].label.replace(/\s+/g, ' ') }, { label:'날짜 (기본 오늘)', type:'date', value: todayStr() }, { label:'대상', options: targets, value: targets[0] }, { label:'이미 적힌 칸', options:['빈 칸만 채우기','적힌 칸도 새 기록으로 추가'], value:'빈 칸만 채우기' }], { okText:'입력', icon:'✓' });
   if(!r) return;
   const col = dcols.find(c => c.label.replace(/\s+/g, ' ') === r[0]) || dcols[0], date = r[1] || todayStr();
   const ids = r[2].startsWith('체크한') ? picked : shown, onlyEmpty = r[3] === '빈 칸만 채우기';
@@ -5317,19 +5431,20 @@ async function closeBulk(){
   smAlert('입력했어요', `${col.label.replace(/\s+/g, ' ')} · ${n}곳에 ${date}`, { icon:'✓' });
 }
 async function closeAddCol(){
-  const r = await smForm('결산 항목 추가', [{ label:'항목 이름', placeholder:'예: 재고 확인' }, { label:'입력 방식', options: CLOSE_TYPES.map(x => x[1]), value:'날짜' }, { label:'다음 회차로 이어받기', options:['아니오','예'], value:'아니오' }], { okText:'추가' });
+  const r = await smForm('결산 항목 추가', [{ label:'항목 이름', placeholder:'예: 재고 확인' }, { label:'입력 방식', options: CLOSE_TYPES.map(x => x[1]), value:'날짜' }, { label:'다음 해 결산으로 이어받기', options:['아니오','예'], value:'아니오' }], { okText:'추가' });
   if(!r || !r[0].trim()) return;
   closeCols.push({ id: closeUid('k'), label: r[0].trim(), type: (CLOSE_TYPES.find(x => x[1] === r[1]) || CLOSE_TYPES[0])[0], carry: r[2] === '예' });
   renderClose(); scheduleGoogleSave();
 }
 async function closeEditCol(id){
   const col = closeCols.find(c => c.id === id); if(!col) return;
-  const r = await smForm('결산 항목 수정', [{ label:'항목 이름', type:'textarea', rows:2, value: col.label }, { label:'입력 방식', options: CLOSE_TYPES.map(x => x[1]), value: (CLOSE_TYPES.find(x => x[0] === col.type) || CLOSE_TYPES[0])[1] }, { label:'다음 회차로 이어받기', options:['아니오','예'], value: col.carry ? '예' : '아니오' }], { okText:'저장', cancelText:'삭제', icon:'✎' });
+  const r = await smForm('결산 항목 수정', [{ label:'항목 이름', type:'textarea', rows:2, value: col.label }, { label:'입력 방식', options: CLOSE_TYPES.map(x => x[1]), value: (CLOSE_TYPES.find(x => x[0] === col.type) || CLOSE_TYPES[0])[1] }, { label:'다음 해 결산으로 이어받기', options:['아니오','예'], value: col.carry ? '예' : '아니오' }], { okText:'저장', cancelText:'삭제', icon:'✎' });
   if(r === undefined) return;   // [2026.10.15] 닫기(X) - 아무것도 안 바꿈
   if(r === null){
-    if(!(await smConfirm(`'${col.label.replace(/\s+/g, ' ')}' 항목을 지울까요?`, `${closeKeyLabel(closeKey())}에서만 지워져요(이 회차에 적은 값 포함). 다른 회차는 그대로예요.`, { tone:'danger', icon:'!', okText:'삭제' }))) return;
+    if(!(await smConfirm(`'${col.label.replace(/\s+/g, ' ')}' 항목을 지울까요?`, `${closeYear}년 결산에서만 지워져요(적은 값·기록 포함). 다른 연도는 그대로예요.`, { tone:'danger', icon:'!', okText:'삭제' }))) return;
     closeCols = closeCols.filter(c => c.id !== id);
     Object.values((closeData[closeKey()] || {}).v || {}).forEach(v => { delete v[id]; });   // [2026.11.02] 이 회차만
+    Object.values((closeData[closeKey()] || {}).h || {}).forEach(v => { delete v[id]; });   // [2026.11.04] 기록도
   }else{
     if(r[0].trim()) col.label = r[0].trim();
     const to = (CLOSE_TYPES.find(x => x[1] === r[1]) || CLOSE_TYPES[0])[0];
@@ -5360,7 +5475,7 @@ function closeTableHtml(docs){
   });
   const head = `<th class="tx-seq"><input type="checkbox" title="날짜 일괄 입력할 거래처 모두 고르기" onchange="closePickAll(this.checked)"></th><th class="tx-seq cl-lk">순번</th>`
     + ['상호명','법인등록번호','사업자번호','개업일','회사 메모'].map((l, i) => `<th class="vp-link cl-lk${i === 0 ? ' vp-sticky' : ''}${i === 4 ? ' vp-div' : ''}" title="회사웹 값(조회만)">${l}</th>`).join('')   // [2026.11.03] 회사웹 결산 메모(1차·2차)
-    + closeCols.map(c => `<th data-smdrag="close" data-smcol="${c.id}" draggable="true"><button class="vp-th" onclick="closeEditCol('${c.id}')" title="눌러서 이름·입력 방식·이어받기 수정 또는 삭제 · 끌어서 위치 옮기기${c.carry ? '\n(다음 회차로 이어받는 항목)' : ''}">${taxjEsc(c.label).replace(/\n/g, '<br>')}${c.carry ? '<span class="vp-carry">↻</span>' : ''}</button></th>`).join('');
+    + closeCols.map(c => `<th data-smdrag="close" data-smcol="${c.id}" draggable="true"><button class="vp-th" onclick="closeEditCol('${c.id}')" title="눌러서 이름·입력 방식·이어받기 수정 또는 삭제 · 끌어서 위치 옮기기${c.carry ? '\n(다음 해 결산으로 이어받는 항목)' : ''}">${taxjEsc(c.label).replace(/\n/g, '<br>')}${c.carry ? '<span class="vp-carry">↻</span>' : ''}</button></th>`).join('');
   const body = rows.map((x, n) => {
     const cid = escapeAttr(x.id), v = d.v[x.id] || {}, t = s => s ? taxjEsc(String(s)) : '-';
     const lk = (val, extra) => `<td class="cl-lk cl-num${extra || ''}${val ? '' : ' cl-na'}">${t(val)}</td>`;   // 회사웹 거래처 표와 같은 칸
@@ -5369,11 +5484,13 @@ function closeTableHtml(docs){
       const val = v[c.id];
       if(c.type === 'check') return `<td style="text-align:center;"><input type="checkbox" ${val ? 'checked' : ''} onchange="closeSetVal('${cid}','${c.id}',this.checked)"></td>`;
       if(c.type === 'memo') return `<td style="text-align:center;">${closeMemoBtn(cid, c.id, val)}</td>`;   // [2026.10.23] 메모(목록) - 아이콘(개수), 눌러서 목록 보기·추가
-      if(c.type === 'range') return `<td style="text-align:center;"><button type="button" class="cl-dt${val && !closeIsRange(val) ? ' txt' : ''}" data-cid="${cid}" data-col="${c.id}" title="${escapeAttr(val || '')}" onclick="closeRangePop(this)">${taxjEsc(closeFmtRange(val))}</button></td>`;
-      if(c.type === 'date') return `<td style="text-align:center;"><button type="button" class="cl-dt${val && !CLOSE_ISO_RE.test(val) ? ' txt' : ''}" data-cid="${cid}" data-col="${c.id}" title="${escapeAttr(val || '')}" onclick="closeDatePop(this)">${taxjEsc(closeFmtDate(val))}</button></td>`;
+      const hb = closeHistBadge(x.id, c.id);   // [2026.11.04] 2회 이상 입력한 칸은 오른쪽 위에 횟수
+      if(c.type === 'range') return `<td style="text-align:center;" class="${hb ? 'cl-has-h' : ''}"><button type="button" class="cl-dt${val && !closeIsRange(val) ? ' txt' : ''}" data-cid="${cid}" data-col="${c.id}" title="${escapeAttr(val || '')}" onclick="closeRangePop(this)">${taxjEsc(closeFmtRange(val))}</button>${hb}</td>`;
+      if(c.type === 'date') return `<td style="text-align:center;" class="${hb ? 'cl-has-h' : ''}"><button type="button" class="cl-dt${val && !CLOSE_ISO_RE.test(val) ? ' txt' : ''}" data-cid="${cid}" data-col="${c.id}" title="${escapeAttr(val || '')}" onclick="closeDatePop(this)">${taxjEsc(closeFmtDate(val))}</button>${hb}</td>`;
       const s = val == null ? '' : typeof val === 'number' ? val.toLocaleString('ko-KR') : String(val);
-      if(c.type === 'num') return `<td><input class="vp-in" style="width:${w[c.id]}px; text-align:right;" value="${escapeAttr(s)}" onchange="closeNumInput(this,'${cid}','${c.id}')"></td>`;
-      return `<td><input class="vp-in" style="width:${w[c.id]}px;" value="${escapeAttr(s)}" title="${escapeAttr(s)}" onchange="this.title=this.value; closeSetVal('${cid}','${c.id}',this.value.trim())"></td>`;
+      const hbt = hb ? hb.replace('<span class="cl-hn"', `<span class="cl-hn" data-cid="${cid}" data-col="${c.id}" onclick="closeHistPop(this)"`) : '';
+      if(c.type === 'num') return `<td class="${hb ? 'cl-has-h' : ''}"><input class="vp-in" style="width:${w[c.id]}px; text-align:right;" value="${escapeAttr(s)}" onchange="closeNumInput(this,'${cid}','${c.id}')">${hbt}</td>`;
+      return `<td class="${hb ? 'cl-has-h' : ''}"><input class="vp-in" style="width:${w[c.id]}px;" value="${escapeAttr(s)}" title="${escapeAttr(s)}" onchange="this.title=this.value; closeSetVal('${cid}','${c.id}',this.value.trim())">${hbt}</td>`;
     }).join('');
     return `<tr${x.gone ? ' class="cl-gone"' : ''}><td class="tx-seq"><input type="checkbox" class="cl-pick" data-cid="${cid}" ${closePicked.has(x.id) ? 'checked' : ''} onchange="closePick(this.dataset.cid, this.checked)"></td><td class="tx-seq cl-lk cl-num">${n + 1}</td>
       <td class="vp-sticky cl-lk" style="${smEntCss(x.c.entityType)}">${taxjEsc(x.c.name || '')}${x.gone ? ' <span class="cl-gone-tag">해지</span>' : ''}</td>
@@ -5445,6 +5562,7 @@ function closeMergeMemoCols(){
 }
 function renderClose(){
   try{ closeMergeMemoCols(); }catch(e){ console.warn('결산 비고·메모 합치기', e); }
+  try{ closeMergeRounds(); }catch(e){ console.warn('결산 회차 합치기', e); }
   const el = document.getElementById('tab-close');
   if(!el) return;
   const a = document.activeElement;
@@ -5466,19 +5584,16 @@ function renderClose(){
   el.innerHTML = `<div class="card">${taxjLiveBarHtml()}
     <div class="toolbar" style="justify-content:center;">
       <select onchange="closeYear=this.value; closeRound=''; closePicked=new Set(); renderClose();">${[...years].sort((a, b) => b - a).map(y => `<option value="${y}" ${y === closeYear ? 'selected' : ''}>${y}년</option>`).join('')}</select>
-      ${rounds.length ? `<select onchange="closeRound=this.value; closePicked=new Set(); renderClose();">${rounds.map(r => `<option value="${r}" ${r === closeRound ? 'selected' : ''}>${r}차</option>`).join('')}</select>` : ''}
-      ${d ? `<label class="cl-date-lab">결산일 <input type="date" value="${escapeAttr(d.date || '')}" onchange="closeSetDate(this.value)"></label>` : ''}
+      <!-- [2026.11.04] 회차·결산일 고르기 뺌(요청) - 연도마다 표 하나, 칸마다 입력 기록이 쌓임 -->
       <input type="text" placeholder="거래처 검색" value="${escapeAttr(closeQuery)}" oninput="closeQuery=this.value; clearTimeout(window._closeQT); window._closeQT=setTimeout(()=>{ renderClose(); const s=document.querySelector('#tab-close input[placeholder=&quot;거래처 검색&quot;]'); if(s){ s.focus(); s.setSelectionRange(s.value.length, s.value.length); } }, 250);">
     </div>
     <div class="toolbar"><div class="spacer"></div>
-      <button class="btn primary xs" onclick="closeNewRound()">+ 새 회차</button>
+      ${d ? '' : `<button class="btn primary xs" onclick="closeNewRound()">+ ${closeYear}년 결산 만들기</button>`}
       ${d ? `<button class="sm-tool-ic" onclick="closeBulk()" title="날짜 일괄 입력 - 왼쪽 체크박스로 고른 거래처(없으면 보이는 전체)에 오늘 또는 고른 날짜를 넣어요" aria-label="날짜 일괄 입력">${ICON_BULK}</button>` : ''}
       <button class="sm-tool-ic" onclick="closeAddCol()" title="항목 추가" aria-label="항목 추가">${ICON_PLUS}</button>
-      ${d ? `<button class="sm-tool-ic" onclick="closeCarry()" title="다음 회차로 이월 - 항목마다 안 넘김·항목만·항목+내용을 골라 넘겨요(다음 회차가 없으면 새로 만들면서)" aria-label="다음 회차로 이월">${ICON_CARRY}</button>` : ''}
-      <button class="sm-tool-ic" onclick="document.getElementById('closeXlsx').click()" title="엑셀 올리기 - 1행 = 항목 이름인 결산 엑셀을 고른 회차(없으면 새 회차)에 넣어요" aria-label="엑셀 올리기">${UPLOAD_XLSX_SVG}</button><!-- [2026.11.02] 글자 → 아이콘(요청) --><input type="file" id="closeXlsx" accept=".xlsx,.xls" style="display:none;" onchange="closeImport(this)">
-      ${d ? '<button class="btn ghost xs danger" onclick="closeDeleteRound()">회차 삭제</button>' : ''}
+      <button class="sm-tool-ic" onclick="document.getElementById('closeXlsx').click()" title="엑셀 올리기 - 1행 = 항목 이름인 결산 엑셀을 이 연도 결산에 넣어요(값은 칸마다 새 기록으로 쌓임)" aria-label="엑셀 올리기">${UPLOAD_XLSX_SVG}</button><!-- [2026.11.02] 글자 → 아이콘(요청) --><input type="file" id="closeXlsx" accept=".xlsx,.xls" style="display:none;" onchange="closeImport(this)">
     </div>
-    ${d ? closeTableHtml(docs) : `<div class="empty">${closeYear}년 결산 회차가 아직 없어요.<br>'+ 새 회차'를 누르면 그날 수임 중인 거래처로 만들어요. 엑셀이 있으면 '엑셀 올리기'로 바로 넣어도 돼요.</div>`}
+    ${d ? closeTableHtml(docs) : `<div class="empty">${closeYear}년 결산이 아직 없어요.<br>'+ ${closeYear}년 결산 만들기'를 누르면 지금 수임 중인 거래처로 만들어요. 엑셀이 있으면 '엑셀 올리기'로 바로 넣어도 돼요.</div>`}
   </div>`;
   el._closeSig = sig; el.classList.toggle('vat-wide', !!d);
   if(keep.length) [...el.querySelectorAll('.table-scroll')].forEach((x, i) => { if(keep[i]){ x.scrollLeft = keep[i][0]; x.scrollTop = keep[i][1]; } });
