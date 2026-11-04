@@ -94,6 +94,12 @@ function smTogglePcView(){ try{ localStorage.setItem('sm_pc_view', window.SM_PC_
     color:var(--text);
     letter-spacing:.2px;
   }
+  /* [2026.11.04] "휴대폰에서 PC 화면 버튼이 제목에 너무 붙음"(요청) - 좁은 화면에선 제목 왼쪽, 버튼·날짜 오른쪽으로 나눠 간격 둠 */
+  @media (max-width:600px){
+    header{ grid-template-columns:auto 1fr; column-gap:12px; padding:12px 16px; }
+    header > span:first-child{ display:none; }
+    header .wordmark{ justify-self:start; font-size:19px; white-space:nowrap; }
+  }
   header .today-pill{
     justify-self:end;
     font-size:12.5px;
@@ -1380,7 +1386,7 @@ function smTogglePcView(){ try{ localStorage.setItem('sm_pc_view', window.SM_PC_
   .side-nav{ width:100%; display:flex; flex-direction:column; align-items:center; gap:4px; }
   /* 매뉴얼(2026.10.08): [왼쪽 목록 | 오른쪽 본문] */
   .mn-layout{ display:grid; grid-template-columns:260px 1fr; gap:18px; margin-top:14px; align-items:start; }
-  .mn-list{ display:flex; flex-direction:column; gap:4px; border-right:1px solid var(--border); padding-right:14px; min-height:320px; }
+  .mn-list{ display:flex; flex-direction:column; gap:4px; border-right:1px solid var(--border); padding-right:14px; min-height:max(320px, calc(100vh - 260px)); }   /* [2026.11.04] 화면 세로로 꽉 차게(요청) */
   .mn-list input{ font-family:inherit; font-size:13px; padding:8px 12px; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--bg); margin-bottom:6px; }
   .mn-item{ font-family:inherit; text-align:left; border:none; background:transparent; border-radius:10px; padding:8px 10px; cursor:pointer; display:flex; flex-direction:column; gap:2px; }
   .mn-item:hover{ background:#fdf3f7; }
@@ -1476,6 +1482,25 @@ function smTogglePcView(){ try{ localStorage.setItem('sm_pc_view', window.SM_PC_
     aside.sidebar .quick-bar{ flex-direction:column; align-items:center; }
     .nav-item{ padding:4px; justify-content:center; }
     .nav-item .tiny, .nav-flyout.open{ display:none; }
+  }
+  /* [2026.11.04] 요청: "휴대폰에서 세로로 너무 늘어남" → 휴대폰 폭에서는 왼쪽 메뉴 띠를 화면 아래 가로 띠로, 본문은 화면 폭 전체
+     (컴퓨터 화면·PC 화면 보기에는 영향 없음). 아이콘이 많으면 띠를 옆으로 밀어서 봄 */
+  @media (max-width:600px){
+    .app-shell{ display:block; }
+    aside.sidebar{ position:fixed; left:0; right:0; bottom:0; top:auto; z-index:950; width:auto; margin:0; max-height:none;
+      flex-direction:row; align-items:center; gap:2px; padding:6px 8px calc(6px + env(safe-area-inset-bottom, 0px));
+      border-radius:18px 18px 0 0; border-bottom:none; overflow-x:auto; overflow-y:hidden; scrollbar-width:none;
+      box-shadow:0 -8px 20px -12px rgba(150,50,90,.35); }
+    aside.sidebar::-webkit-scrollbar{ display:none; }
+    aside.sidebar .quick-bar{ flex-direction:row; flex:none; width:auto; gap:4px; padding:0 6px 0 0; margin:0 4px 0 0; border-bottom:none; border-right:1px solid var(--border); }
+    aside.sidebar .quick-bar .quick-btn{ width:38px; height:38px; }
+    aside.sidebar .quick-bar .quick-btn[title="홈"]{ display:none; }   /* 홈은 메뉴에 있어서 한 번만 */
+    .side-nav{ flex-direction:row; flex:none; width:auto; gap:2px; }
+    .nav-wrap{ width:auto; flex:none; }
+    .nav-item{ width:auto; padding:3px; }
+    main{ padding:18px 14px 96px; }
+    .sm-fab{ bottom:72px; }
+    .sm-fab-pop{ bottom:128px; max-height:calc(100vh - 140px); }
   }
 
   /* [2026.10.20] 새로고침 직후 시트를 불러오기 전에는 본문 대신 "불러오는 중…" (왼쪽 메뉴·머리글은 그대로) */
@@ -2320,7 +2345,6 @@ const NAV_SUBMENUS = {
     {js:"switchTab('accounts')", label:'개인계정'},   // [2026.11.02] 계정 메뉴를 여기로(요청)
     {js:"setInnerView('corp')",  label:'회사정보'},
     {js:"setInnerView('team')",  label:'팀정보'},
-    {js:"setInnerView('sched')", label:'세무일정'},
   ],
   // [2026.10.12] 회사웹 개인 메뉴와 같은 하위메뉴(요청 - 근태경비)
   attend: [
@@ -2417,6 +2441,8 @@ function renderNav(){
   }).join('');
 
   updatePageHead();   // [2026.10.14] 대메뉴 아래 설명 문구는 안 보이게(요청)
+  // [2026.11.04] 휴대폰 아래 메뉴 띠: 고른 메뉴가 띠 가운데쯤 보이게
+  try{ if(window.innerWidth <= 600){ const bar = document.getElementById('sidebar'), on = sb.querySelector('.nav-item.active'); if(bar && on){ const br = bar.getBoundingClientRect(), r = on.getBoundingClientRect(); bar.scrollLeft = Math.max(0, bar.scrollLeft + (r.left - br.left) - (br.width - r.width) / 2); } } }catch(e){}
 }
 // [2026.10.16] "메뉴 제목은 점(·)으로 잇지 말고 대제목(메뉴 이름) 아래 소제목(하위메뉴)으로"(요청)
 function pageSubtitle(){
@@ -9265,7 +9291,7 @@ function renderPay(){
    세무일정 = Tax.J 세무일정(기본 규칙 TAX_SCHEDULE_ANNUAL·MONTHLY + s__taxScheduleCustomItems + 날짜 직접 수정 s__taxScheduleOverrides, 주말·공휴일이면 다음 영업일).
    회사 원본은 읽기만. 암호화된 항목은 회사웹에서만 열림 */
 let innerView = 'corp', innerSchedMonth = '';
-const INNER_VIEWS = [['corp','회사정보'], ['team','팀정보'], ['sched','세무일정']];
+const INNER_VIEWS = [['corp','회사정보'], ['team','팀정보']];   // [2026.11.04] 세무일정 하위메뉴 뺌(요청: "필요 없을 것 같아") - 일정 계산(innerTaxMonth)은 홈 세무일정 안내에서 계속 씀
 function setInnerView(v){ innerView = v; if(activeTab !== 'inner') switchTab('inner'); else renderInner(); }
 // Tax.J CORP_BASIC_INFO_ORDER와 같음
 const INNER_CORP_ORDER = ['사업자번호','법인등록번호','창립일','대표자','주민등록번호','주소','우편번호','조정반번호','대표번호','대표팩스','폴더 링크'];
