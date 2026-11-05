@@ -464,6 +464,7 @@ function smTogglePcView(){ try{ localStorage.setItem('sm_pc_view', window.SM_PC_
   .step-date{ display:block; font-size:9.5px; font-weight:600; opacity:.75; margin-top:1px; }
 
   .settings-card{ max-width:820px; margin-left:auto; margin-right:auto; }
+  .vp-in.cl-auto::placeholder{ color:var(--text); opacity:1; }   /* [2026.11.05] 결산 급여종류 자동 값 - 직접 적은 값과 같은 글자색 */
   /* [2026.11.05] "설정 › 웹 표 글자가 세로줄 넘어감, 가로폭 넓게 써도 됨"(요청) - 웹·실시간멘트 화면만 카드 폭 넓히고 표 칸 안에서 줄바꿈 */
   .settings-card.sm-wide{ max-width:1280px; }
   #settings-web td, #settings-ment td{ white-space:normal; word-break:keep-all; overflow-wrap:anywhere; }
@@ -5121,6 +5122,16 @@ let closeYear = '', closeRound = '', closeQuery = '', closePicked = new Set();
 const CLOSE_TYPES = [['date','날짜'], ['month','월'], ['range','기간'], ['text','글자'], ['check','체크'], ['num','숫자'], ['memo','메모(목록)']];   // [2026.10.23] 메모(목록) 추가(요청)   // [2026.10.15] 기간(시작~끝 날짜) 추가(요청)
 const CLOSE_LINK_RE = /^(순번|상호|상호명|법인등록번호|사업자번호|개업일)$/;
 const CLOSE_CARRY_RE = /^(차량|급여종류|비고)/;
+// [2026.11.05] "결산 급여종류는 그 해 귀속 발생 소득이 자동으로 나오게(회사웹 참고)"(요청) - 회사웹 원천세 검토표 달별 발생급여(reviewFigures[거래처(@nextMonth)][연도][월].payKinds)를
+//   결산 연도 1~12월 모두 모아 보여 줌('없음' 제외). 칸에 직접 적은 값이 있으면 그 값이 먼저. 종류 순서·이름은 회사웹 ITO_PAY_KINDS·ITO_PAY_LABEL과 같게
+const CLOSE_PAY_KINDS = ['근로','근로연말','사업','일용','특고','기타간이','기타미대상','기타','퇴직','이자','예술'];
+const CLOSE_PAY_LABEL = { 근로연말:'근로(연말)', 기타간이:'기타(간이)', 기타미대상:'기타(간이미대상)' };
+function closeIsPayKindsCol(c){ return c && c.type === 'text' && /^급여종류/.test(String(c.label || '').replace(/\s+/g, '')); }
+function closePayKindsAuto(cid, y){
+  const rf = (taxjFull && taxjDoc('reviewFigures')) || {}, got = new Set();
+  [cid, cid + '@nextMonth'].forEach(k => { const yr = ((rf[k] || {})[String(y)]) || {}; for(let m = 1; m <= 12; m++) ((yr[String(m)] || {}).payKinds || []).forEach(x => { if(x && x !== '없음') got.add(x); }); });
+  return [...got].sort((a, b) => (CLOSE_PAY_KINDS.indexOf(a) + 99) % 99 - (CLOSE_PAY_KINDS.indexOf(b) + 99) % 99).map(k => CLOSE_PAY_LABEL[k] || k).join(', ');
+}
 const CLOSE_QUICK = ['x', '-', '미해당'];
 const CLOSE_ISO_RE = /^\d{4}-\d{2}-\d{2}$/;
 // [2026.11.03] 회사웹 결산 메모 - 회사웹 결산 화면과 같게 1차 메모(+ 다르면 ' / ' 2차 메모), 보고 있는 결산 연도 기준
@@ -5657,7 +5668,7 @@ function closeTableHtml(docs){
   closeCols.forEach(c => {
     if(c.type === 'check') return;
     if(c.type === 'date' || c.type === 'month' || c.type === 'range' || c.type === 'memo'){ w[c.id] = 0; return; }
-    const len = Math.max(...String(c.label).split('\n').map(s => s.length), ...rows.map(x => String((d.v[x.id] || {})[c.id] ?? '').length));
+    const len = Math.max(...String(c.label).split('\n').map(s => s.length), ...rows.map(x => String((d.v[x.id] || {})[c.id] ?? (closeIsPayKindsCol(c) ? closePayKindsAuto(x.id, closeYear) : '')).length));   // [2026.11.05] 급여종류 자동 값 길이도
     w[c.id] = Math.max(56, Math.min(240, len * 12 + 14));
   });
   const head = `<th class="tx-seq"><input type="checkbox" title="날짜 일괄 입력할 거래처 모두 고르기" onchange="closePickAll(this.checked)"></th><th class="tx-seq cl-lk">순번</th>`
@@ -5678,6 +5689,7 @@ function closeTableHtml(docs){
       const s = val == null ? '' : typeof val === 'number' ? val.toLocaleString('ko-KR') : String(val);
       const hbt = hb ? hb.replace('<span class="cl-hn"', `<span class="cl-hn" data-cid="${cid}" data-col="${c.id}" onclick="closeHistPop(this)"`) : '';
       if(c.type === 'num') return `<td class="${hb ? 'cl-has-h' : ''}"><input class="vp-in" style="width:${w[c.id]}px; text-align:right;" value="${escapeAttr(s)}" onchange="closeNumInput(this,'${cid}','${c.id}')">${hbt}</td>`;
+      if(!s && closeIsPayKindsCol(c)){ const au = closePayKindsAuto(x.id, closeYear); if(au) return `<td class="${hb ? 'cl-has-h' : ''}"><input class="vp-in cl-auto" style="width:${w[c.id]}px;" value="" placeholder="${escapeAttr(au)}" title="${escapeAttr(`회사웹 원천세 검토표 ${closeYear}년 1~12월 발생급여: ${au}\n직접 적으면 적은 값으로 바뀌어요`)}" onchange="closeSetVal('${cid}','${c.id}',this.value.trim())">${hbt}</td>`; }   // [2026.11.05] 비어 있으면 회사웹 발생급여 자동
       return `<td class="${hb ? 'cl-has-h' : ''}"><input class="vp-in" style="width:${w[c.id]}px;" value="${escapeAttr(s)}" title="${escapeAttr(s)}" onchange="this.title=this.value; closeSetVal('${cid}','${c.id}',this.value.trim())">${hbt}</td>`;
     }).join('');
     return `<tr${x.gone ? ' class="cl-gone"' : ''}><td class="tx-seq"><input type="checkbox" class="cl-pick" data-cid="${cid}" ${closePicked.has(x.id) ? 'checked' : ''} onchange="closePick(this.dataset.cid, this.checked)"></td><td class="tx-seq cl-lk cl-num">${n + 1}</td>
