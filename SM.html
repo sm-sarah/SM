@@ -1117,6 +1117,12 @@ function smTogglePcView(){ try{ localStorage.setItem('sm_pc_view', window.SM_PC_
   .row-actions .icon-btn{ width:28px; height:28px; }
   .task-list li .row-actions{ opacity:0; transition:opacity .12s; }
   .task-list li:focus-within .row-actions{ opacity:1; }
+  /* [2026.11.05] 할 일 줄의 특이사항 + (평소엔 숨김, 줄에 마우스를 올리면 보임 - 요청) */
+  .task-list .wl-note-add{ display:inline-flex; align-items:center; justify-content:center; width:20px; height:20px; margin-left:4px; padding:0; border:none; border-radius:6px; background:transparent; color:var(--muted-soft); cursor:pointer; vertical-align:middle; opacity:0; transition:opacity .12s; }
+  .task-list .wl-note-add svg{ width:13px; height:13px; }
+  .task-list li:hover .wl-note-add, .task-list .wl-note-add:focus{ opacity:1; }
+  .task-list .wl-note-add:hover{ background:var(--primary-soft); color:var(--primary-dark); }
+  @media (hover:none){ .task-list .wl-note-add{ opacity:.6; } }
   @media (hover:none){ .task-list li .row-actions, .notice-item .row-actions{ opacity:.7; } }   /* 휴대폰(마우스 없음)에서는 항상 보이게 */
   .task-list li:hover .row-actions{ opacity:1; }
   .notice-item{ align-items:center; cursor:default; }
@@ -1320,6 +1326,26 @@ function smTogglePcView(){ try{ localStorage.setItem('sm_pc_view', window.SM_PC_
   /* [2026.10.19] 부가세 총괄·진행의 메모·Tip·신고도움 = 회사웹처럼 작은 테두리 아이콘 버튼(색은 works 색) */
   .sm-tool-ic.vt-ic{ width:24px; height:24px; color:var(--primary-dark); }
   .vt-ic-n{ font-size:10px; font-weight:800; margin-left:1px; }
+  /* [2026.11.05] 원천세 메모 팝업 - 건마다 줄바꿈·번호 칸 고정(왼쪽 정렬)·점선 구분, 전체/월별 묶음(요청) */
+  .smm-box{ background:var(--primary-soft); border-radius:10px; padding:4px 12px; text-align:left; }
+  .smm-ln{ display:flex; gap:6px; padding:7px 0; font-size:13.5px; color:var(--text); line-height:1.5; }
+  .smm-ln + .smm-ln{ border-top:1px dashed var(--border); }
+  .smm-no{ flex:0 0 22px; font-weight:800; color:var(--primary-dark); }
+  .smm-tx{ flex:1; min-width:0; word-break:keep-all; overflow-wrap:anywhere; }
+  .smm-sec{ display:flex; align-items:center; gap:6px; margin:12px 0 6px; font-size:12px; font-weight:700; color:var(--muted); }
+  .smm-sec:first-child{ margin-top:0; }
+  .smm-chip{ display:inline-block; padding:1px 9px; border-radius:999px; font-size:11.5px; font-weight:800; background:var(--primary); color:#fff; }
+  .smm-chip.mon{ background:#fff; color:var(--primary-dark); border:1px solid var(--primary); }
+  .smm-mrow{ display:flex; gap:8px; align-items:flex-start; margin-bottom:6px; }
+  .smm-m{ flex:0 0 34px; padding-top:8px; font-size:12.5px; font-weight:800; color:var(--muted); text-align:right; }
+  .smm-mrow.cur .smm-m{ color:var(--primary-dark); }
+  .smm-mrow .smm-box{ flex:1; min-width:0; }
+  .smm-lane{ font-size:11.5px; font-weight:800; padding-top:6px; }
+  /* [2026.11.05] 내가 만든 항목 머리글의 ✎ → 평소엔 숨기고 마우스를 가까이 대면 톱니(요청). 칸 폭·글자 위치가 안 바뀌게 글자 오른쪽 바깥에 겹쳐 띄움 */
+  .sm-col-gear{ position:absolute; left:100%; top:50%; transform:translateY(-50%); margin-left:1px; display:inline-flex; color:var(--muted-soft); opacity:0; transition:opacity .12s; pointer-events:none; }
+  th:hover .sm-col-gear{ opacity:1; }
+  .pay-yr-todo{ display:inline-block; width:30px; height:18px; border-radius:6px; background:#efe2e9; vertical-align:middle; }
+  .pay-yr-tr{ display:inline-block; font-size:10.5px; font-weight:800; color:#8f7b87; background:#f1e6ec; border-radius:999px; padding:1px 7px; }
   /* [2026.10.20] "부가세 총괄도 한 화면에 다 나오게 글자 크기 줄여줘"(요청) - 표 글자·칸 여백만 줄임(칸 구성·색은 그대로) */
   /* [2026.11.02] "부가세 총괄만 글자가 작아 보임"(요청) - 글자 크기는 다른 works 표와 같게(줄였던 11.5px 되돌림), 칸 여백만 조금 좁게 둠 */
   #tab-vat .table-scroll table.vat-t-tbl th{ padding:8px 6px; }
@@ -2682,13 +2708,28 @@ async function deleteTask(id){
   tasks = tasks.filter(x => x.id !== id);
   renderAll();
 }
+// [2026.11.05] "할 일 등록 후 + 버튼에 마우스를 올리면 보이고, 누르면 특이사항 입력"(요청) - 수정 팝업의 특이사항과 같은 값(t.note)
+async function noteTask(id){
+  const t = tasks.find(x => x.id === id);
+  if(!t) return;
+  const r = await smForm('특이사항', [
+    { label:`${t.text} (Enter 줄바꿈, Ctrl+Enter 저장)`, type:'textarea', value:t.note || '', placeholder:'진행 상황, 연락처, 참고할 내용 등', rows:3 },
+  ], { okText:'저장', icon:'✎', wide:true });
+  if(!r) return;
+  const note = (r[0] || '').trim();
+  if(note === (t.note || '')) return;
+  if(t.source === 'master'){ t.origKey = t.date + '|' + t.text; t.source = 'edited'; hideMasterKey('hiddenMasterTasks', t.origKey); }   // editTask와 같음(다시 불러올 때 지워지지 않게)
+  pushHist(t, '수정', [{ label:'특이사항', from:t.note || '', to:note }]);
+  if(note) t.note = note; else delete t.note;
+  renderAll();
+}
 async function editTask(id){
   const t = tasks.find(x => x.id === id);
   if(!t) return;
   const r = await smForm('할 일 수정', [
     { label:'날짜', type:'date', value:t.date },
     { label:'내용', value:t.text },
-    { label:'메모 · 비고 (Enter 줄바꿈, Ctrl+Enter 저장)', type:'textarea', value:t.note || '', placeholder:'진행 상황, 연락처, 참고할 내용 등', rows:3 },
+    { label:'특이사항 (Enter 줄바꿈, Ctrl+Enter 저장)', type:'textarea', value:t.note || '', placeholder:'진행 상황, 연락처, 참고할 내용 등', rows:3 },   // [2026.11.05] '메모 · 비고' → '특이사항'(요청)
   ], { okText:'저장', icon:'✎', wide:true });
   if(!r) return;
   const [date, text, note] = [r[0] || t.date, (r[1] || '').trim(), (r[2] || '').trim()];
@@ -2696,7 +2737,7 @@ async function editTask(id){
   const changes = [];
   if(date !== t.date) changes.push({ label:'날짜', from:t.date, to:date });
   if(text !== t.text) changes.push({ label:'내용', from:t.text, to:text });
-  if(note !== (t.note || '')) changes.push({ label:'메모', from:t.note || '', to:note });
+  if(note !== (t.note || '')) changes.push({ label:'특이사항', from:t.note || '', to:note });
   if(!changes.length) return;
   // 마스터 시트 항목은 다시 불러올 때 통째로 교체되므로, 메모만 고쳐도 'edited'로 바꿔 메모가 지워지지 않게 함
   if(t.source === 'master'){ t.origKey = t.date + '|' + t.text; t.source = 'edited'; hideMasterKey('hiddenMasterTasks', t.origKey); }
@@ -3285,7 +3326,7 @@ function renderWorklist(){
       <div class="toolbar" style="margin-top:12px;">
         <input type="date" id="newTaskDate" value="${worklistViewDate}">
         <input type="text" id="newTaskText" placeholder="할 일을 입력하세요 (Enter로 추가)" style="flex:1; min-width:200px;" onkeydown="if(event.key==='Enter' && !event.isComposing) addTask()" onpaste="pasteTasks(event)">
-        <input type="text" id="newTaskNote" placeholder="메모 (선택)" style="flex:0 1 220px; min-width:120px;" onkeydown="if(event.key==='Enter' && !event.isComposing) addTask()">
+        <!-- [2026.11.05] "할 일 입력할 때 메모는 같이 입력 안 하게"(요청) - 메모 칸을 뺌. 특이사항은 등록 후 줄에 마우스를 올리면 나오는 + 로 적음(noteTask) -->
         <button class="btn primary" onclick="addTask()">추가</button>
       </div>
     </div>
@@ -3544,7 +3585,7 @@ function wlTaskItem(t, opts = {}){
     <li class="${t.done ? 'done' : ''}">
       ${opts.carryPick ? `<input type="checkbox" class="carry-pick" ${carryPicked.has(t.id) ? 'checked' : ''} onchange="toggleCarryPick(${t.id})" title="넘길 일로 고르기">` : `<input type="checkbox" ${t.done ? 'checked' : ''} onchange="toggleTask(${t.id})">`}
       ${opts.showDate ? `<span class="task-date" style="cursor:pointer;" onclick="setWorklistDay('${t.date}')" title="이 날짜로 이동">${shortDate(t.date)}</span>` : ''}
-      <span class="task-text">${t.text}${t.movedFrom ? `<span class="wl-dot moved" data-tip="${shortDate(t.movedFrom)}에서 넘어옴"></span>` : ''}${t.postponedFrom ? `<span class="wl-dot postponed" data-tip="${shortDate(t.postponedFrom)}에서 미룸"></span>` : ''}${t.note ? `<span class="task-note">${escapeAttr(t.note)}</span>` : ''}</span>
+      <span class="task-text">${t.text}${t.movedFrom ? `<span class="wl-dot moved" data-tip="${shortDate(t.movedFrom)}에서 넘어옴"></span>` : ''}${t.postponedFrom ? `<span class="wl-dot postponed" data-tip="${shortDate(t.postponedFrom)}에서 미룸"></span>` : ''}${opts.carryPick ? '' : `<button type="button" class="wl-note-add" onclick="noteTask(${t.id})" title="특이사항 ${t.note ? '수정' : '적기'}" aria-label="특이사항">${ICON_PLUS}</button>`}${t.note ? `<span class="task-note">${escapeAttr(t.note)}</span>` : ''}</span>
       ${opts.carryPick ? `<button class="icon-btn wl-done-btn" onclick="toggleTask(${t.id})" title="완료 - 원래 날짜(${shortDate(t.date)})에 한 일로 표시하고 목록에서 빼요" aria-label="완료"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></button>` : ''}<!-- [2026.11.03] "못한 일 목록에서 체크 누락분을 바로 완료"(요청) - 이 목록의 동그라미는 '넘길 일 고르기'라 완료 버튼을 따로 둠 -->
       ${canCarry ? `<button class="btn xs" onclick="carryTaskToToday(${t.id})" title="오늘 할 일로 옮기기">오늘로 →</button>` : ''}
       ${actionIcons(`editTask(${t.id})`, `showTaskHistory(${t.id})`, `deleteTask(${t.id})`).replace('<span class="row-actions">', '<span class="row-actions">' + ((!t.done && t.date >= todayS) ? `<button class="icon-btn" onclick="postponeTask(${t.id})" title="다음 날로 미루기" aria-label="다음 날로 미루기">${ICON_POSTPONE}</button>` : ''))}
@@ -3620,16 +3661,14 @@ async function addTaskPopup(dateStr){
   const r = await smForm('할 일 추가', [
     { label:'날짜', type:'date', value:dateStr || todayStr() },
     { label:'할 일 (여러 줄이면 한 줄씩 따로 등록)', type:'textarea', placeholder:'할 일을 입력하거나 목록을 붙여넣으세요', rows:4 },
-    { label:'메모 · 비고 (선택)', type:'textarea', placeholder:'진행 상황, 연락처, 참고할 내용 등', rows:2 },
+    // [2026.11.05] 메모 칸은 뺌(요청) - 특이사항은 등록 후 줄의 + 로
   ], { okText:'추가', wide:true });
   if(!r) return;
   const date = r[0] || dateStr || todayStr();
   const lines = splitPastedLines(r[1]);
   if(!lines.length) return;
-  const note = (r[2] || '').trim();
   lines.forEach(text => {
     const nt = {id: nextTaskId++, date, text, done:false};
-    if(note && lines.length === 1) nt.note = note;
     pushHist(nt, '추가');
     tasks.push(nt);
   });
@@ -4002,7 +4041,7 @@ function vatTMemoText(docs, cid, year, period, comb){
   return [a ? `【예정】\n${a}` : '', b ? `【확정】\n${b}` : ''].filter(Boolean).join('\n');
 }
 function vatTDueShort(v){ const m = String(v || '').match(/^(\d{4})\D(\d{1,2})\D(\d{1,2})/); return m ? `${m[1].slice(2)}.${m[2].padStart(2,'0')}.${m[3].padStart(2,'0')}` : String(v || ''); }
-function vatTMemo(name, label, memo){ smAlert(`${name} · ${label}`, memo, { icon:'i' }); }
+function vatTMemo(name, label, memo){ smAlert(`${name} · ${label}`, memo || '없어요', { icon:'i', html: smMemoBlocksHtml(memo) }); }   // [2026.11.05] 건마다 줄바꿈·구분(요청)
 function vatTShowMemo(cid){
   const docs = taxjFull && taxjFull.docs; if(!docs) return;
   const c = taxjClientIndex(docs).byId[cid] || {};
@@ -4339,7 +4378,7 @@ function vatTableHtml(docs){
     <div class="toolbar"><div class="cl-subtabs">${segs.map(([k, l, c]) => `<button class="cl-subtab ${vatSeg === k ? 'on' : ''}" onclick="vatSeg='${k}'; renderVat();">${l} ${c}</button>`).join('')}</div>
       <div class="spacer"></div><button class="sm-tool-ic" onclick="addVatCustomCol()" title="항목 추가" aria-label="항목 추가">${ICON_PLUS}</button></div>
     <div class="table-scroll" style="margin-top:12px;"><table class="vat-t-tbl"><thead><tr><th class="tx-seq">순번</th><th>상호명</th><th>사업자번호</th><th>업종코드</th><th>업태</th><th>구분</th><th>제외사유</th><th>직전 과세기간<br>공급가액</th><th>예정고지세액</th><th>관할서</th><th>납부기한</th><th>안내문</th><th>납부서</th><th>신고<br>도움</th><th>통합<br>자료</th><th>신고<br>서류</th><th>신고<br>현황</th><th>${pre ? '예정신고' : '확정신고'}<br>납부세액</th><th>${pre ? '예정신고' : '확정신고'}<br>납부기한</th><th>Tip</th><th>메모</th><th title="회사웹 부가세 검증과 같은 계산(매출·매입 항목별, 예정)">검증</th>
-      ${vatCustomCols.map(col => `<th><button class="btn ghost xs" onclick="editVatCustomCol('${col.id}')" title="눌러서 이름·입력 방식 수정 또는 삭제" style="font-weight:800;">${taxjEsc(col.label)} ✎</button></th>`).join('')}</tr></thead>
+      ${vatCustomCols.map(col => `<th><button class="btn ghost xs" onclick="editVatCustomCol('${col.id}')" title="눌러서 이름·입력 방식 수정 또는 삭제" style="font-weight:800; position:relative;">${taxjEsc(col.label)}${ICON_COL_GEAR}</button></th>`).join('')}</tr></thead>
       <tbody>${rows || `<tr><td colspan="${cols}"><div class="empty" style="padding:18px;">${q ? '검색 결과가 없어요.' : '거래처가 없어요.'}</div></td></tr>`}</tbody></table></div>`;
 }
 /* ── [2026.10.14] 부가세 진행(요청: "부가세 메뉴에 총괄(지금 있는 내용) / 진행 메뉴를 만들어서 엑셀(진행표) 항목을 구현. 26.1기 확정에 넣고, 이걸 토대로 2기 예정을 새로 작성") ──
@@ -5805,7 +5844,7 @@ function taxSetVal(kind, cid, colId, value){
   TAX_COL_KINDS[kind].render(); scheduleGoogleSave();
 }
 function taxColHeadHtml(kind, pos){
-  return taxCols(kind).filter(c => (c.pos || 'end') === pos).map(c => `<th data-smdrag="${kind}" data-smcol="${c.id}" draggable="true" title="끌어서 위치 옮기기"><button class="btn ghost xs" onclick="taxEditCol('${kind}','${c.id}')" title="눌러서 이름·입력 방식 수정 또는 삭제 · 끌어서 위치 옮기기" style="font-weight:800;">${taxjEsc(c.label)} ✎</button></th>`).join('');
+  return taxCols(kind).filter(c => (c.pos || 'end') === pos).map(c => `<th data-smdrag="${kind}" data-smcol="${c.id}" draggable="true" title="끌어서 위치 옮기기"><button class="btn ghost xs" onclick="taxEditCol('${kind}','${c.id}')" title="눌러서 이름·입력 방식 수정 또는 삭제 · 끌어서 위치 옮기기" style="font-weight:800; position:relative;">${taxjEsc(c.label)}${ICON_COL_GEAR}</button></th>`).join('');
 }
 function taxColCellsHtml(kind, cid, pos){
   return taxCols(kind).filter(c => (c.pos || 'end') === pos).map(c => {
@@ -6315,7 +6354,7 @@ function clCoMap(){
 }
 function clAddrMap(){ const f = clCoMap(); return c => (f(c) || {}).bizAddress || ''; }
 // [2026.11.03] 회사웹 거래처 메모(memos 목록이 있으면 ' / '로 이음 - 회사웹 거래처 표와 같음)
-function clMemoMap(){ const f = clCoMap(); return c => { const x = f(c) || {}; return Array.isArray(x.memos) && x.memos.length ? x.memos.map(m => (m && m.text) || '').filter(Boolean).join(' / ') : (x.memo || ''); }; }
+function clMemoMap(){ const f = clCoMap(); return c => { const x = f(c) || {}; return Array.isArray(x.memos) && x.memos.length ? x.memos.map(m => (m && m.text) || '').filter(Boolean).join('\n') : (x.memo || ''); }; }   // [2026.11.05] ' / '로 이어 붙이던 걸 한 건씩 줄로(요청 - 메모 팝업에서 건마다 구분)
 function clAddrTd(a){ return `<td class="cl-addr${a ? '' : ' cl-na'}" title="${escapeAttr(a)}">${a ? taxjEsc(a) : '-'}</td>`; }
 function renderReadonlyClientTable(list, terminated){
   const addrOf = clAddrMap(), memoOf = clMemoMap();
@@ -8226,8 +8265,26 @@ function smMemoBtn(memo, title){
   const n = m.split('\n').map(x => x.trim()).filter(Boolean).length, i = smMemoStore.push([title || '메모', m]) - 1;
   return `<button type="button" class="sm-tool-ic vt-ic" onclick="smMemoShow(${i})" title="${escapeAttr(m)}" aria-label="메모">${ICON_MEMO_DOC}${n > 1 ? `<span class="vt-ic-n">${n}</span>` : ''}</button>`;
 }
-function smMemoShow(i){ const x = smMemoStore[i]; if(x) smAlert(x[0], x[1], { icon:'i' }); }
+function smMemoShow(i){ const x = smMemoStore[i]; if(x) smAlert(x[0], x[1], { icon:'i', html: smMemoBlocksHtml(x[1]) }); }   // [2026.11.05] 건마다 줄바꿈·구분(요청)
 function smCoMemoTd(memo, title){ return `<td style="text-align:center;">${smMemoBtn(memo, title || '회사 메모')}</td>`; }
+// [2026.11.05] "메모가 여러 건이면 앞머리 위치 같게 줄바꿈(왼쪽 정렬), 너무 줄글이라 구분이 안 되니 구분해서"(요청) - 원천세 총괄 비고·신고현황 메모 팝업
+//   한 줄 = 한 건. 앞에 적어 둔 "1)"·"1." 번호는 떼고 다시 붙임(번호 칸 폭 고정 → 둘째 줄부터 글 머리가 첫 줄과 같은 위치). 건마다 점선으로 구분
+function smMemoLines(t){ return String(t || '').split('\n').map(x => x.trim().replace(/^\d+\)\s*|^\d+\.\s+/, '')).filter(Boolean); }
+// [2026.11.05] 메모 팝업 공통(요청 - 법인세·종소세·지급명세서·거래처·부가세 메모도 원천세와 같게): 【예정】 같은 머리 줄은 소제목,
+//   "1)"·"1." 번호 줄 = 새 건, 앞이 들여쓰기된 줄 = 앞 건에 이어 붙임(부가세 vatTMemoNum 형식), 그 밖의 줄 = 한 줄 한 건
+function smMemoBlocksHtml(t){
+  const groups = []; let g = null;
+  String(t || '').split('\n').forEach(raw => {
+    if(!raw.trim()) return;
+    const hd = raw.trim().match(/^【(.+)】$/);
+    if(hd){ g = { head: hd[1], items: [] }; groups.push(g); return; }
+    if(!g){ g = { head: '', items: [] }; groups.push(g); }
+    if(/^\s{2,}/.test(raw) && g.items.length) g.items[g.items.length - 1].push(raw.trim());
+    else g.items.push([raw.trim().replace(/^\d+\)\s*|^\d+\.\s+/, '')]);
+  });
+  return groups.map(x => `${x.head ? `<div class="smm-sec"><span class="smm-chip mon">${taxjEsc(x.head)}</span></div>` : ''}<div class="smm-box">${x.items.map((ls, i) => `<div class="smm-ln">${x.items.length > 1 ? `<span class="smm-no">${i + 1})</span>` : ''}<span class="smm-tx">${ls.map(taxjEsc).join('<br>')}</span></div>`).join('')}</div>`).join('');
+}
+function smMemoItemsHtml(lines){ return `<div class="smm-box">${lines.map((x, i) => `<div class="smm-ln">${lines.length > 1 ? `<span class="smm-no">${i + 1})</span>` : ''}<span class="smm-tx">${taxjEsc(x)}</span></div>`).join('')}</div>`; }
 function taxjFsMemo(type, period, c){ if(!taxjFull || !period) return ''; const cid = taxjIdOf(c); if(cid == null) return ''; return ((taxjFsEntry(type, period, cid) || {}).memo) || ''; }
 const TAXJ_ST_COLOR = { 신고완료:'#059669', 결산완료:'#059669', 기안완료:'#b45309', 검토중:'#b45309', 미대상:'#d4c6cd' };
 // 신고현황(sharedFilingStatus) 한 칸 → '회사 진행' 칸. 글자색만, 완료일은 옆에 작게, 메모는 마우스를 올리면
@@ -9018,6 +9075,7 @@ const PAY_VIEWS = [['overview','총괄'], ['payroll','급여현황'], ['status',
 function setPayView(v){ payView = v; if(activeTab !== 'pay') switchTab('pay'); else renderPay(); }
 function payViewTabsHtml(){ return ''; }   // [2026.10.14] 왼쪽 하위메뉴와 같은 가로 메뉴는 없앰(요청) - 이동은 왼쪽 메뉴 원천세 › 총괄·신고현황·일용직·제출
 const PAY_NA = '<span style="color:#d4c6cd;">-</span>';
+const ICON_COL_GEAR = '<span class="sm-col-gear" aria-hidden="true"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></svg></span>';   // [2026.11.05] 내 항목 머리글 ✎ 대신(요청) - 원천세 신고현황·부가세·법인세·종소세
 function payIsReg(c){ return ['기장대행','신고대리'].includes(c.taxType) && c.status !== '해지'; }
 // Tax.J filingCycleRecordsOf / filingCycleRecordAt / filingCycleRecApplicable와 같은 기준
 function payCycleRecs(docs, cid){ return ((docs.s__filingCycles || {})[cid] || []).filter(r => r && r.effectiveFrom).slice().sort((a, b) => a.effectiveFrom.localeCompare(b.effectiveFrom)); }
@@ -9037,8 +9095,38 @@ function paySearchHtml(){ return `<input type="text" placeholder="상호 검색"
 function payShowNote(cid){
   const docs = taxjFull && taxjFull.docs; if(!docs) return;
   const c = taxjClientIndex(docs).byId[cid] || {};
-  const items = String(((docs.s__itOverview || {})[cid] || {}).note || '').split('\n').map(x => x.trim()).filter(Boolean);
-  smAlert(`${c.name || ''} · 비고`, items.map((t, i) => `${i + 1}. ${t}`).join('\n') || '없어요', { icon:'i' });
+  const items = smMemoLines(((docs.s__itOverview || {})[cid] || {}).note);
+  smAlert(`${c.name || ''} · 비고`, '없어요', { icon:'i', html: items.length ? smMemoItemsHtml(items) : '' });   // [2026.11.05] 건마다 줄바꿈·구분(요청)
+}
+// [2026.11.05] "신고현황 메모는 전체(연도 무관)와 월별이 다 회사웹에 있으니 연동"(요청) - 회사웹 신고현황 메모 칸(급여 특이사항, openItClientMemoModal)과 같은 값을 읽기만:
+//   전체 = s__itOverview[거래처].note(총괄 비고와 같은 값) / 월별 = 그해 1~12월 s__itFilingStatus[월][거래처][당월·익월].memo (회사웹 itClientMonthMemos와 같음)
+//   lane = 당월·익월 두 줄로 나뉜 거래처면 그 줄의 지급시기 월별 메모만(회사웹 laneMemo와 같음)
+function payItMonthMemos(docs, cid, year, lane){
+  const st = docs.s__itFilingStatus || {}, out = [];
+  for(let m = 1; m <= 12; m++){
+    const p = `${year}-${pad2(m)}`, e = (st[p] || {})[cid];
+    if(!e) continue;
+    const parts = [['sameMonth','당월지급'], ['nextMonth','익월지급']].filter(([k]) => (!lane || k === lane) && e[k] && String(e[k].memo || '').trim());
+    if(parts.length) out.push({ m, p, parts: parts.map(([k, l]) => ({ k, l, lines: smMemoLines(e[k].memo) })) });
+  }
+  return out;
+}
+function payItMemoBtn(docs, c, year, lane){
+  const note = smMemoLines(((docs.s__itOverview || {})[c.id] || {}).note), months = payItMonthMemos(docs, c.id, year, lane);
+  const n = note.length + months.reduce((s, x) => s + x.parts.reduce((a, pp) => a + pp.lines.length, 0), 0);
+  if(!n) return PAY_NA;
+  const tip = [note.length ? `전체 ${note.length}건` : '', months.length ? `월별 ${months.map(x => x.m + '월').join(', ')}` : ''].filter(Boolean).join(' · ');
+  return `<button type="button" class="sm-tool-ic vt-ic" onclick="payItMemoShow('${escapeAttr(c.id)}','${lane || ''}')" title="급여 특이사항 - ${escapeAttr(tip)}" aria-label="메모">${ICON_MEMO_DOC}${n > 1 ? `<span class="vt-ic-n">${n}</span>` : ''}</button>`;
+}
+function payItMemoShow(cid, lane){
+  const docs = taxjFull && taxjFull.docs; if(!docs) return;
+  const c = taxjClientIndex(docs).byId[cid] || {}, year = (payMonth || '').slice(0, 4) || String(new Date().getFullYear()), curM = Number((payMonth || '').slice(5, 7));
+  const note = smMemoLines(((docs.s__itOverview || {})[cid] || {}).note), months = payItMonthMemos(docs, cid, year, lane);
+  let h = '';
+  if(note.length) h += `<div class="smm-sec"><span class="smm-chip">전체</span></div>${smMemoItemsHtml(note)}`;
+  if(months.length) h += `<div class="smm-sec"><span class="smm-chip mon">월별</span>${year}년 귀속${lane ? ` · ${lane === 'sameMonth' ? '당월' : '익월'}지급` : ''}</div>`
+    + months.map(x => `<div class="smm-mrow${x.m === curM ? ' cur' : ''}"><span class="smm-m">${x.m}월</span><div class="smm-box">${x.parts.map(pp => `${x.parts.length > 1 ? `<div class="smm-lane" style="color:${pp.k === 'sameMonth' ? '#047857' : '#be123c'};">${pp.l}</div>` : ''}${pp.lines.map((t, i) => `<div class="smm-ln">${pp.lines.length > 1 ? `<span class="smm-no">${i + 1})</span>` : ''}<span class="smm-tx">${taxjEsc(t)}</span></div>`).join('')}`).join('')}</div></div>`).join('');
+  smAlert(`${c.name || ''} · 급여 특이사항`, '없어요', { icon:'i', html: h });
 }
 function payOverviewHtml(docs){
   const idx = taxjClientIndex(docs), ov = docs.s__itOverview || {}, year = String(new Date().getFullYear());
@@ -9345,6 +9433,9 @@ function payStatusHtml(docs){
     const halfOn = !!(rec && payRecApp(rec) && rec.cycle === '반기' && recs.length && p >= recs[0].effectiveFrom);
     // [2026.11.03] "신고현황 = 이번 달 급여가 있는 거래처, 올해 급여 있던 곳은 급여현황에서"(요청) - 11/2에 넣은 흐린 줄(올해 다른 달 급여)은 급여현황 메뉴로 옮김
     if(!halfOn && !(own && own.applicable && (own.sameMonthPay || own.nextMonthPay))) return;
+    // [2026.11.05] "신고현황에는 반기 대상이 안 나와야 함 - 반기는 6월·12월 귀속 때 신고"(요청) - 10/26의 '반기 상관없이 매달'을 되돌림.
+    //   반기 거래처는 6·12월 귀속에서만 보여줌(그 달 급여 작업은 급여현황 연간표에서 봄)
+    if(halfOff(c.id)) return;
     const offMonth = false;
     if(!offMonth && recs.length && !(p >= recs[0].effectiveFrom && payRecApp(rec))) return;
     // [2026.10.14] "노아하우징쿱은 26.9월에 급여가 없는데도 나온다"(요청) - 반기 신고 거래처는 그 달에 급여(그 달 신고대상 등록)가 있거나
@@ -9384,12 +9475,12 @@ function payStatusHtml(docs){
         ${cc('payslip')}<td>${slip}</td>${cc('payroll')}<td>${taxjChk(v.payroll)}</td>
         ${cc('close')}${taxTds(v.returnClose, v.returnCloseLocal, '신고서 마감')}${cc('filed')}${taxTds(v.national, v.local, '신고')}
         ${cc('bill')}${cc('paid')}
-        ${cc('memo')}<td>${smMemoBtn(v.memo, `${c.name} · ${mm}월 귀속 메모`)}</td><!-- [2026.11.03] 아이콘 + 팝업(요청) -->
+        ${cc('memo')}<td>${payItMemoBtn(docs, c, yy, dual ? k : '')}</td><!-- [2026.11.03] 아이콘 + 팝업(요청) · [2026.11.05] 회사웹 메모 칸처럼 전체+월별(그해) 연동(요청) -->
         ${cc('end')}</tr>`);
     });
   });
   const pct = total ? Math.round(cntPayroll / total * 100) : 0;
-  const ch = pos => payCustomCols.filter(col => (col.pos || 'end') === pos).map(col => `<th rowspan="2" data-smdrag="pay" data-smcol="${col.id}" draggable="true" title="끌어서 위치 옮기기"><button class="btn ghost xs" onclick="editPayCustomCol('${col.id}')" title="눌러서 이름·입력 방식 수정 또는 삭제 · 끌어서 위치 옮기기" style="font-weight:800;">${taxjEsc(col.label)} ✎</button></th>`).join('');
+  const ch = pos => payCustomCols.filter(col => (col.pos || 'end') === pos).map(col => `<th rowspan="2" data-smdrag="pay" data-smcol="${col.id}" draggable="true" title="끌어서 위치 옮기기"><button class="btn ghost xs" onclick="editPayCustomCol('${col.id}')" title="눌러서 이름·입력 방식 수정 또는 삭제 · 끌어서 위치 옮기기" style="font-weight:800; position:relative;">${taxjEsc(col.label)}${ICON_COL_GEAR}</button></th>`).join('');
   // [2026.10.15] "연월 귀속 제목은 가운데로, 검색은 항목 추가 칩 아래로"(요청)
   return `<div class="toolbar" style="display:grid; grid-template-columns:1fr auto 1fr; align-items:center;">
       <div></div><!-- [2026.11.02] 신고현황·지급명세서 전환은 위 하위메뉴로(요청) -->
@@ -9414,32 +9505,44 @@ function payPayrollHtml(docs){
   if(!payMonth) payMonth = payFocusMonth(docs);
   if(!payGridYear) payGridYear = payMonth.slice(0, 4);
   const y = payGridYear, idx = taxjClientIndex(docs), stAll = docs.s__itFilingStatus || {}, months = Array.from({ length:12 }, (_, i) => `${y}-${pad2(i + 1)}`);
-  const cellOf = (c, recs, pp) => {
-    const o = payTarget(docs, c.id, pp);
+  // [2026.11.05] "회사웹 구성은 따라가야"(요청) - 회사웹 신고현황 연간표(renderIncomeTaxFilingStatusTable)처럼:
+  //   ① 그해 당월·익월이 다 있는 거래처는 당월 줄·익월 줄로 나눔(clientHasDualTiming) ② 아직 안 끝난 칸은 글자 없이 빈 칸(미래 달 포함)
+  //   ③ 이관 달(s__itFilingStatus[월][거래처].transfer)은 '이관' ④ 반기 거래처의 6·12월 외 달은 그 반기 끝 달(6·12월) 신고대상으로 판단(회사웹 itHalfLanes)
+  const cellOf = (c, recs, pp, lane) => {
+    let o = payTarget(docs, c.id, pp);
+    const rec = payCycleAt(docs, c.id, pp), mm = Number(pp.slice(5));
+    if(rec && payRecApp(rec) && (rec.cycle || '매월') === '반기' && mm !== 6 && mm !== 12 && !(o && o.applicable && (o.sameMonthPay || o.nextMonthPay))){
+      const tEnd = payTarget(docs, c.id, `${y}-${mm <= 6 ? '06' : '12'}`); if(tEnd && tEnd.marked && tEnd.applicable) o = tEnd;
+    }
     if(!(o && o.applicable && (o.sameMonthPay || o.nextMonthPay))) return null;
-    if(recs.length && !(pp >= recs[0].effectiveFrom && payRecApp(payCycleAt(docs, c.id, pp)))) return null;
-    const lanes = [o.sameMonthPay ? 'sameMonth' : null, o.nextMonthPay ? 'nextMonth' : null].filter(Boolean), e = (stAll[pp] || {})[c.id] || {};
+    if(recs.length && !(pp >= recs[0].effectiveFrom && payRecApp(rec))) return null;
+    let lanes = [o.sameMonthPay ? 'sameMonth' : null, o.nextMonthPay ? 'nextMonth' : null].filter(Boolean);
+    if(lane){ if(!lanes.includes(lane)) return null; lanes = [lane]; }
+    const e = (stAll[pp] || {})[c.id] || {};
+    if(e.transfer) return { transfer:true };
     return { lanes, done: lanes.every(k => (e[k] || {}).payroll), dates: lanes.map(k => (e[k] || {}).payroll).filter(Boolean) };
   };
   let n = 0;
   const rows = idx.sorted.filter(payIsReg).map(c => {
-    const recs = payCycleRecs(docs, c.id), cells = months.map(pp => cellOf(c, recs, pp));
-    if(!cells.some(Boolean)) return '';
+    const recs = payCycleRecs(docs, c.id);
+    if(!months.some(pp => cellOf(c, recs, pp, ''))) return '';
     const rec = payCycleAt(docs, c.id, months.includes(payMonth) ? payMonth : months[11]);
     const base = !rec ? '미등록' : payRecApp(rec) ? (rec.cycle || '매월') : '미대상';
+    const lanes = payDualYear(docs, c.id, y) ? ['sameMonth','nextMonth'] : [''];
+    const span = lanes.length > 1 ? ` rowspan="${lanes.length}"` : '';
     n++;
-    return `<tr><td class="tx-seq">${n}</td><td class="tx-name" style="${smEntCss(c.entityType)}">${taxjEsc(c.name)}</td><td style="white-space:nowrap; font-weight:700;">${taxjEsc(base)}</td>`
-      + cells.map((x, i) => {
-        const cur = months[i] === payMonth ? ' pay-yr-cur' : '';
+    return lanes.map((lane, li) => `<tr${lanes.length > 1 ? ` class="${li ? 'pay-lane-2' : 'pay-lane-1'}"` : ''}>${li ? '' : `<td class="tx-seq"${span}>${n}</td><td class="tx-name"${span} style="${smEntCss(c.entityType)}">${taxjEsc(c.name)}</td>`}<td style="white-space:nowrap; font-weight:700;">${payCycleLabelHtml(base, lane)}</td>`
+      + months.map((pp, i) => {
+        const x = cellOf(c, recs, pp, lane), cur = pp === payMonth ? ' pay-yr-cur' : '';
         if(!x) return `<td class="pay-yr${cur}"><span style="color:#d4c6cd;">-</span></td>`;
+        if(x.transfer) return `<td class="pay-yr${cur}" title="이관 - 이전 세무사무실에서 처리 · 급여 있음"><span class="pay-yr-tr">이관</span></td>`;
         if(x.done) return `<td class="pay-yr${cur}" title="급여마감 ${escapeAttr(x.dates.join(', '))}"><span class="pay-chk">✓</span></td>`;
-        const lab = x.lanes.length > 1 ? '당·익' : x.lanes[0] === 'sameMonth' ? '당월' : '익월';
-        return `<td class="pay-yr${cur}" title="급여 있음 - 급여마감 전"><span style="font-weight:700; color:${x.lanes.length > 1 ? 'var(--text)' : x.lanes[0] === 'sameMonth' ? '#047857' : '#be123c'};">${lab}</span></td>`;
-      }).join('') + '</tr>';
+        return `<td class="pay-yr${cur}" title="급여 있음 - 급여마감 전"><span class="pay-yr-todo"></span></td>`;
+      }).join('') + '</tr>').join('');
   }).filter(Boolean);
   return `<div class="toolbar" style="justify-content:center;"><button class="btn ghost xs" onclick="payGridShift(-1)" title="이전 해">‹</button><span style="font-weight:800;">${y}년 귀속</span><button class="btn ghost xs" onclick="payGridShift(1)" title="다음 해">›</button></div>
     ${rows.length ? `<div class="table-scroll" style="margin-top:8px;"><table><thead><tr><th class="tx-seq">순번</th><th>상호명</th><th>신고</th>${months.map(pp => `<th class="${pp === payMonth ? 'pay-yr-cur' : ''}">${Number(pp.slice(5))}월</th>`).join('')}</tr></thead><tbody>${rows.join('')}</tbody></table></div>
-    <div class="hint" style="margin-top:8px; text-align:right;">✓ 급여마감 완료 · 당월/익월 급여 있음(마감 전) · - 급여 없음</div>`
+    <div class="hint" style="margin-top:8px; text-align:right;">✓ 급여마감 완료 · <span class="pay-yr-todo" style="width:18px; height:11px;"></span> 급여 있음(마감 전) · 이관 이전 사무실 처리 · - 급여 없음</div>`
       : `<div class="empty">${y}년에 급여가 있었던 거래처가 없어요.</div>`}`;
 }
 
