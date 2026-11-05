@@ -464,7 +464,6 @@ function smTogglePcView(){ try{ localStorage.setItem('sm_pc_view', window.SM_PC_
   .step-date{ display:block; font-size:9.5px; font-weight:600; opacity:.75; margin-top:1px; }
 
   .settings-card{ max-width:820px; margin-left:auto; margin-right:auto; }
-  .vp-in.cl-auto::placeholder{ color:var(--text); opacity:1; }   /* [2026.11.05] 결산 급여종류 자동 값 - 직접 적은 값과 같은 글자색 */
   /* [2026.11.05] "설정 › 웹 표 글자가 세로줄 넘어감, 가로폭 넓게 써도 됨"(요청) - 웹·실시간멘트 화면만 카드 폭 넓히고 표 칸 안에서 줄바꿈 */
   .settings-card.sm-wide{ max-width:1280px; }
   #settings-web td, #settings-ment td{ white-space:normal; word-break:keep-all; overflow-wrap:anywhere; }
@@ -5127,10 +5126,24 @@ const CLOSE_CARRY_RE = /^(차량|급여종류|비고)/;
 const CLOSE_PAY_KINDS = ['근로','근로연말','사업','일용','특고','기타간이','기타미대상','기타','퇴직','이자','예술'];
 const CLOSE_PAY_LABEL = { 근로연말:'근로(연말)', 기타간이:'기타(간이)', 기타미대상:'기타(간이미대상)' };
 function closeIsPayKindsCol(c){ return c && c.type === 'text' && /^급여종류/.test(String(c.label || '').replace(/\s+/g, '')); }
-function closePayKindsAuto(cid, y){
-  const rf = (taxjFull && taxjDoc('reviewFigures')) || {}, got = new Set();
-  [cid, cid + '@nextMonth'].forEach(k => { const yr = ((rf[k] || {})[String(y)]) || {}; for(let m = 1; m <= 12; m++) ((yr[String(m)] || {}).payKinds || []).forEach(x => { if(x && x !== '없음') got.add(x); }); });
-  return [...got].sort((a, b) => (CLOSE_PAY_KINDS.indexOf(a) + 99) % 99 - (CLOSE_PAY_KINDS.indexOf(b) + 99) % 99).map(k => CLOSE_PAY_LABEL[k] || k).join(', ');
+function closePayKindsAuto(cid, y){ return closePayKindsInfo(cid, y).kinds.join(', '); }
+// [2026.11.05] "급여종류를 결산 고정 항목으로, 아이콘으로 표기해 누르면 팝업"(요청) - 회사 메모 오른쪽 회사웹 값(조회만) 칸. 팝업에 종류 + 달별 발생급여
+function closePayKindsInfo(cid, y){
+  const rf = (taxjFull && taxjDoc('reviewFigures')) || {}, got = new Set(), byM = [];
+  const ord = a => (CLOSE_PAY_KINDS.indexOf(a) + 99) % 99, lab = k => CLOSE_PAY_LABEL[k] || k;
+  for(let m = 1; m <= 12; m++){
+    const ms = new Set();
+    [cid, cid + '@nextMonth'].forEach(k => ((((((rf[k] || {})[String(y)]) || {})[String(m)]) || {}).payKinds || []).forEach(x => { if(x && x !== '없음'){ ms.add(x); got.add(x); } }));
+    if(ms.size) byM.push([m, [...ms].sort((a, b) => ord(a) - ord(b)).map(lab)]);
+  }
+  return { kinds: [...got].sort((a, b) => ord(a) - ord(b)).map(lab), byM };
+}
+function closePayKindsTd(cid, name){
+  const I = closePayKindsInfo(cid, closeYear);
+  if(!I.kinds.length) return '<td class="vp-div" style="text-align:center;"><span style="color:#d4c6cd;">-</span></td>';
+  const txt = `【${closeYear}년 귀속 발생 급여종류】\n${I.kinds.join('\n')}\n【달별 발생급여 (회사웹 원천세 검토표)】\n${I.byM.map(([m, L]) => `${m}월  ${L.join(', ')}`).join('\n')}`;
+  const i = smMemoStore.push([`${name || ''} · ${closeYear}년 급여종류`, txt]) - 1;
+  return `<td class="vp-div" style="text-align:center;"><button type="button" class="sm-tool-ic vt-ic" onclick="smMemoShow(${i})" title="${escapeAttr(I.kinds.join(', '))}" aria-label="급여종류">${ICON_MEMO_DOC}${I.kinds.length > 1 ? `<span class="vt-ic-n">${I.kinds.length}</span>` : ''}</button></td>`;
 }
 const CLOSE_QUICK = ['x', '-', '미해당'];
 const CLOSE_ISO_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -5668,11 +5681,11 @@ function closeTableHtml(docs){
   closeCols.forEach(c => {
     if(c.type === 'check') return;
     if(c.type === 'date' || c.type === 'month' || c.type === 'range' || c.type === 'memo'){ w[c.id] = 0; return; }
-    const len = Math.max(...String(c.label).split('\n').map(s => s.length), ...rows.map(x => String((d.v[x.id] || {})[c.id] ?? (closeIsPayKindsCol(c) ? closePayKindsAuto(x.id, closeYear) : '')).length));   // [2026.11.05] 급여종류 자동 값 길이도
+    const len = Math.max(...String(c.label).split('\n').map(s => s.length), ...rows.map(x => String((d.v[x.id] || {})[c.id] ?? '').length));
     w[c.id] = Math.max(56, Math.min(240, len * 12 + 14));
   });
   const head = `<th class="tx-seq"><input type="checkbox" title="날짜 일괄 입력할 거래처 모두 고르기" onchange="closePickAll(this.checked)"></th><th class="tx-seq cl-lk">순번</th>`
-    + ['상호명','법인등록번호','사업자번호','개업일','회사 메모'].map((l, i) => `<th class="vp-link cl-lk${i === 0 ? ' vp-sticky' : ''}${i === 4 ? ' vp-div' : ''}" title="회사웹 값(조회만)">${l}</th>`).join('')   // [2026.11.03] 회사웹 결산 메모(1차·2차)
+    + ['상호명','법인등록번호','사업자번호','개업일','회사 메모','급여종류'].map((l, i) => `<th class="vp-link cl-lk${i === 0 ? ' vp-sticky' : ''}${i === 5 ? ' vp-div' : ''}" title="${i === 5 ? '회사웹 원천세 검토표 이 해 1~12월 발생급여(조회만) - 아이콘을 누르면 달별로 보여요' : '회사웹 값(조회만)'}">${l}</th>`).join('')   // [2026.11.05] 급여종류 고정 칸(요청)   // [2026.11.03] 회사웹 결산 메모(1차·2차)
     + closeCols.map(c => `<th data-smdrag="close" data-smcol="${c.id}" draggable="true"><button class="vp-th" onclick="closeEditCol('${c.id}')" title="눌러서 이름·입력 방식·이어받기 수정 또는 삭제 · 끌어서 위치 옮기기${c.carry ? '\n(다음 해 결산으로 이어받는 항목)' : ''}">${taxjEsc(c.label).replace(/\n/g, '<br>')}${c.carry ? '<span class="vp-carry">↻</span>' : ''}</button></th>`).join('');
   const body = rows.map((x, n) => {
     const cid = escapeAttr(x.id), v = d.v[x.id] || {}, t = s => s ? taxjEsc(String(s)) : '-';
@@ -5689,15 +5702,14 @@ function closeTableHtml(docs){
       const s = val == null ? '' : typeof val === 'number' ? val.toLocaleString('ko-KR') : String(val);
       const hbt = hb ? hb.replace('<span class="cl-hn"', `<span class="cl-hn" data-cid="${cid}" data-col="${c.id}" onclick="closeHistPop(this)"`) : '';
       if(c.type === 'num') return `<td class="${hb ? 'cl-has-h' : ''}"><input class="vp-in" style="width:${w[c.id]}px; text-align:right;" value="${escapeAttr(s)}" onchange="closeNumInput(this,'${cid}','${c.id}')">${hbt}</td>`;
-      if(!s && closeIsPayKindsCol(c)){ const au = closePayKindsAuto(x.id, closeYear); if(au) return `<td class="${hb ? 'cl-has-h' : ''}"><input class="vp-in cl-auto" style="width:${w[c.id]}px;" value="" placeholder="${escapeAttr(au)}" title="${escapeAttr(`회사웹 원천세 검토표 ${closeYear}년 1~12월 발생급여: ${au}\n직접 적으면 적은 값으로 바뀌어요`)}" onchange="closeSetVal('${cid}','${c.id}',this.value.trim())">${hbt}</td>`; }   // [2026.11.05] 비어 있으면 회사웹 발생급여 자동
       return `<td class="${hb ? 'cl-has-h' : ''}"><input class="vp-in" style="width:${w[c.id]}px;" value="${escapeAttr(s)}" title="${escapeAttr(s)}" onchange="this.title=this.value; closeSetVal('${cid}','${c.id}',this.value.trim())">${hbt}</td>`;
     }).join('');
     return `<tr${x.gone ? ' class="cl-gone"' : ''}><td class="tx-seq"><input type="checkbox" class="cl-pick" data-cid="${cid}" ${closePicked.has(x.id) ? 'checked' : ''} onchange="closePick(this.dataset.cid, this.checked)"></td><td class="tx-seq cl-lk cl-num">${n + 1}</td>
       <td class="vp-sticky cl-lk" style="${smEntCss(x.c.entityType)}">${taxjEsc(x.c.name || '')}${x.gone ? ' <span class="cl-gone-tag">해지</span>' : ''}${closeRowBadge(x.id)}</td>
-      ${x.c.entityType === '개인' ? `<td class="cl-lk cl-num cl-off">${t(x.c.corpRegNo)}</td>` : lk(x.c.corpRegNo)}${lk(innerBizNo(x.c.bizNo || ''))}${lk(x.c.openDate)}${smCoMemoTd(closeCoMemo(x.id), `${x.c.name || ''} · ${closeYear}년 결산 회사 메모`).replace('<td', '<td class="vp-div"').replace('class="vp-div" class="', 'class="vp-div ')}${cells}</tr>`;
+      ${x.c.entityType === '개인' ? `<td class="cl-lk cl-num cl-off">${t(x.c.corpRegNo)}</td>` : lk(x.c.corpRegNo)}${lk(innerBizNo(x.c.bizNo || ''))}${lk(x.c.openDate)}${smCoMemoTd(closeCoMemo(x.id), `${x.c.name || ''} · ${closeYear}년 결산 회사 메모`)}${closePayKindsTd(x.id, x.c.name)}${cells}</tr>`;
   }).join('');
   return `<div class="table-scroll vat-prog" style="margin-top:8px;"><table><thead><tr>${head}</tr></thead>
-    <tbody>${body || `<tr><td colspan="${closeCols.length + 6}"><div class="empty" style="padding:18px;">${q ? '검색 결과가 없어요.' : '거래처가 없어요.'}</div></td></tr>`}</tbody></table></div>`;
+    <tbody>${body || `<tr><td colspan="${closeCols.length + 8}"><div class="empty" style="padding:18px;">${q ? '검색 결과가 없어요.' : '거래처가 없어요.'}</div></td></tr>`}</tbody></table></div>`;
 }
 // [2026.10.23] "결산 메뉴 메모랑 비고 합치고, 리스트 형태로 입력해서 팝업으로 보기"(요청)
 //   메모(목록) = 한 줄이 한 항목('\n'으로 이어 저장 - 예전 글자 값도 그대로 읽힘). 칸에는 아이콘 + 개수, 마우스를 올리면 번호 목록, 누르면 목록 창(추가·삭제)
