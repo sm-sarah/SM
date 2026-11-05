@@ -2399,6 +2399,7 @@ const NAV_SUBMENUS = {
     {anchor:'settings-password', label:'비밀번호'},   // [2026.11.02] 보관함 비밀번호 바꾸기(요청)
     {anchor:'settings-google',  label:'Google 연동'},
     {anchor:'settings-deploy',  label:'GitHub 배포'},
+    {anchor:'settings-web',     label:'웹'},   // [2026.11.05] 회사웹·타팀웹 구성 설명 + 관리 사이트 링크(링크 › 클로드에서 옮김, 요청)
     {anchor:'settings-recurring', label:'반복 할 일'},
     {anchor:'settings-backup',  label:'자동 백업'},
     {anchor:'settings-reset',   label:'데이터 초기화'},
@@ -10144,6 +10145,36 @@ function taxjUsageTableHtml(rep){
       <tbody>${rows.replace(/<td/g, '<td style="padding:6px 8px; border-bottom:1px solid var(--line, #f1f1f1); vertical-align:top;"').replace(/<td style="padding:6px 8px; border-bottom:1px solid var\(--line, #f1f1f1\); vertical-align:top;" style="/g, '<td style="padding:6px 8px; border-bottom:1px solid var(--line, #f1f1f1); vertical-align:top; ')}</tbody>
     </table></div>`;
 }
+// [2026.11.05] 설정 › 웹 - 구성 설명·배포 순서·링크
+const SM_WEB_PARTS = [
+  ['Firestore (Google, 프로젝트 taxj-a3e01)', '실제 자료 저장소. 출퇴근·경비·거래처·결재·공지(taxj), 타팀 근태(taxj_teamdata)·오늘 상태(taxj_teamlive)·백업(taxj_teambackup), 명단(taxj_members)·팀 설정(taxj_auth), 앱 코드 조각(taxj_code)'],
+  ['Firestore 보안 규칙', '누가 무엇을 읽고 쓰는지 정함. 우리 자료는 Tax.J 명단·총괄만, 타팀 근태는 본인·팀 관리자·총괄만, 오늘 상태는 같은 팀 전체'],
+  ['GitHub Pages (공개 저장소 sm-sarah/Tax.J)', '사이트 주소(sm-sarah.github.io/Tax.J). 로그인 화면(로더)·알림 파일·그림만 둠. 자료는 저장하지 않음'],
+  ['GitHub (비공개 sm-sarah/Tax.J-src)', '앱 원본 보관·변경 기록. 앱의 배포 버튼이 같이 저장. Claude는 여기서 최신 원본을 받아 작업'],
+  ['Cloud Run sendpush', '푸시 알림 서버. 테스트 알림, 출퇴근 5분 전 알림(우리 팀·타팀), 타팀 1시간 백업'],
+  ['Cloud Scheduler', '1분마다 sendpush를 깨워 출퇴근 알림·백업을 돌림(평일 낮)'],
+  ['공유 드라이브 01.기장대리', '결재 첨부파일, 3시간 자동백업, 비상용 예전 저장소'],
+  ['Google 로그인 (taxj-a3e01)', 'Tax.J 버튼 - 회사 계정. 드라이브 권한이 있어서 심사 전엔 테스트 사용자 등록 필요'],
+  ['Google 로그인 (taxj-guest)', '청인 버튼 - 타팀(회사 밖 계정 포함). 이메일만 확인, 명단(총괄 › 팀·권한)에 있어야 들어옴'],
+  ['각 PC·휴대폰 브라우저', '빨리 열리게 하는 사본(캐시). 원본은 Firestore'],
+];
+const SM_WEB_DEPLOY = [
+  ['앱 (index.html)', 'Tax.J 설정 › 데이터 › 배포(또는 상단 배포 아이콘)에서 파일 선택 → Firebase에 올리고 비공개 저장소에도 저장'],
+  ['보안 규칙 (firestore-rules.txt)', 'Firebase 콘솔 › Firestore › 규칙 전체를 바꿔 붙이고 게시. 앱과 짝이 맞아야 하면 앱 배포 바로 다음에'],
+  ['알림 서버 (index.js)', 'Google Cloud › Cloud Run › sendpush › 소스 수정 → 저장 및 재배포 (프로젝트 taxj-a3e01 확인)'],
+  ['로그인 화면 (로더 index.html)', 'GitHub sm-sarah/Tax.J › Add file › Upload files → Commit (앱 파일과 이름이 같으니 헷갈리지 않게)'],
+];
+function smWebLinksHtml(){
+  const mine = links.filter(l => (l.group || '기타') !== SM_CLAUDE_GROUP && smIsWebLink(l));
+  const rows = smClaudeLinks().concat(mine.map(l => ({ ...l, memo: `내 링크 · ${l.memo || ''}` })));
+  const kinds = {};
+  rows.forEach(l => { const k = l._builtin ? String(l.memo).split(' · ')[0] : '내가 넣은 링크'; (kinds[k] = kinds[k] || []).push(l); });
+  return Object.keys(kinds).map(k => `<div style="font-weight:800; font-size:13px; color:var(--primary-dark); margin:12px 0 4px;">${taxjEsc(k)}</div>
+    <div class="table-scroll"><table><thead><tr><th style="width:30%;">사이트명</th><th style="width:56px;">링크</th><th>메모</th></tr></thead><tbody>${kinds[k].map(l => `<tr>
+      <td style="text-align:left; font-weight:700;">${taxjEsc(l.name)}</td>
+      <td style="text-align:center;">${l.url ? `<a class="icon-btn" href="${escapeAttr(linkHref(l.url))}" target="_blank" rel="noopener" title="${escapeAttr(l.url)}" aria-label="링크 열기" style="color:var(--primary-dark); display:inline-flex;">${ICON_LINK}</a>` : ''}</td>
+      <td style="text-align:left; white-space:pre-wrap; font-size:13px;">${taxjEsc(l._builtin ? String(l.memo).split(' · ').slice(1).join(' · ') : (l.memo || ''))}</td></tr>`).join('')}</tbody></table></div>`).join('');
+}
 function renderSettings(){
   const el = document.getElementById('tab-settings');
   el.innerHTML = `
@@ -10234,6 +10265,24 @@ function renderSettings(){
         <div class="hint" id="smDeployMsg" style="margin-top:6px;">${smDeployMsgText}</div>
       </div>
 
+      <div class="settings-block" id="settings-web"><!-- [2026.11.05] 설정 › 웹(요청) - 회사웹(Tax.J)·타팀웹이 어디서 어떻게 돌아가는지 + 관리 사이트 링크 -->
+        <div style="flex:1;">
+          <h3>웹 구성</h3>
+          <div class="hint" style="max-width:none;">회사웹 Tax.J와 타팀웹(Tax.J 안의 타팀 계정 전용 근태 화면)이 어디에 무엇을 두는지예요.</div>
+          <div class="table-scroll" style="margin-top:10px;"><table>
+            <thead><tr><th style="width:26%;">곳</th><th>하는 일</th></tr></thead>
+            <tbody>${SM_WEB_PARTS.map(([a, b]) => `<tr><td style="text-align:left; font-weight:700;">${taxjEsc(a)}</td><td style="text-align:left; font-size:13px;">${taxjEsc(b)}</td></tr>`).join('')}</tbody>
+          </table></div>
+          <h3 style="margin-top:16px;">작업·배포 순서</h3>
+          <div class="table-scroll" style="margin-top:6px;"><table>
+            <thead><tr><th style="width:26%;">바꾸는 것</th><th>올리는 곳</th></tr></thead>
+            <tbody>${SM_WEB_DEPLOY.map(([a, b]) => `<tr><td style="text-align:left; font-weight:700;">${taxjEsc(a)}</td><td style="text-align:left; font-size:13px;">${taxjEsc(b)}</td></tr>`).join('')}</tbody>
+          </table></div>
+          <h3 style="margin-top:16px;">관리 사이트 링크</h3>
+          <div class="hint" style="max-width:none;">Claude가 작업하면서 생기거나 바뀐 링크는 자동으로 채워져요(${taxjEsc(SM_CLAUDE_LINKS_AT.slice(5).replace('-', '/'))} 기준). 링크 메뉴에서 넣은 회사웹 관리 주소도 여기 같이 보여요.</div>
+          ${smWebLinksHtml()}
+        </div>
+      </div>
       <!-- [2026.10.04] "개인계정으로만 Tax.J 사용 현황 보기"(요청) - [2026.10.16] Tax.J › 사용 현황 메뉴로 옮김(요청) -->
 
       <!-- [2026.10.08] 'Tax.J 검토표 계산식'은 따로 만든 '검토표' 메뉴로 옮김(요청) -->
@@ -10690,11 +10739,11 @@ const ICON_LINK = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" s
 // [2026.10.22] "Claude 작업할 때 주는 관리 사이트 링크를 링크 메뉴 '클로드' 분야에 계속 업데이트"(요청)
 //   [구분, 이름, 주소, 용도]. 이 목록은 앱 코드에 들어 있어 화면에서 고치지 않고, Claude가 작업하다 관리 사이트 링크가 새로 생기거나 바뀌면
 //   요청이 없어도 여기에 넣고 배포함(규칙: 이 저장소와 Tax.J-src의 CLAUDE.md). 맨 아래 줄일수록 최근에 넣은 것
-const SM_CLAUDE_LINKS_AT = '2026-10-27';
+const SM_CLAUDE_LINKS_AT = '2026-11-05';
 const SM_CLAUDE_LINKS = [
   ["앱", "Tax.J", "https://sm-sarah.github.io/Tax.J/", "직원 접속 주소"],
-  ["GitHub", "저장소", "https://github.com/sm-sarah/Tax.J-src", "앱 파일 보관"],
-  ["GitHub", "파일 올리기", "https://github.com/sm-sarah/Tax.J/upload/main", "index.html 등 업로드 (안 열리면 저장소 › 파일 추가)"],
+  ["GitHub", "저장소", "https://github.com/sm-sarah/Tax.J-src", "앱 원본 보관(비공개) · 앱의 배포 버튼이 같이 저장"],
+  ["GitHub", "파일 올리기", "https://github.com/sm-sarah/Tax.J/upload/main", "공개 저장소에 로그인 화면(로더)·알림 파일만 올림 · 앱 코드는 절대 올리지 않음"],
   ["GitHub", "배포 상태", "https://github.com/sm-sarah/Tax.J/actions", "올린 뒤 사이트 반영 확인"],
   ["GitHub", "액세스 토큰", "https://github.com/settings/tokens", "앱 안 GitHub 배포용 토큰"],
   ["Firebase", "프로젝트 홈", "https://console.firebase.google.com/project/taxj-a3e01/overview", "Firebase 전체"],
@@ -10712,9 +10761,15 @@ const SM_CLAUDE_LINKS = [
   ["Drive", "01.기장대리", "https://drive.google.com/drive/folders/0ALthlaDsIhh1Uk9PVA", "결재 첨부·자동백업 폴더"],
   ["Google Cloud", "OAuth 브랜딩", "https://console.cloud.google.com/auth/branding?project=273460053868", "앱 게시 전 앱 이름·지원 이메일 등 입력"],
   ["Google Cloud", "OAuth 대상(테스트 사용자)", "https://console.cloud.google.com/auth/audience?project=273460053868", "테스트 사용자 추가·앱 게시 상태"],
-  ["Firebase", "Realtime Database 규칙", "https://console.firebase.google.com/project/taxj-a3e01/database/taxj-a3e01-default-rtdb/rules", "접속 신호·비숑 멘트 기록(bichonLog) 읽기·쓰기 규칙"]
+  ["Firebase", "Realtime Database 규칙", "https://console.firebase.google.com/project/taxj-a3e01/database/taxj-a3e01-default-rtdb/rules", "접속 신호·비숑 멘트 기록(bichonLog) 읽기·쓰기 규칙"],
+  ["GitHub", "공개 저장소(로더)", "https://github.com/sm-sarah/Tax.J", "사이트 주소용 · 로그인 화면·알림 파일·그림만"],
+  ["Google Cloud", "타팀 로그인(taxj-guest) 대상", "https://console.cloud.google.com/auth/audience?project=891162030748", "청인 버튼(회사 밖 계정) 로그인 앱 게시 상태"]
 ];
 const SM_CLAUDE_GROUP = '클로드';
+// [2026.11.05] "회사웹 작업에 필요한 링크는 설정 › 웹으로 옮겨줘"(요청) - 위 목록(클로드)과, 내가 넣은 링크 중 회사웹 관리 사이트 주소인 것은
+//   링크 메뉴에서 빼고 설정 › 웹에서 보여줌(내가 넣은 링크 자료 자체는 그대로 저장돼 있음 - 보이는 곳만 옮김)
+const SM_WEB_LINK_RE = /github\.com\/sm-sarah\/tax\.j|sm-sarah\.github\.io\/tax\.j|console\.firebase\.google\.com|console\.cloud\.google\.com|shell\.cloud\.google\.com|drive\.google\.com\/drive\/folders\/0ALthlaDsIhh1Uk9PVA/i;
+function smIsWebLink(l){ return !!(l && (l._builtin || SM_WEB_LINK_RE.test(String(l.url || '')))); }
 function smClaudeLinks(){ return SM_CLAUDE_LINKS.map(([kind, name, url, memo], i) => ({ id: -1 - i, _builtin:true, _ord:i, group: SM_CLAUDE_GROUP, name, url, memo: `${kind} · ${memo}`, at: SM_CLAUDE_LINKS_AT })); }
 function linkGroups(){
   const cats = (linkCats || []).filter(c => c && c !== '기타');
@@ -11221,9 +11276,9 @@ function renderLinks(){
   const el = document.getElementById('tab-links');
   if(!el) return;
   const q = linkSearch.trim().toLowerCase();
-  const allG = linkGroups().filter(g => g !== SM_CLAUDE_GROUP).concat(SM_CLAUDE_GROUP);
+  const allG = linkGroups().filter(g => g !== SM_CLAUDE_GROUP && links.some(l => (l.group || '기타') === g && !smIsWebLink(l)) || (linkCats || []).includes(g) && g !== SM_CLAUDE_GROUP);
   if(linkGroupSel && !allG.includes(linkGroupSel)) linkGroupSel = '';
-  const list = links.filter(l => (l.group || '기타') !== SM_CLAUDE_GROUP).concat(smClaudeLinks()).filter(l => !linkGroupSel || (l.group || '기타') === linkGroupSel)
+  const list = links.filter(l => (l.group || '기타') !== SM_CLAUDE_GROUP && !smIsWebLink(l)).filter(l => !linkGroupSel || (l.group || '기타') === linkGroupSel)
     .filter(l => !q || [l.name, l.url, l.group, l.memo, ...(l.files || []).map(f => f.name)].some(v => String(v || '').toLowerCase().includes(q)));
   const cnt = g => links.filter(l => (l.group || '기타') === g).length;
   const showSeg = links.length || allG.length;
