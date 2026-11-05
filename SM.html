@@ -2044,6 +2044,35 @@ function smColsPrune(map){ const o = {}; Object.keys(map || {}).forEach(k => { i
 // [2026.11.02] "works 상호명 법인·개인 조회 스타일을 회사웹처럼 통일"(요청) - 회사웹과 같게 법인 남청(#0B5A78)·개인 분홍(#BE185D), 굵게(800)
 function smEntCss(t){ return `font-weight:800; color:${t === '법인' ? '#0b5a78' : t === '개인' ? '#be185d' : 'inherit'};`; }
 function smColsCopy(cols){ return JSON.parse(JSON.stringify(cols || [])); }
+// [2026.11.05] "항목 지울 때 항목만/내용도, 이번 것만/다른 회차·연도도 자세히 물어봐 줘"(요청) - 항목 삭제 공통 선택 창
+//   반환 { what:'all'(항목+내용)|'vals'(내용만 비움, 항목 남김)|'col'(항목만, 적은 내용은 남겨 둠), every:true면 모든 회차(같은 이름 항목), hist:true면 회차 기록도 } · 취소면 null
+const SM_DEL_WHAT = [['all','항목과 적은 내용 모두 지우기'], ['vals','적은 내용만 비우기 (항목은 남김)'], ['col','항목만 지우기 (적은 내용은 남겨 둠)']];
+async function smColDelAsk(label, cur, every, opts){
+  opts = opts || {};
+  const f = [{ label:'무엇을 지울까요', options: SM_DEL_WHAT.map(x => x[1]), value: SM_DEL_WHAT[0][1] }];
+  if(every) f.push({ label:'어디서 지울까요', options:[`${cur}만 (다른 것은 그대로)`, `${every} (같은 이름 항목)`], value:`${cur}만 (다른 것은 그대로)` });
+  if(opts.hist) f.push({ label:'회차 기록 (N회 눌러 보는 기록)', options:['기록에서도 지우기', '기록은 남기기'], value:'기록에서도 지우기' });
+  const r = await smForm(`'${String(label || '').replace(/\s+/g, ' ')}' 항목 지우기`, f, { tone:'danger', icon:'!', okText:'지우기' });
+  if(!r) return null;
+  let i = 1;
+  const what = (SM_DEL_WHAT.find(x => x[1] === r[0]) || SM_DEL_WHAT[0])[0];
+  const all = every ? !String(r[i++]).startsWith(cur + '만') : false;
+  const hist = opts.hist ? r[i] !== '기록은 남기기' : false;
+  return { what, every: all, hist };
+}
+function smColNorm(s){ return String(s || '').replace(/\s+/g, ' ').trim(); }
+// 회차별 항목 지도(map[key]=[항목])에서 지우기 - 지운(또는 비울) 항목 id를 키별로 돌려줌 { key:[id...] }
+function smColDelApply(map, keys, col, what){
+  const out = {};
+  keys.forEach(k => {
+    const cols = Array.isArray(map[k]) ? map[k] : [];
+    const ids = cols.filter(c => c.id === col.id || smColNorm(c.label) === smColNorm(col.label)).map(c => c.id);
+    if(!ids.length) return;
+    out[k] = ids;
+    if(what !== 'vals') map[k] = cols.filter(c => !ids.includes(c.id));
+  });
+  return out;
+}
 // [2026.11.02] "해당없음 말고 다 미해당으로 통일"(요청) - 고르는 버튼·오른쪽 클릭은 '미해당'. 예전에 넣은 '해당없음'도 불러올 때 '미해당'으로 바꿈(값 판단은 둘 다 미해당으로)
 function smIsNA(v){ return v === '미해당' || v === '해당없음'; }
 function smNaUnify(){
@@ -4188,9 +4217,10 @@ async function editVatCustomCol(id){
   const r = await smForm('항목 수정', [{ label:'항목 이름', value: col.label }, { label:'입력 방식', options: PAY_COL_TYPES.map(x => x[1]), value: (PAY_COL_TYPES.find(x => x[0] === col.type) || PAY_COL_TYPES[0])[1] }], { okText:'저장', cancelText:'삭제', icon:'✎' });
   if(r === undefined) return;   // [2026.10.15] 닫기(X) - 아무것도 안 바꿈
   if(r === null){
-    if(!(await smConfirm(`'${col.label}' 항목을 지울까요?`, '이 항목에 적어 둔 값도 모두 지워져요.', { tone:'danger', icon:'!', okText:'삭제' }))) return;
-    vatCustomCols = vatCustomCols.filter(c => c.id !== id);
-    Object.values(vatCustomVals).forEach(per => Object.values(per).forEach(v => { delete v[id]; }));
+    const a = await smColDelAsk(col.label);   // [2026.11.05] 항목만/내용도 물어봄(요청) - 이 항목은 모든 기수 공통이라 범위는 안 물음
+    if(!a) return;
+    if(a.what !== 'vals') vatCustomCols = vatCustomCols.filter(c => c.id !== id);
+    if(a.what !== 'col') Object.values(vatCustomVals).forEach(per => Object.values(per).forEach(v => { delete v[id]; }));
   }else{
     if(r[0].trim()) col.label = r[0].trim();
     col.type = (PAY_COL_TYPES.find(x => x[1] === r[1]) || PAY_COL_TYPES[0])[0];
@@ -4646,9 +4676,10 @@ async function vatProgEditCol(id){
   if(r === null){
     // [2026.11.02] 항목이 기수마다 따로라 이 기수에서만 지움(다른 기수 항목·값은 그대로)
     const key = vatProgKey();
-    if(!(await smConfirm(`'${vatProgNorm(col.label)}' 항목을 지울까요?`, `${vatProgKeyLabel(key)}에서만 지워져요(이 기수에 적은 값 포함). 다른 기수는 그대로예요.`, { tone:'danger', icon:'!', okText:'삭제' }))) return;
-    vatProgCols = vatProgCols.filter(c => c.id !== id);
-    Object.values(vatProg[key] || {}).forEach(v => { delete v[id]; });
+    const a = await smColDelAsk(vatProgNorm(col.label), vatProgKeyLabel(key), '모든 기수');   // [2026.11.05] 자세히 물어봄(요청)
+    if(!a) return;
+    const hit = smColDelApply(vatProgColsBy, a.every ? Object.keys(vatProgColsBy) : [key], col, a.what);
+    if(a.what !== 'col') Object.entries(hit).forEach(([k, ids]) => Object.values(vatProg[k] || {}).forEach(v => ids.forEach(i => { delete v[i]; })));
   }else{
     if(r[0].trim()) col.label = r[0].trim();
     col.type = (VAT_PROG_TYPES.find(x => x[1] === r[1]) || VAT_PROG_TYPES[0])[0];
@@ -5593,10 +5624,13 @@ async function closeEditCol(id){
   const r = await smForm('결산 항목 수정', [{ label:'항목 이름', type:'textarea', rows:2, value: col.label }, { label:'입력 방식', options: CLOSE_TYPES.map(x => x[1]), value: (CLOSE_TYPES.find(x => x[0] === col.type) || CLOSE_TYPES[0])[1] }, { label:'다음 해 결산으로 이어받기', options:['아니오','예'], value: col.carry ? '예' : '아니오' }], { okText:'저장', cancelText:'삭제', icon:'✎' });
   if(r === undefined) return;   // [2026.10.15] 닫기(X) - 아무것도 안 바꿈
   if(r === null){
-    if(!(await smConfirm(`'${col.label.replace(/\s+/g, ' ')}' 항목을 지울까요?`, `${closeYear}년 결산에서만 지워져요(적은 값·기록 포함). 다른 연도는 그대로예요.`, { tone:'danger', icon:'!', okText:'삭제' }))) return;
-    closeCols = closeCols.filter(c => c.id !== id);
-    Object.values((closeData[closeKey()] || {}).v || {}).forEach(v => { delete v[id]; });   // [2026.11.02] 이 회차만
-    Object.values((closeData[closeKey()] || {}).rh || {}).forEach(L => L.forEach(x => { delete (x.v || {})[id]; }));   // [2026.11.04] 회차 기록에서도
+    const a = await smColDelAsk(col.label, `${closeYear}년 결산`, '모든 연도 결산', { hist:true });   // [2026.11.05] 자세히 물어봄(요청)
+    if(!a) return;
+    const hit = smColDelApply(closeColsBy, a.every ? Object.keys(closeColsBy) : [closeKey()], col, a.what);
+    if(a.what !== 'col') Object.entries(hit).forEach(([k, ids]) => {
+      Object.values((closeData[k] || {}).v || {}).forEach(v => ids.forEach(i => { delete v[i]; }));   // [2026.11.02] 이 회차만
+      if(a.hist) Object.values((closeData[k] || {}).rh || {}).forEach(L => L.forEach(x => ids.forEach(i => { delete (x.v || {})[i]; })));   // [2026.11.04] 회차 기록에서도
+    });
   }else{
     if(r[0].trim()) col.label = r[0].trim();
     const to = (CLOSE_TYPES.find(x => x[1] === r[1]) || CLOSE_TYPES[0])[0];
@@ -5892,9 +5926,10 @@ async function taxEditCol(kind, id){
   const r = await smForm('항목 수정', [{ label:'항목 이름', value: col.label }, { label:'입력 방식', options: PAY_COL_TYPES.map(x => x[1]), value: (PAY_COL_TYPES.find(x => x[0] === col.type) || PAY_COL_TYPES[0])[1] }], { okText:'저장', cancelText:'삭제', icon:'✎', closeX:true });
   if(r === undefined) return;
   if(r === null){
-    if(!(await smConfirm(`'${col.label}' 항목을 지울까요?`, `${y}년 귀속에서만 지워져요(이 해에 적은 값 포함). 다른 해는 그대로예요.`, { tone:'danger', icon:'!', okText:'삭제' }))) return;
-    taxColsBy[kind][y] = taxCols(kind).filter(c => c.id !== id);
-    Object.values(((taxColVals[kind] || {})[y]) || {}).forEach(v => { delete v[id]; });
+    const a = await smColDelAsk(col.label, `${y}년 귀속`, '모든 귀속연도');   // [2026.11.05] 자세히 물어봄(요청)
+    if(!a) return;
+    const hit = smColDelApply(taxColsBy[kind], a.every ? Object.keys(taxColsBy[kind]) : [String(y)], col, a.what);
+    if(a.what !== 'col') Object.entries(hit).forEach(([k, ids]) => Object.values(((taxColVals[kind] || {})[k]) || {}).forEach(v => ids.forEach(i => { delete v[i]; })));
   }else{
     if(r[0].trim()) col.label = r[0].trim();
     col.type = (PAY_COL_TYPES.find(x => x[1] === r[1]) || PAY_COL_TYPES[0])[0];
@@ -9228,9 +9263,10 @@ async function editPayCustomCol(id){
   const r = await smForm('항목 수정', [{ label:'항목 이름', value: col.label }, { label:'입력 방식', options: PAY_COL_TYPES.map(x => x[1]), value: (PAY_COL_TYPES.find(x => x[0] === col.type) || PAY_COL_TYPES[0])[1] }], { okText:'저장', cancelText:'삭제', icon:'✎', closeX:true });
   if(r === undefined) return;   // [2026.10.15] 닫기(X) - 아무것도 안 바꿈
   if(r === null){
-    if(!(await smConfirm(`'${col.label}' 항목을 지울까요?`, `${payMonth.replace('-', '년 ')}월 귀속에서만 지워져요(이 달에 적은 값 포함). 다른 달은 그대로예요.`, { tone:'danger', icon:'!', okText:'삭제' }))) return;
-    payCustomCols = payCustomCols.filter(c => c.id !== id);
-    Object.values(payCustomVals[payMonth] || {}).forEach(v => { delete v[id]; });   // [2026.11.02] 이 달만
+    const a = await smColDelAsk(col.label, `${payMonth.replace('-', '년 ')}월 귀속`, '모든 달');   // [2026.11.05] 자세히 물어봄(요청)
+    if(!a) return;
+    const hit = smColDelApply(payColsBy, a.every ? Object.keys(payColsBy) : [payMonth], col, a.what);
+    if(a.what !== 'col') Object.entries(hit).forEach(([k, ids]) => Object.values(payCustomVals[k] || {}).forEach(v => ids.forEach(i => { delete v[i]; })));   // [2026.11.02] 이 달만
   }else{
     if(r[0].trim()) col.label = r[0].trim();
     col.type = (PAY_COL_TYPES.find(x => x[1] === r[1]) || PAY_COL_TYPES[0])[0];
