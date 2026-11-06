@@ -5983,7 +5983,8 @@ let corpYearAuto = true, indivYearAuto = true;
 function smFocusYear(kind){
   const d = new Date(), t0 = new Date(d.getFullYear(), d.getMonth(), d.getDate()), y = d.getFullYear();
   for(let Y = y; Y >= y - 3; Y--){
-    const from = kind === 'corp' ? new Date(Y + 1, 2, 3) : kind === 'indiv' ? new Date(Y + 1, 4, 3) : new Date(Y, 5, 1);
+    // [2026.11.06] 회사웹과 같게(요청 "25년 귀속 신고가 끝났으면 26년 귀속이 첫 화면에") - 지난 귀속 마감 다음 날부터: 법인세 Y년 4/1, 종소세 Y년 6/1
+    const from = kind === 'corp' ? new Date(Y, 3, 1) : kind === 'indiv' ? new Date(Y, 5, 1) : new Date(Y, 5, 1);
     if(t0 >= from) return String(Y);
   }
   return String(y - 1);
@@ -6084,6 +6085,13 @@ function renderIndiv(){
   const data = indivData[currentIndivYear];
   const rows = indivClients();
   const done = rows.filter(c => data[c.id] && data[c.id].steps['납부']).length;
+  // [2026.11.06] 회사웹 종소세 신고현황의 중간예납(홈택스 고지 불러오기) 열을 같이 - 회사웹이 그 귀속연도에 불러왔을 때만, 읽기만(요청)
+  //   회사 자료: s__filingStatus['종소세'][연도][거래처].midNotice(고지세액)·midInstall(분납가능세액)·midPay(납부서 날짜)·midKey(연결 열쇠)
+  const midOf = c => { const cid = taxjFull ? taxjIdOf(c) : null; const e = cid == null ? null : taxjFsEntry('종소세', currentIndivYear, cid); return e && e.midKey ? e : null; };
+  const midOn = rows.some(c => midOf(c));
+  const midCells = c => { if(!midOn) return ''; const e = midOf(c); if(!e) return '<td>-</td><td>-</td><td>-</td>';
+    const n = v => Number(v || 0).toLocaleString('ko-KR');
+    return `<td style="text-align:right; font-variant-numeric:tabular-nums;">${n(e.midNotice)}</td><td style="text-align:right; font-variant-numeric:tabular-nums;">${Number(e.midInstall||0) ? n(e.midInstall) : '-'}</td><td style="white-space:nowrap;">${e.midPay ? `<span style="color:#10B981; font-weight:900;">✓</span> ${e.midPay.slice(5).replace('-','/')}` : '-'}</td>`; };
 
   el.innerHTML = `
     <div class="card">
@@ -6104,7 +6112,7 @@ function renderIndiv(){
       </div>
       <div class="table-scroll" style="margin-top:16px;">
       <table>
-        <thead><tr><th class="tx-seq">순번</th><th class="tx-type">구분</th><th data-smdrag="indiv" data-smfix="honest,honest">상호명</th>${taxColHeadHtml('indiv','honest')}<th data-smdrag="indiv" data-smfix="honest,step">성실신고</th>${taxColHeadHtml('indiv','step')}<th data-smdrag="indiv" data-smfix="step,co">진행 단계</th>${taxColHeadHtml('indiv','co')}<th data-smdrag="indiv" data-smfix="co,note">회사 진행</th><th data-smdrag="indiv" data-smfix="co,note">회사 메모</th>${taxColHeadHtml('indiv','note')}<th data-smdrag="indiv" data-smfix="note,end">비고</th>${taxColHeadHtml('indiv','end')}</tr></thead>
+        <thead><tr><th class="tx-seq">순번</th><th class="tx-type">구분</th><th data-smdrag="indiv" data-smfix="honest,honest">상호명</th>${taxColHeadHtml('indiv','honest')}<th data-smdrag="indiv" data-smfix="honest,step">성실신고</th>${taxColHeadHtml('indiv','step')}<th data-smdrag="indiv" data-smfix="step,co">진행 단계</th>${taxColHeadHtml('indiv','co')}<th data-smdrag="indiv" data-smfix="co,note">회사 진행</th><th data-smdrag="indiv" data-smfix="co,note">회사 메모</th>${midOn ? '<th title="회사웹 중간예납(홈택스 고지)">고지세액</th><th>분납가능세액</th><th title="회사웹에서 넣은 납부서 날짜">납부서</th>' : ''}${taxColHeadHtml('indiv','note')}<th data-smdrag="indiv" data-smfix="note,end">비고</th>${taxColHeadHtml('indiv','end')}</tr></thead>
         <tbody>
           ${sortedClients().filter(x => rows.includes(x)).map(c => {
             const r = data[c.id] || {honest:false, steps:Object.fromEntries(indivSteps.map(s=>[s,''])), note:''};
@@ -6121,7 +6129,7 @@ function renderIndiv(){
                   `).join('')}
                 </div>
               </td>
-              ${taxColCellsHtml('indiv', c.id, 'co')}<td>${taxjStatusCellHtml('종소세', currentIndivYear, c)}</td>${smCoMemoTd(taxjFsMemo('종소세', currentIndivYear, c), `${c.name} · ${currentIndivYear}년 귀속 종소세 회사 메모`)}
+              ${taxColCellsHtml('indiv', c.id, 'co')}<td>${taxjStatusCellHtml('종소세', currentIndivYear, c)}</td>${smCoMemoTd(taxjFsMemo('종소세', currentIndivYear, c), `${c.name} · ${currentIndivYear}년 귀속 종소세 회사 메모`)}${midCells(c)}
               ${taxColCellsHtml('indiv', c.id, 'note')}<td class="note-cell"><input type="text" value="${r.note}" onchange="updateIndivNote(${c.id}, this.value)" style="width:100%"></td>
               ${taxColCellsHtml('indiv', c.id, 'end')}</tr>`;
           }).join('')}
