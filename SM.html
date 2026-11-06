@@ -1741,7 +1741,7 @@ function smTogglePcView(){ try{ localStorage.setItem('sm_pc_view', window.SM_PC_
   <span style="justify-self:end; display:flex; align-items:center; gap:8px;">
     <span class="pill warn" id="syncWarningBadge" style="display:none; cursor:pointer;" onclick="handleGoogleSignIn()" title="눌러서 다시 연결하기">⚠ 연동 끊김 · 다시 로그인</span>
     <button class="btn xs sm-pcview-btn" id="pcViewBtn" style="white-space:nowrap; flex-shrink:0;" onclick="smTogglePcView()" title="휴대폰에서 컴퓨터 화면처럼 보기 / 휴대폰 화면으로 보기"></button><!-- [2026.10.20] PC 화면 보기 토글(터치 기기에서만 보임) -->
-    <button class="btn xs primary" id="installAppBtn" style="display:none; white-space:nowrap; flex-shrink:0;" onclick="installApp()" title="이 기기에 앱으로 설치">⬇ 앱 설치</button><!-- [2026.10.20] 휴대폰에서 글자가 세로로 꺾여 나오던 것(한 줄로) -->
+    <button class="btn xs primary" id="installAppBtn" style="display:none; white-space:nowrap; flex-shrink:0;" onclick="installApp()" title="이 기기에 앱으로 설치"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;"><path d="M12.5 21h-4.5a2 2 0 0 1 -2 -2v-14a2 2 0 0 1 2 -2h8a2 2 0 0 1 2 2v7"/><path d="M11 4h2"/><path d="M12 17v.01"/><path d="M19 16v6"/><path d="M22 19l-3 3l-3 -3"/></svg> 앱 설치</button><!-- [2026.10.20] 휴대폰에서 글자가 세로로 꺾여 나오던 것(한 줄로) -->
     <span class="today-pill" id="todayPill"></span>
   </span>
 </header>
@@ -3107,8 +3107,8 @@ let checklistSearch = '';
 let checklistSearchOpen = false;
 const SEARCH_SVG = '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>';
 // [2026.11.02] Tax.J 불러오기·새로고침 아이콘(거래처·Tax.J 메뉴 등 같은 모양)
-const ICON_TAXJ_LOAD = '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 4v5h-5"/><path d="M12 8v5l3 2"/></svg>';
-const UPLOAD_XLSX_SVG = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v12"/><path d="M7 11l5 5 5-5"/><path d="M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg>';
+const ICON_TAXJ_LOAD = '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3v4a1 1 0 0 0 1 1h4"/><path d="M5 13v-8a2 2 0 0 1 2 -2h7l5 5v11a2 2 0 0 1 -2 2h-5.5m-9.5 -2h7m-3 -3l3 3l-3 3"/></svg>'; // [2026.11.06] 회사웹(Tax.J)과 같은 기능 아이콘 통일(요청) - 불러오기 = 문서로 들어오는 화살표
+const UPLOAD_XLSX_SVG = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="12" height="12" rx="2"/><line x1="2" y1="6.5" x2="14" y2="6.5"/><line x1="6.5" y1="2" x2="6.5" y2="14"/><path d="M19 22V8"/><path d="M15 12l4-4 4 4"/></svg>'; // [2026.11.06] 회사웹(Tax.J)과 같은 기능 아이콘 통일(요청) - 엑셀 올리기 = 표+↑
 function checklistYear(){ return new Date().getFullYear(); }
 function selectWorklistMonth(m){
   if(!m) return;
@@ -4957,7 +4957,7 @@ function vatProgHtml(docs){
       <button class="vp-mb" onclick="vatProgArrange()" title="배치·묶음 - 항목 순서와 묶음(매출·매입 등 두 줄 머리글)을 정해요" aria-label="배치·묶음">${vpIc('<rect x="3" y="4" width="18" height="5" rx="1.5"/><rect x="3" y="12" width="8" height="8" rx="1.5"/><rect x="13" y="12" width="8" height="8" rx="1.5"/>')}</button>
       <button class="vp-mb" onclick="vatProgCarryNext()" title="다음 기수로 이월 - 항목마다 안 넘김·항목만·항목+내용을 골라 넘겨요" aria-label="다음 기수로 이월">${vpIc('<path d="M4 5v14"/><path d="M8 12h12"/><path d="M15 7l5 5-5 5"/>')}</button></div>
     <div class="vp-mg vp-mg-ic"><span class="vp-mg-l">값</span>
-      <button class="vp-mb" onclick="document.getElementById('vatProgXlsx').click()" title="엑셀 올리기 - 1행 = 항목 이름인 진행표 엑셀을 ${plab}에 넣어요" aria-label="엑셀 올리기">${vpIc('<path d="M12 15V3M7 8l5-5 5 5M4 15v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/>')}</button><input type="file" id="vatProgXlsx" accept=".xlsx,.xls" style="display:none;" onchange="vatProgImport(this)">
+      <button class="vp-mb" onclick="document.getElementById('vatProgXlsx').click()" title="엑셀 올리기 - 1행 = 항목 이름인 진행표 엑셀을 ${plab}에 넣어요" aria-label="엑셀 올리기">${vpIc('<rect x="2" y="2" width="12" height="12" rx="2"/><line x1="2" y1="6.5" x2="14" y2="6.5"/><line x1="6.5" y1="2" x2="6.5" y2="14"/><path d="M19 22V8"/><path d="M15 12l4-4 4 4"/>')}</button><input type="file" id="vatProgXlsx" accept=".xlsx,.xls" style="display:none;" onchange="vatProgImport(this)">
       ${vatProgHasData(key) ? `<button class="vp-mb" onclick="vatProgMove()" title="다른 기수로 - 이 기수에 넣은 값을 다른 기수로 옮겨요" aria-label="다른 기수로">${vpIc('<path d="M5 12h14M13 6l6 6-6 6"/>')}</button><button class="vp-mb vp-mb-danger" onclick="vatProgClear()" title="비우기 - 이 기수에 적은 내 항목 값을 지워요" aria-label="비우기">${vpIc('<path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/>')}</button>` : ''}</div></div>
     <div class="vp-save-row">${vpSaveBadgeHtml()}</div>`;
   if(!docs) return bar + '<div class="empty">Tax.J에 연결하면 회사웹 거래처·예정고지 칸이 채워지고, 옆에 내 진행 칸을 적을 수 있어요.</div>';
@@ -6145,7 +6145,7 @@ function renderIndiv(){
    ========================================================= */
 
 const ICON_EDIT = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>';
-const ICON_HISTORY = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/></svg>';
+const ICON_HISTORY = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>'; // [2026.11.06] 회사웹(Tax.J)과 같은 기능 아이콘 통일(요청) - 이력 = 시계
 const ICON_TRASH = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/></svg>';
 
 // 할 일 내용에서 거래처 찾기용 짧은 이름 ("주식회사 나우이엔지" → "나우이엔지", "나우")
@@ -10877,7 +10877,7 @@ function libHistory(k, id){
   const ehtml = (x.edits || []).length ? `<div style="font-weight:800; font-size:13px; margin:14px 0 6px;">정보 수정 기록</div>${x.edits.map(h => `<div style="font-size:12.5px; margin-bottom:4px;"><b>${taxjEsc(h.at)}</b> ${h.ch.map(c => `${lab(c.f)}: <span style="color:var(--muted);">${taxjEsc(c.from) || '(없음)'} →</span> ${taxjEsc(c.to) || '(없음)'}`).join(' · ')}</div>`).join('')}` : '';
   smDialog({ title:`${x.title} · 이력`, html:`<div style="display:flex; flex-direction:column; gap:8px;">${vhtml}</div>${ehtml}`, icon:'↺', okText:'닫기', cancelText:null, wide:true });
 }
-const ICON_UPLOAD = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4"/><path d="M7 9l5-5 5 5"/><path d="M5 20h14"/></svg>';
+const ICON_UPLOAD = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 7a2 2 0 0 1 2 -2h6a2 2 0 0 1 2 2v10a2 2 0 0 1 -2 2h-6a2 2 0 0 1 -2 -2l0 -10"/><path d="M7 7l0 10"/><path d="M4 8l0 8"/></svg>'; // [2026.11.06] 아이콘 통일(요청) - 새 버전 올리기 = 겹친 버전
 function renderLib(k){
   const el = document.getElementById('tab-' + k);
   if(!el) return;
