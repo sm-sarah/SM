@@ -9050,7 +9050,7 @@ function renderAttend(){
   }else if(attendView === 'leave'){
     const rows = [].concat(
       (att.leaveUsage || []).filter(inMonth).map(e => ({ e, kind:'휴가', txt: [e.type, e.subtype].filter(Boolean).join(' · ') + (e.days ? ` ${e.days}일` : ''), key:'leave:' + (e.id || e.date) })),
-      (att.remoteEntries || []).filter(inMonth).map(e => ({ e, kind:'재택', txt: [e.bonus ? '특별' : '정기', e.half ? (e.half === 'am' ? '오전' : e.half === 'pm' ? '오후' : e.half) : '', e.noLunch ? '식대 제외' : ''].filter(Boolean).join(' · '), key:'remote:' + (e.id || e.date) })),
+      (att.remoteEntries || []).filter(inMonth).map(e => ({ e, kind:'재택', txt: [e.bonus ? '특별' : '정기', e.half ? (e.half === 'am' ? '오전' : e.half === 'pm' ? '오후' : e.half) : '', (e.startTime || e.endTime) ? `${e.startTime || ''}~${e.endTime || ''}` : '', e.noLunch ? '식대 제외' : ''].filter(Boolean).join(' · '), key:'remote:' + (e.id || e.date) })),   // [2026.11.06] 회사웹 재택 시간(startTime·endTime)도 표시(요청)
       (att.leaveGrants || []).filter(inMonth).map(e => ({ e, kind:'휴가 부여', txt: `${e.type ? e.type + ' ' : ''}${e.days != null ? e.days + '일' : ''}`, key:'grant:' + (e.id || e.date) }))
     ).sort((a, b) => a.e.date < b.e.date ? -1 : a.e.date > b.e.date ? 1 : 0);
     const yearUse = (att.leaveUsage || []).filter(e => String(e.date || '').startsWith(String(yy))).length;
@@ -9083,7 +9083,7 @@ function renderAttend(){
       }
     });
     (att.leaveUsage || []).filter(u => u && !u.deleted && inMonth(u)).forEach(u => put(u.date, chip('leave', [u.type || '휴가', u.subtype].filter(Boolean).join('·'), [u.type, u.subtype, u.days ? u.days + '일' : '', u.memo].filter(Boolean).join(' · '))));
-    (att.remoteEntries || []).filter(r => r && !r.deleted && inMonth(r)).forEach(r => put(r.date, chip('remote', r.bonus ? '특별재택' : r.half === 'am' ? '오전재택' : r.half === 'pm' ? '오후재택' : '정기재택', [r.bonus ? '특별재택' : '정기재택', r.memo].filter(Boolean).join(' · '))));
+    (att.remoteEntries || []).filter(r => r && !r.deleted && inMonth(r)).forEach(r => put(r.date, chip('remote', r.bonus ? '특별재택' : r.half === 'am' ? '오전재택' : r.half === 'pm' ? '오후재택' : '정기재택', [r.bonus ? '특별재택' : '정기재택', (r.startTime || r.endTime) ? `${r.startTime || ''}~${r.endTime || ''}` : '', r.memo].filter(Boolean).join(' · '))));
     const evs = ((pd.schedule || {}).events || []).filter(e => e && !e.deleted && inMonth(e));
     evs.forEach(e => {
       const tm = e.startTime ? e.startTime + (e.endTime ? '~' + e.endTime : '') : (e.allDay ? '종일' : '');
@@ -10103,7 +10103,7 @@ function taxjCalMarks(){
   const me = (docs.profiles || []).find(p => p && String(p.email || '').toLowerCase() === String(full.email || '').toLowerCase());
   const att = me ? ((docs['data__' + me.id] || {}).attendance || {}) : {};
   (att.leaveUsage || []).forEach(u => { if(u && u.date && !u.deleted) add(u.date, 'item', { cls:'leave', label: u.type || '휴가', title: [u.type, u.subtype, u.memo].filter(Boolean).join(' · ') }); });
-  (att.remoteEntries || []).forEach(r => { if(r && r.date && !r.deleted) add(r.date, 'item', { cls:'remote', label: r.bonus ? '특별재택' : r.half === 'am' ? '오전재택' : r.half === 'pm' ? '오후재택' : '재택', title: [r.bonus ? '특별재택' : r.half ? '반일재택' : '정기재택', r.memo].filter(Boolean).join(' · ') }); });
+  (att.remoteEntries || []).forEach(r => { if(r && r.date && !r.deleted) add(r.date, 'item', { cls:'remote', label: r.bonus ? '특별재택' : r.half === 'am' ? '오전재택' : r.half === 'pm' ? '오후재택' : '재택', title: [r.bonus ? '특별재택' : r.half ? '반일재택' : '정기재택', (r.startTime || r.endTime) ? `${r.startTime || ''}~${r.endTime || ''}` : '', r.memo].filter(Boolean).join(' · ') }); });
   taxjCalMarks.cache = { at: full.at, map };
   return map;
 }
