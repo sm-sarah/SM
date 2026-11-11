@@ -1362,6 +1362,11 @@ function smTogglePcView(){ try{ localStorage.setItem('sm_pc_view', window.SM_PC_
   .cl-pop-range button:hover{ border-color:var(--primary); color:var(--primary-dark); }
   .rd-view.top{ margin-top:18px; }   /* 닫기(×)와 안 겹치게 */
   .cl-pop-row button.on{ border-color:var(--primary); color:var(--primary-dark); font-weight:800; }
+  /* [2026.11.11] 계산기 */
+  .calc-tb td, .calc-tb th{ text-align:center; white-space:nowrap; }
+  .calc-tb .calc-o{ text-align:right; font-variant-numeric:tabular-nums; padding-right:12px; }
+  .calc-tb .calc-k{ font-weight:800; color:var(--primary-dark); }
+  .calc-tb tfoot td{ border-top:2px solid var(--border); font-weight:700; }
   .ck-chips{ display:flex; flex-wrap:wrap; gap:4px; align-items:center; }
   .ck-chip{ display:inline-flex; align-items:center; height:20px; padding:0 8px; border-radius:999px; font-size:11.5px; font-weight:800; background:#EEF0F5; color:#4A4E63; white-space:nowrap; }
   .ck-chip[data-k="근로"], .ck-chip[data-k="근로연말"]{ background:#FCE1EA; color:#B4234A; }
@@ -1825,6 +1830,7 @@ function smTogglePcView(){ try{ localStorage.setItem('sm_pc_view', window.SM_PC_
     <div id="tab-indiv" class="tab"></div>
     <div id="tab-clients" class="tab"></div>
     <div id="tab-review" class="tab"></div>
+    <div id="tab-calc" class="tab"></div>
     <div id="tab-taxj" class="tab"></div>
     <div id="tab-settings" class="tab"></div>
   </main>
@@ -2402,10 +2408,15 @@ const ICONS = {
   inner: '<path d="M3 21h18"/><path d="M5 21V7l7-4 7 4v14"/><path d="M9 21v-5h6v5"/><path d="M9 10h.01M15 10h.01"/>',
   attend: '<circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2"/><path d="M9 2h6"/>',
   submit: '<path d="M22 2 11 13"/><path d="M22 2 15 22 11 13 2 9z"/>',
+  calc: '<rect x="5" y="2.5" width="14" height="19" rx="2.5"/><rect x="8" y="5.5" width="8" height="4" rx="1"/><path d="M8.5 13h.01M12 13h.01M15.5 13h.01M8.5 16.5h.01M12 16.5h.01M15.5 16.5h.01"/>',
   taxj: '<rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/><path d="M7 9.5h4M7 12.5h7"/>',
   settings: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>',
 };
 
+// [2026.11.11] 계산기(요청) - 하위메뉴 = 계산법. 새 계산법은 CALC_VIEWS에 [id, 이름]을 넣고 CALC_RENDER[id]에 화면을 만들면 됨(입력값은 이 기기에만 잠깐 보관, 시트에는 안 올림)
+const CALC_VIEWS = [['taxback', '세액역산']];
+const CALC_RENDER = {};
+let calcView = (() => { try{ const v = localStorage.getItem('sm_calc_view'); return CALC_VIEWS.some(x => x[0] === v) ? v : CALC_VIEWS[0][0]; }catch(e){ return CALC_VIEWS[0][0]; } })();
 const TABS = [
   {id:'home',     label:'홈'},
   // [2026.10.15] "To do 메뉴 삭제하고 내용을 홈으로"(요청) - To do 메뉴를 없애고 홈을 누르면 To do 화면(체크리스트·Today)이 나옴. 예전 홈(요약·달력)은 안 보임
@@ -2419,6 +2430,7 @@ const TABS = [
   // [2026.11.02] "원천세·부가세·결산·법인세·종소세·거래처를 works 메뉴로 통합 - 그 안에서 상단에 거래처·결산·원천세·부가세·법인세·종소세 + 각 하위메뉴"(요청)
   //   왼쪽 메뉴에는 works 하나만, 화면 위에 WORKS_TABS 탭과 하위메뉴(worksHeadHtml). 각 화면(tab-pay 등)은 그대로 씀
   {id:'works',    label:'works', c:2},
+  {id:'calc',     label:'계산기', c:5},   // [2026.11.11] "대메뉴 works 아래 계산기, 하위메뉴 세액역산 - 계산법은 생길 때마다 추가"(요청)
   {id:'taxj',     label:'Tax.J', c:3},
   {id:'settings', label:'설정', c:4},
 ];
@@ -2458,11 +2470,13 @@ const TAB_TITLES = {
   submit:['제출','회사웹 지급명세서 제출현황(매월·반기·연간)을 실시간으로 보고, 내 확인·메모를 더해요.'],
   clients:['거래처','모든 신고 탭이 참조하는 기준정보입니다.'],
   review:['검토표','Tax.J 원천세 검토표 계산식을 조회해요.'],
+  calc:['계산기',''],
   taxj:['Tax.J','회사웹(Tax.J) 데이터를 받아 내 데이터로 보관해요.'],
   settings:['설정',''],
 };
 
 const NAV_SUBMENUS = {
+  calc: CALC_VIEWS.map(([k, l]) => ({ js:`setCalcView('${k}')`, label:l })),   // [2026.11.11] 계산기 하위메뉴(CALC_VIEWS에 더하면 자동으로 생김)
   taxj: [
     {js:"setTaxjFullView('filing')", label:'신고 진행 현황'},
     {js:"setTaxjFullView('pay')",    label:'급여'},
@@ -2549,7 +2563,7 @@ function settingsApplyView(el){
 let activeTab = 'home';
 
 // [2026.10.22] "매뉴얼 하위메뉴 누르면 변화가 없어"(요청) - 지금 보고 있는 분야를 하위메뉴에서 표시(매뉴얼·서식·법령)
-function subCur(id){ try{ if(NAV_PARENT[activeTab] && NAV_PARENT[activeTab][0] === id) return NAV_PARENT[activeTab][1]; if(id === 'inner' && activeTab === 'inner') return (INNER_VIEWS.find(x => x[0] === innerView) || [])[1] || null; if(id === 'settings' && activeTab === 'settings') return ((NAV_SUBMENUS.settings || []).find(x => x.anchor === settingsView) || {}).label || null;   // [2026.11.03] 보고 있는 설정 하위메뉴 표시
+function subCur(id){ try{ if(NAV_PARENT[activeTab] && NAV_PARENT[activeTab][0] === id) return NAV_PARENT[activeTab][1]; if(id === 'inner' && activeTab === 'inner') return (INNER_VIEWS.find(x => x[0] === innerView) || [])[1] || null; if(id === 'calc' && activeTab === 'calc') return (CALC_VIEWS.find(x => x[0] === calcView) || [])[1] || null; if(id === 'settings' && activeTab === 'settings') return ((NAV_SUBMENUS.settings || []).find(x => x.anchor === settingsView) || {}).label || null;   // [2026.11.03] 보고 있는 설정 하위메뉴 표시
     return id === 'works' ? ((WORKS_TABS.find(x => x[0] === activeTab) || [])[1] || null) : id === 'manuals' ? (manualCat || '전체') : (id === 'forms' || id === 'laws') ? (LIB[id].sel || '전체') : null; }catch(e){ return null; } }
 function renderNav(){
   const sb = document.getElementById('sidebarNav');
@@ -2590,6 +2604,7 @@ function pageSubtitle(){
       case 'attend': return pick(ATTEND_VIEWS, attendView);
       case 'clients': return nav(clientsView);
       case 'taxj': return nav(taxjFullView);
+      case 'calc': return (CALC_VIEWS.find(x => x[0] === calcView) || [])[1] || '';
       case 'manuals': return manualCat || '전체';
       case 'forms': case 'laws': return LIB[activeTab].sel || '전체';
     }
@@ -5829,7 +5844,10 @@ function smcRd(v){
   return { r: '', m: t, d: '' };
 }
 const SMC_RD_QUICK = [['1분기','01-01','03-31'], ['2분기','04-01','06-30'], ['3분기','07-01','09-30'], ['4분기','10-01','12-31'], ['상반기','01-01','06-30'], ['하반기','07-01','12-31']];
-function smcRdName(r, y){ const q = SMC_RD_QUICK.find(([, a, b]) => r === `${y}-${a}~${y}-${b}`); return q ? q[0] : ''; }
+// [2026.11.11] 분기 여러 개(이어진 분기)도 이름 - 1~2분기 = 상반기, 3~4 = 하반기, 1~4 = 연간, 그 밖 'a~b분기'
+const SMC_Q = [['01-01','03-31'], ['04-01','06-30'], ['07-01','09-30'], ['10-01','12-31']];
+function smcRdQs(r, y){ const [a, b] = String(r || '').split('~'); const qa = SMC_Q.findIndex(q => a === `${y}-${q[0]}`), qb = SMC_Q.findIndex(q => b === `${y}-${q[1]}`); return qa >= 0 && qb >= qa ? [qa + 1, qb + 1] : null; }
+function smcRdName(r, y){ const q = smcRdQs(r, y); if(!q) return ''; const [a, b] = q; return a === b ? `${a}분기` : a === 1 && b === 2 ? '상반기' : a === 3 && b === 4 ? '하반기' : a === 1 && b === 4 ? '연간' : `${a}~${b}분기`; }
 function smcAttr(s, k, c){ return `data-s="${escapeAttr(s)}" data-k="${escapeAttr(String(k))}" data-c="${escapeAttr(c)}"`; }
 function smcTd(s, k, col, val, tdCls){
   const S = SMC[s], t = col.type, at = smcAttr(s, k, col.id), y = S.year(), td = `<td style="text-align:center;"${tdCls ? ` class="${tdCls}"` : ''}>`;
@@ -5870,7 +5888,7 @@ function smcRdPop(btn){
   const edit = () => {
     const o = smcRd(S.get(k, c)), [a0, b0] = o.r ? o.r.split('~') : ['', ''], has = !!(o.r || o.m || o.d);
     pop.innerHTML = `${closePopX()}${hist()}<div class="rd-lab">기간</div>
-      <div class="cl-pop-row">${SMC_RD_QUICK.map(([n, a, b]) => `<button type="button" data-q="${a}~${b}"${o.r === `${y}-${a}~${y}-${b}` ? ' class="on"' : ''}>${n}</button>`).join('')}</div>
+      <div class="cl-pop-row">${['1분기','2분기','3분기','4분기'].map((n, i) => `<button type="button" data-qn="${i + 1}">${n}</button>`).join('')}<button type="button" data-qh="1,2">상반기</button><button type="button" data-qh="3,4">하반기</button></div>
       <div class="cl-pop-range"><input type="date" class="cl-r-a" value="${smcIso(a0) ? a0 : ''}" title="시작일"><span>~</span><input type="date" class="cl-r-b" value="${smcIso(b0) ? b0 : ''}" title="끝 날짜"></div>
       <input type="text" class="cl-pop-text rd-m" placeholder="메모 (예: 예정, 불공정리만)" value="${escapeAttr(o.m)}">
       <div class="rd-lab">처리날짜</div>
@@ -5878,7 +5896,14 @@ function smcRdPop(btn){
       <div class="cl-pop-row" style="justify-content:space-between;"><button type="button" data-a="${has ? 'back' : 'close'}">${has ? '취소' : '닫기'}</button><button type="button" data-a="ok" style="font-weight:800; color:var(--primary-dark);">저장</button></div>`;
     closePopWire(pop);
     const ia = pop.querySelector('.cl-r-a'), ib = pop.querySelector('.cl-r-b'), im = pop.querySelector('.rd-m'), id = pop.querySelector('.rd-d');
-    pop.querySelectorAll('[data-q]').forEach(b => b.onclick = () => { const [a, z] = b.dataset.q.split('~'); ia.value = `${y}-${a}`; ib.value = `${y}-${z}`; pop.querySelectorAll('[data-q]').forEach(x => x.classList.toggle('on', x === b)); });
+    // [2026.11.11] "분기를 여러 개 고르면 날짜를 이어서"(요청) - 분기 버튼은 켜고 끄기, 고른 분기의 처음~끝으로 날짜를 채움(1·2분기 = 1/1~6/30). 상·하반기는 그 두 분기로 바꿈
+    let qs = new Set((() => { const q = smcRdQs(o.r, y); return q ? Array.from({ length: q[1] - q[0] + 1 }, (_, i) => q[0] + i) : []; })());
+    const qPaint = () => { pop.querySelectorAll('[data-qn]').forEach(b => b.classList.toggle('on', qs.has(+b.dataset.qn))); pop.querySelectorAll('[data-qh]').forEach(b => { const h = b.dataset.qh.split(',').map(Number); b.classList.toggle('on', qs.size === 2 && h.every(x => qs.has(x))); }); };
+    const qApply = () => { qPaint(); if(!qs.size) return; const L = [...qs].sort((a, b) => a - b); ia.value = `${y}-${SMC_Q[L[0] - 1][0]}`; ib.value = `${y}-${SMC_Q[L[L.length - 1] - 1][1]}`; };
+    pop.querySelectorAll('[data-qn]').forEach(b => b.onclick = () => { const n = +b.dataset.qn; if(qs.has(n)) qs.delete(n); else qs.add(n); qApply(); });
+    pop.querySelectorAll('[data-qh]').forEach(b => b.onclick = () => { const h = b.dataset.qh.split(',').map(Number); qs = b.classList.contains('on') ? new Set() : new Set(h); qApply(); });
+    [ia, ib].forEach(i => i.addEventListener('change', () => { const q = smcRdQs(`${ia.value}~${ib.value}`, y); qs = new Set(q ? Array.from({ length: q[1] - q[0] + 1 }, (_, j) => q[0] + j) : []); qPaint(); }));   // 날짜를 직접 고치면 맞는 분기만 켜짐
+    qPaint();
     pop.querySelector('[data-a=today]').onclick = () => { id.value = todayStr(); };
     pop.querySelector('[data-a=back], [data-a=close]').onclick = e => { e.stopPropagation(); if(has) view(); else closeDatePopClose(); };
     const save = () => {
@@ -10698,6 +10723,62 @@ function taxjCalItemsHtml(mk){
 }
 
 // ── [2026.10.08] 검토표 메뉴(요청: "검토표는 따로 메뉴 만들어서 거기서 조회") - 설정에 있던 'Tax.J 검토표 계산식'을 옮겨옴. 메뉴를 열면 자동으로 불러옴 ──
+function setCalcView(v){ calcView = v; try{ localStorage.setItem('sm_calc_view', v); }catch(e){} if(activeTab !== 'calc') switchTab('calc'); else { renderNav(); renderCalc(true); } }
+function renderCalc(force){
+  const el = document.getElementById('tab-calc'); if(!el) return;
+  if(!force && el._v === calcView) return;   // 입력 중인 값이 다시 그리기로 지워지지 않게(바꿀 때만 다시 그림)
+  el._v = calcView;
+  (CALC_RENDER[calcView] || (() => { el.innerHTML = ''; }))(el);
+}
+const calcNum = t => { const s = String(t == null ? '' : t).replace(/[^\d\-]/g, ''); return s === '' || s === '-' ? null : Number(s); };
+const calcWon = n => n == null || isNaN(n) ? '' : Number(n).toLocaleString('ko-KR');
+// ── 세액역산: 세액만 나온 자료(현금영수증 매출내역누계 등)에서 과세분 공급가액·공급대가를 거꾸로 계산
+//   세액 = 공급대가 × 10/110(원 미만 절사) → 공급대가 = 세액 × 11, 공급가액 = 세액 × 10 (절사 때문에 실제는 각각 0~10원 더 클 수 있음)
+//   총금액을 넣으면 '나머지 = 총금액 − 공급대가'(면세·영세 등 세액 없는 금액)도 계산
+let calcTbRows = (() => { try{ const v = JSON.parse(localStorage.getItem('sm_calc_taxback') || 'null'); if(Array.isArray(v) && v.length) return v; }catch(e){} return [{ l:'', t:'', x:'' }]; })();
+function calcTbSave(){ try{ localStorage.setItem('sm_calc_taxback', JSON.stringify(calcTbRows)); }catch(e){} }
+function calcTbRowHtml(r, i){
+  const x = calcNum(r.x), t = calcNum(r.t), sup = x == null ? null : x * 10, tot = x == null ? null : x * 11, rest = t == null || tot == null ? null : t - tot;
+  return `<tr data-i="${i}">
+    <td><input class="vp-in calc-in" data-f="l" value="${escapeAttr(r.l || '')}" placeholder="예: 2026-08" style="width:96px;"></td>
+    <td><input class="vp-in calc-in" data-f="t" value="${escapeAttr(r.t || '')}" placeholder="선택" inputmode="numeric" style="width:120px; text-align:right;"></td>
+    <td><input class="vp-in calc-in" data-f="x" value="${escapeAttr(r.x || '')}" placeholder="세액" inputmode="numeric" style="width:110px; text-align:right;"></td>
+    <td class="calc-o" data-o="sup">${calcWon(sup)}</td><td class="calc-o calc-k" data-o="tot">${calcWon(tot)}</td><td class="calc-o" data-o="rest">${calcWon(rest)}</td>
+    <td><button type="button" class="cl-memo-act calc-del" data-del="${i}" title="이 줄 지우기" aria-label="지우기" style="opacity:1;">✕</button></td></tr>`;
+}
+function calcTbSum(el){
+  let x = 0, t = 0, rest = 0, hasT = false, any = false, hasR = false;
+  calcTbRows.forEach(r => { const a = calcNum(r.x), b = calcNum(r.t); if(a != null){ x += a; any = true; } if(b != null){ t += b; hasT = true; } if(a != null && b != null){ rest += b - a * 11; hasR = true; } });   // 나머지 합계 = 두 칸 다 넣은 줄만
+  const f = el.querySelector('.calc-sum'); if(!f) return;
+  f.innerHTML = any || hasT ? `<td><b>합계</b></td><td class="calc-o">${hasT ? calcWon(t) : ''}</td><td class="calc-o"><b>${calcWon(x)}</b></td><td class="calc-o">${calcWon(x * 10)}</td><td class="calc-o calc-k">${calcWon(x * 11)}</td><td class="calc-o">${hasR ? calcWon(rest) : ''}</td><td></td>` : '';
+}
+CALC_RENDER.taxback = el => {
+  el.innerHTML = `<div class="card">
+      <h3 style="margin:0 0 4px;">세액역산</h3>
+      <div class="hint">세액만 있을 때 과세분 <b>공급가액 = 세액 × 10</b>, <b>공급대가(공급가액 + 세액) = 세액 × 11</b>로 거꾸로 계산해요. 총금액을 넣으면 세액 없는 금액(면세 등)도 나와요.<br>세액은 원 미만을 버린 값이라 실제 공급가액·공급대가는 0~10원 더 클 수 있어요. 세액 칸에 여러 줄을 붙여넣으면 줄마다 나눠 들어가요.</div>
+      <div class="table-scroll vat-prog" style="margin-top:10px; min-height:0; height:auto;"><table class="calc-tb"><thead><tr><th>구분</th><th>총금액</th><th>세액</th><th>공급가액</th><th>공급대가</th><th>나머지(총금액−공급대가)</th><th></th></tr></thead>
+        <tbody>${calcTbRows.map(calcTbRowHtml).join('')}</tbody><tfoot><tr class="calc-sum"></tr></tfoot></table></div>
+      <div style="display:flex; gap:6px; margin-top:8px;"><button type="button" class="btn xs" data-a="add">+ 줄 추가</button><button type="button" class="btn xs ghost" data-a="clear">모두 비우기</button></div>
+    </div>`;
+  const tb = el.querySelector('tbody');
+  const redrawRow = i => { const tr = tb.querySelector(`tr[data-i="${i}"]`); if(!tr) return; const tmp = document.createElement('tbody'); tmp.innerHTML = calcTbRowHtml(calcTbRows[i], i); const nr = tmp.firstElementChild; ['sup','tot','rest'].forEach(o => { tr.querySelector(`[data-o="${o}"]`).innerHTML = nr.querySelector(`[data-o="${o}"]`).innerHTML; }); };
+  tb.addEventListener('input', e => {
+    const inp = e.target.closest('.calc-in'); if(!inp) return; const i = +inp.closest('tr').dataset.i, f = inp.dataset.f;
+    calcTbRows[i][f] = inp.value; redrawRow(i); calcTbSum(el); calcTbSave();
+  });
+  tb.addEventListener('change', e => { const inp = e.target.closest('.calc-in'); if(!inp || inp.dataset.f === 'l') return; const n = calcNum(inp.value); inp.value = n == null ? inp.value.trim() : calcWon(n); calcTbRows[+inp.closest('tr').dataset.i][inp.dataset.f] = inp.value; calcTbSave(); });
+  tb.addEventListener('paste', e => {
+    const inp = e.target.closest('.calc-in'); if(!inp || inp.dataset.f === 'l') return;
+    const L = (e.clipboardData.getData('text') || '').split(/\r?\n/).map(x => x.trim()).filter(Boolean); if(L.length < 2) return;
+    e.preventDefault(); const i0 = +inp.closest('tr').dataset.i, f = inp.dataset.f;
+    L.forEach((v, j) => { const r = calcTbRows[i0 + j] = calcTbRows[i0 + j] || { l:'', t:'', x:'' }; const n = calcNum(v); r[f] = n == null ? v : calcWon(n); });
+    calcTbSave(); renderCalc(true);
+  });
+  tb.addEventListener('click', e => { const b = e.target.closest('[data-del]'); if(!b) return; calcTbRows.splice(+b.dataset.del, 1); if(!calcTbRows.length) calcTbRows.push({ l:'', t:'', x:'' }); calcTbSave(); renderCalc(true); });
+  el.querySelector('[data-a=add]').onclick = () => { calcTbRows.push({ l:'', t:'', x:'' }); calcTbSave(); renderCalc(true); const ins = el.querySelectorAll('tbody tr:last-child .calc-in'); if(ins[0]) ins[0].focus(); };
+  el.querySelector('[data-a=clear]').onclick = async () => { if(!(await smConfirm('입력한 줄을 모두 비울까요?', '', { okText:'비우기' }))) return; calcTbRows = [{ l:'', t:'', x:'' }]; calcTbSave(); renderCalc(true); };
+  calcTbSum(el);
+};
 function renderReview(){
   const el = document.getElementById('tab-review');
   if(!el) return;
@@ -12395,6 +12476,7 @@ function renderAllNoSave(){
   try{ ensurePayMonths(); ensureTaxRows(); generateRecurringTasks(); }catch(e){ console.warn(e); }
   renderHome(); renderWorklist(); renderAccounts(); renderLinks(); renderManuals(); renderLib('forms'); renderLib('laws'); renderVat(); renderClose(); renderPay(); renderCorp(); renderIndiv(); renderClients(); renderSettings();
   if(activeTab === 'review') renderReview();
+  if(activeTab === 'calc') renderCalc();
   if(activeTab === 'taxj') renderTaxjFull();
   if(activeTab === 'attend') renderAttend();
   if(activeTab === 'inner') renderInner();
