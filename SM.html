@@ -7022,6 +7022,7 @@ function collectGoogleSnapshot(){
 }
 
 let needsResaveAfterLoad = false;
+let smSheetExtra = {}, smLoadBroken = '', smDropOk = null, smDropAsking = false;   // [2026.11.11] 데이터 안전: 모르는 칸 보관 · 시트 읽기 실패 · 급감 확인 통과한 내용
 let sheetLoadedOnce = false;
 async function loadFromGoogleSheet(guard){
   const res = await gapi.client.sheets.spreadsheets.values.get({
@@ -7043,6 +7044,10 @@ async function loadFromGoogleSheet(guard){
   Object.keys(parts).forEach(k => { if(map[k] != null) map[k] += parts[k].slice(2).join(''); });
   if(!Object.keys(map).length) return;
   lastSyncedVersion = map.__version || null;
+  // [2026.11.11] 데이터 안전(요청) - 이 화면이 모르는 칸(새 버전에서 생긴 데이터 등)은 그대로 기억해 두었다가 저장할 때 같이 다시 씀(옛 탭이 새 데이터를 지우지 않게)
+  smSheetExtra = {};
+  Object.keys(map).forEach(k => { if(k !== '__version' && !GOOGLE_DATA_KEYS.includes(k)) smSheetExtra[k] = map[k]; });
+  smLoadBroken = '';
 
   // 보호장치: 시트의 할 일이 비어 있는데(예전 저장 실패 등) 이 파일에 할 일이 들어 있으면 지우지 않고 유지 후 다시 저장
   try {
@@ -7111,6 +7116,8 @@ async function loadFromGoogleSheet(guard){
     if(map.manualCats)    try{ renderNav(); }catch(e){}   // 매뉴얼 분야 하위메뉴 갱신
   } catch(e){
     console.error('시트 데이터 파싱 실패', e);
+    // [2026.11.11] 데이터 안전 - 시트를 끝까지 못 읽었으면 이 화면 내용으로 시트를 덮지 않게 저장을 멈춤(못 읽은 칸이 빈 값으로 덮일 수 있어서)
+    smLoadBroken = String(e && e.message || e);
   }
   // 불러온 그대로의 상태를 기억 → 아무것도 안 바꿨으면 저장하지 않음(다른 창 덮어쓰기 방지)
   lastSyncedContent = needsResaveAfterLoad ? null : JSON.stringify(collectGoogleSnapshot());
@@ -7296,12 +7303,31 @@ async function saveToGoogleSheet(){
   }
   const snap = collectGoogleSnapshot();
   const snapStr = JSON.stringify(snap);
+  if(smLoadBroken){ savingNow = false; vpSaveSet('local'); setSyncStatus('⚠ 시트를 끝까지 읽지 못해 저장을 멈췄어요 - 새로고침해 주세요 (입력한 내용은 이 기기에 보관 중)'); return; }   // [2026.11.11]
+  if(smDropAsking){ savingNow = false; return; }   // 확인창이 떠 있는 동안은 저장 안 함
+  if(snapStr !== lastSyncedContent && smDropOk !== lastSyncedContent){   // [2026.11.11] 급감 차단 확인창(회사웹과 같은 안전장치)
+    const drop = smSnapDrop(lastSyncedContent, snap);
+    if(drop.length){
+      savingNow = false; smDropAsking = true;
+      const ok = await smConfirm('저장된 내용보다 많이 줄었어요', `${drop.join('\n')}\n\n일부러 지운 게 맞으면 '저장', 아니면 '저장 안 함'을 눌러 주세요. 저장 안 하면 시트 내용을 다시 불러와요(이 기기 내용은 백업에 남김).`, { tone:'danger', icon:'!', okText:'저장', cancelText:'저장 안 함' });
+      smDropAsking = false;
+      if(ok){ smDropOk = lastSyncedContent; scheduleGoogleSave(); return; }   // 이번 저장본 기준으로는 다시 묻지 않음
+      try{ localStorage.setItem('sm_drop_kept', JSON.stringify({ at: Date.now(), snap: snapStr })); }catch(e){}
+      setSyncStatus('저장 안 함 · 시트 내용을 다시 불러오는 중...');
+      try{ await loadFromGoogleSheet(); clearPendingChanges(); renderAllNoSave(); setSyncStatus('시트 내용을 다시 불러왔어요'); }catch(e){ setSyncStatus('다시 불러오기 실패 - 새로고침해 주세요'); }
+      return;
+    }
+  }
   if(snapStr === lastSyncedContent){ savingNow = false; if(vpSaveState.st === 'pending' || vpSaveState.st === 'saving') vpSaveSet('saved'); return; }   // 바뀐 게 없으면 저장 안 함
   const CHUNK = 45000;
   const rows = [];
   GOOGLE_DATA_KEYS.forEach(k => {
     const str = JSON.stringify(snap[k]);
     rows.push([k, str.slice(0, CHUNK)]);
+    for(let i = CHUNK, n = 2; i < str.length; i += CHUNK, n++) rows.push([`${k}__${n}`, str.slice(i, i + CHUNK)]);
+  });
+  Object.entries(smSheetExtra || {}).forEach(([k, str]) => {   // [2026.11.11] 이 화면이 모르는 칸도 그대로 다시 씀(긴 값은 같은 방식으로 나눠서)
+    str = String(str); rows.push([k, str.slice(0, CHUNK)]);
     for(let i = CHUNK, n = 2; i < str.length; i += CHUNK, n++) rows.push([`${k}__${n}`, str.slice(i, i + CHUNK)]);
   });
   const newVersion = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -7393,13 +7419,30 @@ function smMergeSnap(b, l, r){
   });
   return out;
 }
+// [2026.11.11] 데이터 안전(요청) - 예전엔 다시 연결됐을 때 그사이 다른 기기 저장이 있으면 이 기기 입력을 버렸음.
+//   이제 바뀐 칸만 '바꾸기 전(b)'·'이 기기(l)'를 같이 보관해 두고, 다시 연결되면 시트 최신본과 세 갈래로 합침(저장 공간도 바뀐 칸만큼만 씀)
+let smBaseParsed = { str: null, obj: null };
+function smBaseObj(){ if(smBaseParsed.str !== lastSyncedContent){ let o = null; try{ o = JSON.parse(lastSyncedContent); }catch(e){} smBaseParsed = { str: lastSyncedContent, obj: o }; } return smBaseParsed.obj; }
 function recordPendingChanges(){
   if(!sheetLoadedOnce || lastSyncedContent == null) return;
-  const snapStr = JSON.stringify(collectGoogleSnapshot());
+  const snap = collectGoogleSnapshot(), snapStr = JSON.stringify(snap);
   try{
-    if(snapStr === lastSyncedContent) localStorage.removeItem(PENDING_KEY);
-    else localStorage.setItem(PENDING_KEY, JSON.stringify({ base: lastSyncedVersion, at: Date.now(), snap: snapStr }));
-  }catch(e){}
+    if(snapStr === lastSyncedContent){ localStorage.removeItem(PENDING_KEY); return; }
+    const base = smBaseObj() || {}, keys = {};
+    GOOGLE_DATA_KEYS.forEach(k => { const l = JSON.stringify(snap[k]), b = JSON.stringify(base[k]); if(l !== b) keys[k] = { b: b === undefined ? null : b, l }; });
+    localStorage.setItem(PENDING_KEY, JSON.stringify({ v: 2, base: lastSyncedVersion, at: Date.now(), keys }));
+  }catch(e){ console.warn('저장 안 된 변경 보관 실패(저장 공간)', e); }
+}
+// [2026.11.11] 급감 확인 - 시트에 저장된 것과 비교해 목록·묶음 개수가 절반 아래로(5개 이상이던 것) 줄었거나, 전체 크기가 40% 넘게 줄면 알려 줌
+function smSnapDrop(baseStr, snap){
+  if(!baseStr) return [];
+  let base; try{ base = JSON.parse(baseStr); }catch(e){ return []; }
+  const cnt = v => Array.isArray(v) ? v.length : v && typeof v === 'object' ? Object.keys(v).length : 0;
+  const out = [];
+  GOOGLE_DATA_KEYS.forEach(k => { const a = cnt(base[k]), b = cnt(snap[k]); if(a >= 5 && b < a / 2) out.push(`· ${k}: ${a}개 → ${b}개`); });
+  const sa = baseStr.length, sb = JSON.stringify(snap).length;
+  if(sa > 20000 && sb < sa * 0.6) out.push(`· 전체 크기: ${Math.round(sa / 1024)}KB → ${Math.round(sb / 1024)}KB`);
+  return out;
 }
 function clearPendingChanges(){ try{ localStorage.removeItem(PENDING_KEY); }catch(e){} }
 function hasUnsavedChanges(){
@@ -7465,6 +7508,17 @@ function applySnapshot(o){
 function resolvePendingAfterLoad(){
   let pending = null;
   try{ pending = JSON.parse(localStorage.getItem(PENDING_KEY) || 'null'); }catch(e){}
+  if(pending && pending.v === 2 && pending.keys){   // [2026.11.11] 바뀐 칸만 보관한 새 형식 - 시트 최신본과 합침(같은 기준이면 이 기기 것 그대로)
+    clearPendingChanges();
+    const ks = Object.keys(pending.keys); if(!ks.length) return;
+    const remote = JSON.parse(JSON.stringify(collectGoogleSnapshot())), same = (pending.base || null) === (lastSyncedVersion || null), out = {};
+    ks.forEach(k => { let b = null, l; try{ b = pending.keys[k].b == null ? undefined : JSON.parse(pending.keys[k].b); l = JSON.parse(pending.keys[k].l); }catch(e){ return; } out[k] = same ? l : smMerge3(b, l, remote[k], 0); });
+    applySnapshot(Object.assign(remote, out));
+    renderAllNoSave();
+    scheduleGoogleSave();
+    setSyncStatus(same ? '저장 안 됐던 변경을 이어서 저장하는 중...' : '저장 안 됐던 변경을 다른 기기 저장본과 합쳐서 저장하는 중...');
+    return;
+  }
   if(!pending || !pending.snap) return;
   clearPendingChanges();
   if(pending.snap === lastSyncedContent) return;             // 이미 반영돼 있음
