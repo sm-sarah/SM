@@ -1362,6 +1362,13 @@ function smTogglePcView(){ try{ localStorage.setItem('sm_pc_view', window.SM_PC_
   /* [2026.11.11] 결산 급여종류 팝업 - 회사웹 검토표 급여종류 칩과 같은 색(요청) */
   /* [2026.11.11] 기간+처리날짜 칸·창 */
   .cl-pop-range input[type=month]{ flex:1; min-width:0; }
+  .cl-bulk{ text-align:left; }
+  .cl-bulk-all{ display:flex; gap:6px; align-items:center; font-size:12.5px; font-weight:700; margin-bottom:6px; }
+  .cl-bulk-list{ display:grid; grid-template-columns:repeat(auto-fill, minmax(190px, 1fr)); gap:4px; max-height:38vh; overflow:auto; padding:2px; }
+  .cl-bulk-it{ display:flex; gap:6px; align-items:center; font-size:12.5px; border:1px solid var(--border); border-radius:8px; padding:5px 8px; cursor:pointer; }
+  .cl-bulk-it:has(input:checked){ border-color:var(--primary); background:var(--primary-soft); }
+  .cl-bulk-it span{ flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:700; }
+  .cl-bulk-it i{ font-style:normal; font-size:11px; color:var(--muted); white-space:nowrap; }
   .rd-dd{ margin-left:4px; font-size:11px; font-weight:800; color:#059669; }
   .rd-lab{ font-size:11.5px; font-weight:800; color:var(--muted); margin-bottom:-4px; }
   .rd-view{ display:flex; flex-direction:column; gap:4px; background:var(--primary-soft); border-radius:10px; padding:8px 10px; }
@@ -5884,6 +5891,39 @@ async function closeEditCol(id){
   }
   renderClose(); scheduleGoogleSave();
 }
+// [2026.11.11] "항목 여러 개 체크해서 입력 방식·이어받기·칸 표시 일괄 적용"(요청) - 결산 지금 회차 항목을 골라 입력 방식·다음 해 이어받기·칸 표시를 한 번에(값은 항목 하나 고칠 때처럼 새 입력 방식으로 바꿔 줌, 이 회차만)
+const ICON_COLS_BULK = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="7" height="16" rx="1.5"/><rect x="14" y="4" width="7" height="16" rx="1.5"/><path d="M5 9l1.5 1.5L9 8M16 9l1.5 1.5L20 8"/></svg>';
+function closeColConvert(col, to){
+  const id = col.id; if(to === col.type) return;
+  Object.entries(closeData).filter(([k]) => k === closeKey()).forEach(([k, d]) => Object.values(d.v || {}).forEach(v => {
+    if(!(id in v)) return; const nv = closeConvertVal(v[id], col.type, to, k.split('-')[0]);
+    if(nv === '' || nv == null || nv === false) delete v[id]; else v[id] = nv;
+  }));
+  Object.values((closeData[closeKey()] || {}).rh || {}).forEach(L => L.forEach(x => { const v = x.v || {}; if(!(id in v)) return; const nv = closeConvertVal(v[id], col.type, to, closeYear); if(nv === '' || nv == null || nv === false) delete v[id]; else v[id] = nv; }));
+  col.type = to;
+}
+async function closeBulkCols(){
+  if(!closeCols.length) return smAlert('항목이 없어요', '먼저 항목을 추가해 주세요.');
+  window._clBulkSel = new Set();
+  const KEEP = '(그대로)', lab = t => (CLOSE_TYPES.find(x => x[0] === t) || [, t])[1];
+  const html = `<div class="cl-bulk"><label class="cl-bulk-all"><input type="checkbox" onchange="document.querySelectorAll('.cl-bulk-it input').forEach(c => { c.checked = this.checked; c.onchange(); })"> 모두 고르기</label>
+    <div class="cl-bulk-list">${closeCols.map(c => `<label class="cl-bulk-it"><input type="checkbox" onchange="window._clBulkSel[this.checked ? 'add' : 'delete']('${escapeAttr(c.id)}')"><span>${taxjEsc(String(c.label).replace(/\n/g, ' '))}</span><i>${taxjEsc(lab(c.type))}${smcIsIcon(c) && !SM_VIEW_NO_ICON.includes(lab(c.type)) ? ' · 아이콘' : ''}${c.carry ? ' · ↻' : ''}</i></label>`).join('')}</div></div>`;
+  const r = await smForm('항목 일괄 변경', [{ label:'입력 방식', options: [KEEP].concat(CLOSE_TYPES.map(x => x[1])), value: KEEP }, { label:'다음 해 결산으로 이어받기', options: [KEEP, '예', '아니오'], value: KEEP }, { label:'칸 표시 (체크는 그대로)', options: [KEEP].concat(SM_VIEW_OPTS), value: KEEP }], { okText:'적용', html, icon:'✎', wide:true });
+  if(!r) return;
+  const sel = closeCols.filter(c => window._clBulkSel.has(c.id));
+  if(!sel.length) return smAlert('고른 항목이 없어요', '바꿀 항목을 체크해 주세요.');
+  if(r[0] === KEEP && r[1] === KEEP && r[2] === KEEP) return;
+  const to = r[0] === KEEP ? null : (CLOSE_TYPES.find(x => x[1] === r[0]) || CLOSE_TYPES[0])[0];
+  if(to && sel.some(c => c.type !== to && Object.values(((closeData[closeKey()] || {}).v) || {}).some(v => v && c.id in v)) && !(await smConfirm(`${sel.length}개 항목을 '${r[0]}'(으)로 바꿀까요?`, '이 회차에 적힌 값도 새 입력 방식으로 바꿔요. 맞지 않는 값은 글자로 남거나 비워질 수 있어요.', { okText:'바꾸기', icon:'!' }))) return;
+  let opts = null;
+  for(const c of sel){
+    if(to){ closeColConvert(c, to); if(to === 'select'){ if(!opts){ await vatProgEditOpts(c); opts = c.opts || []; } else c.opts = opts.slice(); } }
+    if(r[1] !== KEEP) c.carry = r[1] === '예';   // 다음 해 결산으로 이어받기
+    if(r[2] !== KEEP) c.view = SM_VIEW_NO_ICON.includes(lab(c.type)) ? 'text' : smViewOf(r[2]);
+  }
+  renderClose(); scheduleGoogleSave();
+  smToast(`${sel.length}개 항목을 바꿨어요`, 2000);
+}
 function closeNumInput(el, cid, colId){ const t = el.value.replace(/,/g, '').trim(); const v = /^-?\d+(\.\d+)?$/.test(t) ? Number(t) : el.value.trim(); el.value = typeof v === 'number' ? v.toLocaleString('ko-KR') : v; closeSetVal(cid, colId, v); }
 // [2026.11.11] "개인웹도 아이콘 위에 뜨는 팝업을 귀여운 모드로"(요청) - title이 달린 요소에 마우스를 올리면 브라우저 기본 글상자 대신 분홍 말풍선.
 //   보이는 동안만 title을 data-sm-title로 옮겨 두고(기본 글상자가 겹쳐 뜨지 않게) 마우스가 나가면 되돌림. 휴대폰(마우스 없음)은 그대로
@@ -6483,6 +6523,7 @@ function renderClose(){
       ${d ? '' : `<button class="btn primary xs" onclick="closeNewRound()">+ ${closeYear}년 결산 만들기</button>`}
       ${d ? `<button class="sm-tool-ic" onclick="closeBulk()" title="날짜 일괄 입력 - 왼쪽 체크박스로 고른 거래처(없으면 보이는 전체)에 오늘 또는 고른 날짜를 넣어요" aria-label="날짜 일괄 입력">${ICON_BULK}</button>` : ''}
       <button class="sm-tool-ic" onclick="closeAddCol()" title="항목 추가" aria-label="항목 추가">${ICON_PLUS}</button>
+      <button class="sm-tool-ic" onclick="closeBulkCols()" title="항목 일괄 변경 - 여러 항목을 골라 입력 방식·칸 표시를 한 번에 바꿔요" aria-label="항목 일괄 변경">${ICON_COLS_BULK}</button>
       <button class="sm-tool-ic" onclick="document.getElementById('closeXlsx').click()" title="엑셀 올리기 - 1행 = 항목 이름인 결산 엑셀을 이 연도 결산에 넣어요(값은 칸마다 새 기록으로 쌓임)" aria-label="엑셀 올리기">${UPLOAD_XLSX_SVG}</button><!-- [2026.11.02] 글자 → 아이콘(요청) --><input type="file" id="closeXlsx" accept=".xlsx,.xls" style="display:none;" onchange="closeImport(this)">
     </div>
     ${d ? closeTableHtml(docs) : `<div class="empty">${closeYear}년 결산이 아직 없어요.<br>'+ ${closeYear}년 결산 만들기'를 누르면 지금 수임 중인 거래처로 만들어요. 엑셀이 있으면 '엑셀 올리기'로 바로 넣어도 돼요.</div>`}
