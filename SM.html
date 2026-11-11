@@ -4207,12 +4207,13 @@ function vatTMemoText(docs, cid, year, period, comb){
   return [a ? `【예정】\n${a}` : '', b ? `【확정】\n${b}` : ''].filter(Boolean).join('\n');
 }
 function vatTDueShort(v){ const m = String(v || '').match(/^(\d{4})\D(\d{1,2})\D(\d{1,2})/); return m ? `${m[1].slice(2)}.${m[2].padStart(2,'0')}.${m[3].padStart(2,'0')}` : String(v || ''); }
-function vatTMemo(name, label, memo){ smAlert(`${name} · ${label}`, memo || '없어요', { icon:'i', html: smMemoBlocksHtml(memo) }); }   // [2026.11.05] 건마다 줄바꿈·구분(요청)
+function vatTMemo(name, label, memo, files){ smAlert(`${name} · ${label}`, memo || '없어요', { icon:'i', html: smMemoBlocksHtml(memo) + taxjMemoFilesHtml(files) }); }
+function vatTMemoFiles(docs, cid, year, period, comb){ const f = pd => (vatTFiling(docs, cid, year, pd) || {}).memoFiles || []; return comb ? f(period.replace(/확정$/, '예정')).concat(f(period)) : f(period); }   // [2026.11.11] 회사웹 부가세 메모 첨부   // [2026.11.05] 건마다 줄바꿈·구분(요청)
 function vatTShowMemo(cid){
   const docs = taxjFull && taxjFull.docs; if(!docs) return;
   const c = taxjClientIndex(docs).byId[cid] || {};
   const pd = vatTPeriod(), comb = vatTComb(docs, cid, vatYear, pd, c.entityType);
-  vatTMemo(c.name || '', `${vatYear}년 ${comb ? pd.slice(0, 2) + ' (예정+확정)' : VAT_T_LABEL[pd]} 메모`, vatTMemoText(docs, cid, vatYear, pd, comb));
+  vatTMemo(c.name || '', `${vatYear}년 ${comb ? pd.slice(0, 2) + ' (예정+확정)' : VAT_T_LABEL[pd]} 메모`, vatTMemoText(docs, cid, vatYear, pd, comb), vatTMemoFiles(docs, cid, vatYear, pd, comb));
 }
 // Tip = Tax.J vatHelpObj·vatHelpTipRows(차량·직원(기수마다)·신고유형·메모)
 function vatTHelp(docs, cid){ const v = ((docs.s__vatFilingTargets || {})[cid] || {}).__help; return !v ? {} : typeof v === 'string' ? { memo: v } : v; }
@@ -5303,6 +5304,7 @@ function closePayKindsTd(cid, name){
 const CLOSE_QUICK = ['x', '-', '미해당'];
 const CLOSE_ISO_RE = /^\d{4}-\d{2}-\d{2}$/;
 // [2026.11.03] 회사웹 결산 메모 - 회사웹 결산 화면과 같게 1차 메모(+ 다르면 ' / ' 2차 메모), 보고 있는 결산 연도 기준
+function closeCoMemoFiles(cid){ const fs = (taxjFull && taxjDoc('filingStatus')) || {}, y = String(closeYear || ''); return ((((fs['결산1차'] || {})[y]) || {})[cid] || {}).memoFiles || []; }   // [2026.11.11] 회사웹 결산 메모 첨부(1차 자리)
 function closeCoMemo(cid){
   const fs = (taxjFull && taxjDoc('filingStatus')) || {}, y = String(closeYear || '');
   const m1 = ((((fs['결산1차'] || {})[y]) || {})[cid] || {}).memo || '', m2 = ((((fs['결산2차'] || {})[y]) || {})[cid] || {}).memo || '';
@@ -6177,7 +6179,7 @@ function closeTableHtml(docs){
     }).join('');
     return `<tr${x.gone ? ' class="cl-gone"' : ''}><td class="tx-seq"><input type="checkbox" class="cl-pick" data-cid="${cid}" ${closePicked.has(x.id) ? 'checked' : ''} onchange="closePick(this.dataset.cid, this.checked)"></td><td class="tx-seq cl-lk cl-num">${n + 1}</td>
       <td class="vp-sticky cl-lk" style="${smEntCss(x.c.entityType)}">${taxjEsc(x.c.name || '')}${x.gone ? ' <span class="cl-gone-tag">해지</span>' : ''}${closeRowBadge(x.id)}</td>
-      ${x.c.entityType === '개인' ? `<td class="cl-lk cl-num cl-off">${t(x.c.corpRegNo)}</td>` : lk(x.c.corpRegNo)}${lk(innerBizNo(x.c.bizNo || ''))}${lk(x.c.openDate)}${smCoMemoTd(closeCoMemo(x.id), `${x.c.name || ''} · ${closeYear}년 결산 회사 메모`)}${closePayKindsTd(x.id, x.c.name)}${cells}</tr>`;
+      ${x.c.entityType === '개인' ? `<td class="cl-lk cl-num cl-off">${t(x.c.corpRegNo)}</td>` : lk(x.c.corpRegNo)}${lk(innerBizNo(x.c.bizNo || ''))}${lk(x.c.openDate)}${smCoMemoTd(closeCoMemo(x.id), `${x.c.name || ''} · ${closeYear}년 결산 회사 메모`, closeCoMemoFiles(x.id))}${closePayKindsTd(x.id, x.c.name)}${cells}</tr>`;
   }).join('');
   return `<div class="table-scroll vat-prog" style="margin-top:8px;"><table><thead><tr>${head}</tr></thead>
     <tbody>${body || `<tr><td colspan="${closeCols.length + 8}"><div class="empty" style="padding:18px;">${q ? '검색 결과가 없어요.' : '거래처가 없어요.'}</div></td></tr>`}</tbody></table></div>`;
@@ -8930,13 +8932,18 @@ function taxjFsEntry(type, period, cid){ const fs = taxjDoc('filingStatus') || {
 // [2026.11.03] "works에서 회사웹과 연결된 메뉴의 메모는 필수로 다 연결"(요청) - 회사웹 메모를 마우스를 올려야만 보이던 곳도 '회사 메모' 칸으로 늘 보이게(조회만)
 // [2026.11.03] "메모·비고는 아이콘으로만, 눌러서 팝업으로"(요청) - 부가세 총괄 메모와 같은 문서 아이콘(여러 줄이면 줄 수), 마우스를 올리면 미리보기, 누르면 창
 const smMemoStore = [];
-function smMemoBtn(memo, title){
-  const m = String(memo || '').trim(); if(!m) return '<span style="color:#d4c6cd;">-</span>';
-  const n = m.split('\n').map(x => x.trim()).filter(Boolean).length, i = smMemoStore.push([title || '메모', m]) - 1;
-  return `<button type="button" class="sm-tool-ic vt-ic" onclick="smMemoShow(${i})" title="${escapeAttr(m)}" aria-label="메모">${ICON_MEMO_DOC}${n > 1 ? `<span class="vt-ic-n">${n}</span>` : ''}</button>`;
+// [2026.11.11] 회사웹 변경 반영(11.11) - 회사웹 메모에 첨부파일(memoFiles: [{id,name,url}] - 회사 공유 드라이브)이 생김 → 메모 팝업 아래 '첨부' 칩(누르면 미리보기, 보기만)
+function taxjMemoFilesHtml(files){
+  const F = (Array.isArray(files) ? files : []).filter(f => f && (f.id || f.url)); if(!F.length) return '';
+  return `<div class="smm-sec"><span class="smm-chip">첨부</span>회사웹 메모 첨부 ${F.length}개</div><div class="cl-att" style="border-top:none; padding-top:0;">${F.map(f => `<span class="att-chip"><a href="${escapeAttr(f.url || '#')}" target="_blank" rel="noopener" title="미리보기 (Ctrl+클릭: 드라이브에서 열기)" data-f="${escapeAttr(JSON.stringify({ id: f.id, name: f.name, url: f.url }))}" onclick="if(event.ctrlKey || event.metaKey || event.shiftKey) return true; event.preventDefault(); smPreviewFile(JSON.parse(this.dataset.f));">📎 ${taxjEsc(f.name || '파일')}</a></span>`).join('')}</div>`;
+}
+function smMemoBtn(memo, title, files){
+  const m = String(memo || '').trim(), F = Array.isArray(files) ? files : []; if(!m && !F.length) return '<span style="color:#d4c6cd;">-</span>';
+  const n = m.split('\n').map(x => x.trim()).filter(Boolean).length + F.length, i = smMemoStore.push([title || '메모', m || '없어요', F.length ? smMemoBlocksHtml(m) + taxjMemoFilesHtml(F) : undefined]) - 1;
+  return `<button type="button" class="sm-tool-ic vt-ic" onclick="smMemoShow(${i})" title="${escapeAttr(m + (F.length ? `${m ? '\n' : ''}📎 첨부 ${F.length}개` : ''))}" aria-label="메모">${F.length ? ICON_CL_CLIP : ICON_MEMO_DOC}${n > 1 ? `<span class="vt-ic-n">${n}</span>` : ''}</button>`;
 }
 function smMemoShow(i){ const x = smMemoStore[i]; if(x) smAlert(x[0], x[1], { icon:'i', html: x[2] || smMemoBlocksHtml(x[1]) }); }   // [2026.11.11] x[2] = 따로 만든 팝업 내용(결산 급여종류 칩)   // [2026.11.05] 건마다 줄바꿈·구분(요청)
-function smCoMemoTd(memo, title){ return `<td style="text-align:center;">${smMemoBtn(memo, title || '회사 메모')}</td>`; }
+function smCoMemoTd(memo, title, files){ return `<td style="text-align:center;">${smMemoBtn(memo, title || '회사 메모', files)}</td>`; }
 // [2026.11.05] "메모가 여러 건이면 앞머리 위치 같게 줄바꿈(왼쪽 정렬), 너무 줄글이라 구분이 안 되니 구분해서"(요청) - 원천세 총괄 비고·신고현황 메모 팝업
 //   한 줄 = 한 건. 앞에 적어 둔 "1)"·"1." 번호는 떼고 다시 붙임(번호 칸 폭 고정 → 둘째 줄부터 글 머리가 첫 줄과 같은 위치). 건마다 점선으로 구분
 function smMemoLines(t){ return String(t || '').split('\n').map(x => x.trim().replace(/^\d+\)\s*|^\d+\.\s+/, '')).filter(Boolean); }
@@ -9659,9 +9666,21 @@ function renderAttend(){
       <div class="stat"><div class="n">${missOut}</div><div class="label">퇴근 기록 없음</div></div>`;
     // [2026.11.05] 회사웹 변경 반영(11.05) - 회사웹 출퇴근 기록에 접속 IP(checkInIp·checkOutIp)가 생겨서 IP 칸 추가(그 전 기록은 회사웹 증빙에만 있어 '-')
     const ipCell = e => (e.checkInIp || e.checkOutIp) ? `<span style="font-size:12px; color:var(--muted);" title="${escapeAttr(`출근 IP ${e.checkInIp || '-'} · 퇴근 IP ${e.checkOutIp || '-'}`)}">${taxjEsc(e.checkInIp || e.checkOutIp)}${e.checkInIp && e.checkOutIp && e.checkInIp !== e.checkOutIp ? '<br>' + taxjEsc(e.checkOutIp) : ''}</span>` : na;
-    body = `<thead><tr><th>날짜</th><th>출근</th><th>퇴근</th><th>출퇴근 간격</th><th>근무지</th><th>IP</th><th>내 확인</th><th>내 메모</th></tr></thead><tbody>${list.length ? list.map(e => `<tr>
+    // [2026.11.11] 회사웹 변경 반영(10.21·11.06) - 근무지 오른쪽 '근태' 칸: 그날 휴가·반차(leaveUsage), 개인일정의 외근·출장·부재(시간은 마우스), 반일·시간 재택(시간대)
+    const lvOn = {}, outOn = {}, remOn = {};
+    (att.leaveUsage || []).filter(u => u && !u.deleted && inMonth(u)).forEach(u => (lvOn[u.date] = lvOn[u.date] || []).push(u));
+    (((pd.schedule || {}).events) || []).filter(ev => ev && !ev.deleted && inMonth(ev) && ['외근','출장','부재'].includes(ev.type)).forEach(ev => (outOn[ev.date] = outOn[ev.date] || []).push(ev));
+    (att.remoteEntries || []).filter(r => r && !r.deleted && inMonth(r) && (r.half || r.startTime || r.endTime)).forEach(r => { remOn[r.date] = r; });
+    const atCell = ds => {
+      const us = lvOn[ds] || [], os = outOn[ds] || [], rm = remOn[ds]; if(!us.length && !os.length && !rm) return na;
+      const tm = (a, b) => (a || b) ? `${a || ''}~${b || ''}` : '';
+      return [us.length ? `<span style="color:#e11d48; font-size:11.5px; font-weight:800;" title="${escapeAttr(us.map(u => [u.type, u.subtype, u.memo].filter(Boolean).join(' ')).join(' · '))}">${taxjEsc(us.map(u => [u.type, u.subtype].filter(Boolean).join(' ')).join(' · '))}</span>` : '',
+        os.length ? `<span style="color:#b45309; font-size:11.5px; font-weight:800;" title="${escapeAttr(os.map(ev => [ev.type, ev.startTime ? tm(ev.startTime, ev.endTime) : ev.allDay ? '종일' : '', ev.memo].filter(Boolean).join(' ')).join(' · '))}">${taxjEsc(os.map(ev => ev.type).join(' · '))}</span>` : '',
+        rm ? `<span style="color:#047857; font-size:11.5px; font-weight:800;" title="${escapeAttr(['재택', rm.half === 'am' ? '오전' : rm.half === 'pm' ? '오후' : '종일', tm(rm.startTime, rm.endTime), rm.memo].filter(Boolean).join(' · '))}">${rm.hourly ? '시간재택' : rm.half === 'am' ? '오전재택' : rm.half === 'pm' ? '오후재택' : '재택'}${tm(rm.startTime, rm.endTime) ? ' ' + taxjEsc(tm(rm.startTime, rm.endTime)) : ''}</span>` : ''].filter(Boolean).join('<span style="color:#d4c6cd;"> · </span>');
+    };
+    body = `<thead><tr><th>날짜</th><th>출근</th><th>퇴근</th><th>출퇴근 간격</th><th>근무지</th><th>근태</th><th>IP</th><th>내 확인</th><th>내 메모</th></tr></thead><tbody>${list.length ? list.map(e => `<tr>
       ${attendDateTd(e.date)}<td>${taxjEsc(e.checkIn) || na}</td><td>${e.checkOut ? taxjEsc(e.checkOut) + (e.checkOutNextDay ? ' <span class="hint" style="margin:0;">다음날</span>' : '') : na}</td>
-      <td>${attendDur(e) || na}</td><td>${taxjEsc(e.status || '사무실')}</td><td>${ipCell(e)}</td>${attendMineCells('clock:' + e.date)}</tr>`).join('') : emptyRow(8)}</tbody>`;
+      <td>${attendDur(e) || na}</td><td>${taxjEsc(e.status || '사무실')}</td><td>${atCell(e.date)}</td><td>${ipCell(e)}</td>${attendMineCells('clock:' + e.date)}</tr>`).join('') : emptyRow(9)}</tbody>`;
   }else if(attendView === 'leave'){
     const rows = [].concat(
       (att.leaveUsage || []).filter(inMonth).map(e => ({ e, kind:'휴가', txt: [e.type, e.subtype].filter(Boolean).join(' · ') + (e.days ? ` ${e.days}일` : ''), key:'leave:' + (e.id || e.date) })),
@@ -9805,8 +9824,8 @@ function payItMonthMemos(docs, cid, year, lane){
   return out;
 }
 function payItMemoBtn(docs, c, year, lane){
-  const note = smMemoLines(((docs.s__itOverview || {})[c.id] || {}).note), months = payItMonthMemos(docs, c.id, year, lane);
-  const n = note.length + months.reduce((s, x) => s + x.parts.reduce((a, pp) => a + pp.lines.length, 0), 0);
+  const note = smMemoLines(((docs.s__itOverview || {})[c.id] || {}).note), months = payItMonthMemos(docs, c.id, year, lane), nf = (((docs.s__itOverview || {})[c.id] || {}).memoFiles || []).length;   // [2026.11.11] 회사웹 특이사항 첨부
+  const n = note.length + months.reduce((s, x) => s + x.parts.reduce((a, pp) => a + pp.lines.length, 0), 0) + nf;
   if(!n) return PAY_NA;
   const tip = [note.length ? `전체 ${note.length}건` : '', months.length ? `월별 ${months.map(x => x.m + '월').join(', ')}` : ''].filter(Boolean).join(' · ');
   return `<button type="button" class="sm-tool-ic vt-ic pay-memo-ic" onclick="payItMemoShow('${escapeAttr(c.id)}','${lane || ''}')" title="급여 특이사항 - ${escapeAttr(tip)}" aria-label="메모">${ICON_MEMO_DOC}${n > 1 ? `<span class="vt-ic-n">${n}</span>` : ''}</button>`;
@@ -9819,6 +9838,7 @@ function payItMemoShow(cid, lane){
   if(note.length) h += `<div class="smm-sec"><span class="smm-chip">전체</span></div>${smMemoItemsHtml(note)}`;
   if(months.length) h += `<div class="smm-sec"><span class="smm-chip mon">월별</span>${year}년 귀속${lane ? ` · ${lane === 'sameMonth' ? '당월' : '익월'}지급` : ''}</div>`
     + months.map(x => `<div class="smm-mrow${x.m === curM ? ' cur' : ''}"><span class="smm-m">${x.m}월</span><div class="smm-box">${x.parts.map(pp => `${x.parts.length > 1 ? `<div class="smm-lane" style="color:${pp.k === 'sameMonth' ? '#047857' : '#be123c'};">${pp.l}</div>` : ''}${pp.lines.map((t, i) => `<div class="smm-ln">${pp.lines.length > 1 ? `<span class="smm-no">${i + 1})</span>` : ''}<span class="smm-tx">${taxjEsc(t)}</span></div>`).join('')}`).join('')}</div></div>`).join('');
+  h += taxjMemoFilesHtml(((docs.s__itOverview || {})[cid] || {}).memoFiles);   // [2026.11.11] 회사웹 특이사항 첨부
   smAlert(`${c.name || ''} · 급여 특이사항`, '없어요', { icon:'i', html: h });
 }
 function payOverviewHtml(docs){
