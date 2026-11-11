@@ -3124,7 +3124,7 @@ function renderCalendar(){
         return `
         <div class="cal-day ${c.dateStr===todayS?'today':''} ${c.other?'other':''}">
           <div class="cal-daynum ${mk && mk.hol ? 'tj-hol' : ''}">${c.d}${mk && mk.hol ? `<span class="tj-holname">${taxjEsc(mk.hol)}</span>` : ''}</div>
-          ${taxjCalItemsHtml(mk)}
+          ${taxjCalItemsHtml(mk, c.dateStr)}
           <div class="cal-tasks">
             ${dayDeadlines.map(x => `<div class="cal-task cal-deadline ${CAL_DEADLINE_CLASS[x.domain] || ''}" title="${x.label}">${x.label}</div>`).join('')}
             ${dayEvents.map(ev => `<div class="cal-task cal-event" onclick="openEvent(${ev.id})" title="${ev.text} (눌러서 수정·이력·삭제)">★ ${ev.text}</div>`).join('')}
@@ -3801,7 +3801,7 @@ function renderWlMonthCal(){
           <div class="wl-mcal-top"><div class="cal-daynum ${mk && mk.hol ? 'tj-hol' : ''}">${parseInt(ds.slice(8), 10)}${mk && mk.hol ? `<span class="tj-holname">${taxjEsc(mk.hol)}</span>` : ''}</div>${list.length ? `<span class="wl-mcal-cnt ${left ? '' : 'all-done'}">${list.length}</span>` : ''}</div>
           ${starts.length ? `<div class="tj-atts">${starts.map(x => `<span class="tj-att plan" title="${escapeAttr(`안내 시작 · ${x.title} (마감 ${Number(x.date.slice(5, 7))}/${Number(x.date.slice(8))})\n${smTaxDesc(x)}`)}">${taxjEsc(smTaxShort(x))} 안내</span>`).join('')}</div>` : ''}<!-- [2026.11.03] 무슨 안내·무슨 마감인지 이름으로(요청) -->
           ${due.length ? `<div class="tj-atts">${due.map(x => `<span class="tj-att due" title="${escapeAttr(`${x.title} 마감\n${smTaxDesc(x)}\n→ 납부여부 확인 및 납부마감 멘트 발송`)}">${taxjEsc(smTaxShort(x))} 마감</span>`).join('')}</div>` : ''}
-          ${taxjCalItemsHtml(mk)}
+          ${taxjCalItemsHtml(mk, ds)}
           <div class="cal-tasks" style="max-height:none;">
             ${shown.map(t => `<div class="wl-ct ${t.done ? 'done' : ''}">${escapeAttr(t.text)}</div>`).join('')}
             ${list.length > 2 ? `<div class="wl-mcal-more">+${list.length - 2}건 더</div>` : ''}
@@ -9372,7 +9372,7 @@ async function attendMyEvAdd(ds){
   if(!r || !String(r[0] || '').trim()) return;
   myEvents = Array.isArray(myEvents) ? myEvents : [];
   myEvents.push(attendMyEvFrom(r, { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 5) }));
-  renderAttend(); scheduleGoogleSave();
+  renderAll();   // 홈 달력에도 보이게
 }
 async function attendMyEvEdit(id){
   const e = (myEvents || []).find(x => x.id === id); if(!e) return;
@@ -9380,7 +9380,7 @@ async function attendMyEvEdit(id){
   if(r === undefined) return;
   if(r === null){ if(!(await smConfirm('이 개인 일정을 지울까요?', e.title || '', { tone:'danger', icon:'!', okText:'삭제' }))) return; myEvents = myEvents.filter(x => x !== e); }
   else attendMyEvFrom(r, e);
-  renderAttend(); scheduleGoogleSave();
+  renderAll();   // 홈 달력에도 보이게
 }
 function setAttendView(v){ attendView = v; if(activeTab !== 'attend') switchTab('attend'); else renderAttend(); }
 function attendShiftMonth(n){ const [y, m] = attendMonth.split('-').map(Number); const d = new Date(y, m - 1 + n, 1); attendMonth = `${d.getFullYear()}-${pad2(d.getMonth() + 1)}`; renderAttend(); }
@@ -10912,8 +10912,13 @@ function smDueOn(ds){
   if(!c.m[ym]){ try{ c.m[ym] = smTaxMonth(Number(ym.slice(0, 4)), Number(ym.slice(5))); }catch(e){ c.m[ym] = []; } }   // [2026.11.03] 개인웹 추가 일정·숨김 반영
   return c.m[ym].filter(x => x.date === ds);
 }
-function taxjCalItemsHtml(mk){
-  return mk && mk.items.length ? `<div class="tj-atts">${mk.items.map(i => `<span class="tj-att ${i.cls}" title="${escapeAttr(i.title || i.label)}">${taxjEsc(i.label)}</span>`).join('')}</div>` : '';
+function taxjCalItemsHtml(mk, ds){
+  // [2026.11.11] "개인캘린더에 등록한 개인 일정이 홈 달력에 안 나옴"(요청) - 홈 달력(먼스)에도 같은 분홍 칩 + *(누르면 수정·삭제)
+  const mine = ds ? (Array.isArray(myEvents) ? myEvents : []).filter(e => e && e.date === ds).sort((a, b) => String(a.start || '99').localeCompare(String(b.start || '99'))) : [];
+  const tm = e => (e.start || e.end) ? `${e.start || ''}~${e.end || ''}` : '';
+  const mh = mine.map(e => `<span class="tj-att mine" role="button" title="${escapeAttr(['개인 일정 (works에만 있음)', e.title, tm(e), e.memo].filter(Boolean).join(' · '))}" onclick="event.stopPropagation(); attendMyEvEdit('${escapeAttr(e.id)}')">${taxjEsc([e.title || '개인 일정', tm(e)].filter(Boolean).join(' '))}<sup>*</sup></span>`).join('');
+  const ch = (mk && mk.items.length ? mk.items.map(i => `<span class="tj-att ${i.cls}" title="${escapeAttr(i.title || i.label)}">${taxjEsc(i.label)}</span>`).join('') : '') + mh;
+  return ch ? `<div class="tj-atts">${ch}</div>` : '';
 }
 
 // ── [2026.10.08] 검토표 메뉴(요청: "검토표는 따로 메뉴 만들어서 거기서 조회") - 설정에 있던 'Tax.J 검토표 계산식'을 옮겨옴. 메뉴를 열면 자동으로 불러옴 ──
