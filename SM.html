@@ -1557,6 +1557,10 @@ function smTogglePcView(){ try{ localStorage.setItem('sm_pc_view', window.SM_PC_
   .sm-pv-tray-it.on{ border-color:var(--primary); background:var(--primary-soft); }
   .sm-pv-tray-it.on button{ color:var(--primary-dark); }
   .sm-pv-tray-it.min button[data-i]{ font-style:italic; opacity:.8; }
+  .cl-att{ display:flex; flex-wrap:wrap; gap:4px; align-items:center; padding-top:6px; border-top:1px dashed var(--border); }
+  .cl-att .att-chip a{ max-width:200px; }
+  .cl-att-add{ font:inherit; font-size:11.5px; font-weight:700; border:1px dashed var(--primary); background:transparent; color:var(--primary-dark); border-radius:8px; padding:2px 8px; cursor:pointer; }
+  .cl-pop.drop{ outline:2px dashed var(--primary); outline-offset:2px; }   /* [2026.11.11] 메모 창에 파일 끌어다 놓기 */
   .att-chip button{ border:none; background:transparent; color:var(--muted); cursor:pointer; font-size:14px; line-height:1; padding:0 3px; }
   .att-chip button:hover{ color:#e2445c; }
   .att-add{ font-family:inherit; font-size:11.5px; font-weight:700; color:var(--muted); background:transparent; border:1px dashed var(--border); border-radius:8px; padding:2px 8px; cursor:pointer; }
@@ -2457,7 +2461,7 @@ const ICONS = {
 // [2026.11.11] 계산기(요청) - 하위메뉴 = 계산법. 새 계산법은 CALC_VIEWS에 [id, 이름]을 넣고 CALC_RENDER[id]에 화면을 만들면 됨(입력값은 이 기기에만 잠깐 보관, 시트에는 안 올림)
 const CALC_VIEWS = [['taxback', '세액역산']];
 const CALC_RENDER = {};
-var calcSaves = {};   // [2026.11.11] 계산기 임시저장 { 계산법id: [{ id, y, at, memo, v:{입력값} }] } - 시트에 저장(works 데이터)
+var calcSaves = {}, cellFiles = {};   // [2026.11.11] 계산기 임시저장 { 계산법id: [{ id, y, at, memo, v:{입력값} }] } - 시트에 저장(works 데이터)
 let calcView = (() => { try{ const v = localStorage.getItem('sm_calc_view'); return CALC_VIEWS.some(x => x[0] === v) ? v : CALC_VIEWS[0][0]; }catch(e){ return CALC_VIEWS[0][0]; } })();
 const TABS = [
   {id:'home',     label:'홈'},
@@ -6108,9 +6112,34 @@ function closeTableHtml(docs){
 //   메모(목록) = 한 줄이 한 항목('\n'으로 이어 저장 - 예전 글자 값도 그대로 읽힘). 칸에는 아이콘 + 개수, 마우스를 올리면 번호 목록, 누르면 목록 창(추가·삭제)
 // [2026.10.27] 줄 앞에 직접 적어 둔 번호('2)' 등)는 목록 번호와 겹쳐서 뺌
 function closeMemoLines(v){ return String(v == null ? '' : v).split('\n').map(x => x.trim().replace(/^\d+\)\s*/, '')).filter(Boolean); }
+// [2026.11.11] "메모·비고에 이미지·PDF 등 첨부파일도, 미리보기와 같이"(요청) - 파일은 내 드라이브(첨부 폴더)에 올리고 칸에는 목록만. 숫자 = 메모 줄 + 파일 수
+function closeFilesKey(cid, col){ return `close|${closeYear}|${cid}|${col}`; }
+function closeFilesOf(cid, col){ cellFiles = cellFiles || {}; const k = closeFilesKey(cid, col); return Array.isArray(cellFiles[k]) ? cellFiles[k] : []; }
 function closeMemoBtn(cid, colId, v){
+  const F = closeFilesOf(cid, colId);
+  if(F.length) return closeMemoBtnHtml(cid, colId, closeMemoLines(v), F);
   const L = closeMemoLines(v);
   return `<button type="button" class="cl-dt vp-dt vp-memo${L.length ? ' has' : ''}" data-cid="${cid}" data-col="${colId}" title="${escapeAttr(L.length ? L.map((x, i) => `${i + 1}) ${x}`).join('\n') : '메모 입력')}" aria-label="메모" onclick="closeMemoPop(this)">${ICON_MEMO_DOC}${L.length ? `<span class="vt-ic-n">${L.length}</span>` : ''}</button>`;
+}
+function closeMemoBtnHtml(cid, colId, L, F){
+  const n = L.length + F.length, tip = L.map((x, i) => `${i + 1}) ${x}`).concat(F.map(f => `📎 ${f.name}`)).join('\n');
+  return `<button type="button" class="cl-dt vp-dt vp-memo${n ? ' has' : ''}" data-cid="${cid}" data-col="${colId}" title="${escapeAttr(n ? tip : '메모 입력')}" aria-label="메모" onclick="closeMemoPop(this)">${F.length ? ICON_CL_CLIP : ICON_MEMO_DOC}${n ? `<span class="vt-ic-n">${n}</span>` : ''}</button>`;
+}
+const ICON_CL_CLIP = '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M21.4 11.1l-9.2 9.2a6 6 0 0 1-8.5-8.5l9.2-9.2a4 4 0 0 1 5.7 5.7l-9.2 9.2a2 2 0 0 1-2.8-2.8l8.5-8.5"/></svg>';
+async function closeMemoUpload(cid, col, files, after){
+  files = Array.from(files || []).filter(Boolean); if(!files.length || !smUploadReady()) return;
+  const big = files.find(f => f.size > 50 * 1024 * 1024); if(big) return smAlert('파일이 너무 커요', `${big.name}: 50MB 이하만 올릴 수 있어요.`);
+  const k = closeFilesKey(cid, col);
+  window.smUploadingN = (window.smUploadingN || 0) + 1;
+  smToast(`파일 ${files.length}개 올리는 중...`, 60000);
+  try{
+    for(const f of files){
+      const up = await smDriveUpload(f.name ? f : new File([f], `붙여넣은 이미지_${Date.now()}.png`, { type: f.type || 'image/png' }));
+      cellFiles = cellFiles || {}; (cellFiles[k] = Array.isArray(cellFiles[k]) ? cellFiles[k] : []).push(Object.assign(up, { at: todayStr() }));
+    }
+    smToast('파일을 올렸어요', 1800);
+  }catch(e){ console.error(e); smToast('', 1); smAlert('올리지 못했어요', String(e && e.message || e), { tone:'danger' }); }
+  finally{ window.smUploadingN = Math.max(0, (window.smUploadingN || 1) - 1); scheduleGoogleSave(); if(after) after(); }
 }
 function closeMemoPop(btn){
   closeDatePopClose();
@@ -6123,8 +6152,25 @@ function closeMemoPop(btn){
       <div style="max-height:260px; overflow:auto; display:flex; flex-direction:column; gap:4px;">${items.length ? items.map((x, i) => `<div class="cl-memo-row" style="display:flex; gap:6px; align-items:flex-start; font-size:12.5px; line-height:1.45;"><span style="color:var(--muted); font-weight:700; min-width:18px;">${i + 1})</span>${editIdx === i
         ? `<input type="text" class="cl-memo-edit" value="${escapeAttr(x)}" style="flex:1; min-width:0; font:inherit; font-size:12.5px; border:1px solid var(--primary); border-radius:6px; padding:2px 6px;">`
         : `<span style="flex:1; white-space:pre-wrap; word-break:break-all;">${taxjEsc(x)}</span><button type="button" class="cl-memo-act" data-edit="${i}" title="수정" aria-label="수정">✎</button>`}<button type="button" class="cl-memo-act" data-del="${i}" title="삭제" aria-label="삭제">✕</button></div>`).join('') : '<div class="hint" style="margin:0;">아직 메모가 없어요.</div>'}</div>
-      <input type="text" class="cl-pop-text cl-memo-add" placeholder="새 메모 입력 후 Enter (추가)" style="font:inherit; font-size:12.5px; border:1px solid var(--border); border-radius:8px; padding:6px 8px;">`;
+      <input type="text" class="cl-pop-text cl-memo-add" placeholder="새 메모 입력 후 Enter (추가)" style="font:inherit; font-size:12.5px; border:1px solid var(--border); border-radius:8px; padding:6px 8px;">
+      <div class="cl-att" title="파일을 여기로 끌어다 놓거나, 메모 칸에 이미지를 붙여넣어도 올라가요">${closeFilesOf(cid, col).map((f, i) => `<span class="att-chip"><a href="${escapeAttr(f.url)}" target="_blank" rel="noopener" data-fi="${i}" title="미리보기 (Ctrl+클릭: 드라이브에서 열기)">📎 ${taxjEsc(f.name)}</a><button type="button" data-fdel="${i}" title="첨부 빼기" aria-label="첨부 빼기">×</button></span>`).join('')}<button type="button" class="cl-att-add">+ 파일</button></div>`;
     closePopWire(pop);
+    // [2026.11.11] 첨부파일 - 누르면 미리보기 창, × = 빼기(드라이브는 휴지통), + 파일 / 끌어다 놓기 / 이미지 붙여넣기
+    const F = closeFilesOf(cid, col);
+    pop.querySelectorAll('[data-fi]').forEach(a => a.onclick = e => { if(e.ctrlKey || e.metaKey || e.shiftKey) return; e.preventDefault(); const f = F[+a.dataset.fi]; smPreviewFile({ id: f.id, name: f.name, url: f.url }); });
+    pop.querySelectorAll('[data-fdel]').forEach(b => b.onclick = async e => {
+      e.stopPropagation(); const f = F[+b.dataset.fdel]; if(!f) return;
+      closeDatePopClose();
+      if(!(await smConfirm('첨부파일을 뺄까요?', `${f.name}\n드라이브에서는 휴지통으로 옮겨져요(30일 안에 되살릴 수 있어요).`, { tone:'danger', icon:'!', okText:'빼기' }))) return;
+      const k = closeFilesKey(cid, col); cellFiles[k] = (cellFiles[k] || []).filter(x => x.id !== f.id); if(!cellFiles[k].length) delete cellFiles[k];
+      scheduleGoogleSave(); renderClose(); smDriveTrash(f.id);
+    });
+    const upAfter = () => { if(document.body.contains(pop)){ save(); draw(); } else renderClose(); };
+    pop.querySelector('.cl-att-add').onclick = e => { e.stopPropagation(); if(!smUploadReady()) return; const fi = document.createElement('input'); fi.type = 'file'; fi.multiple = true; fi.onchange = () => closeMemoUpload(cid, col, fi.files, upAfter); fi.click(); };
+    pop.ondragover = e => { if(Array.from(e.dataTransfer.types || []).includes('Files')){ e.preventDefault(); pop.classList.add('drop'); } };
+    pop.ondragleave = () => pop.classList.remove('drop');
+    pop.ondrop = e => { if(!e.dataTransfer || !e.dataTransfer.files.length) return; e.preventDefault(); pop.classList.remove('drop'); closeMemoUpload(cid, col, e.dataTransfer.files, upAfter); };
+    pop.onpaste = e => { const fs = Array.from((e.clipboardData && e.clipboardData.files) || []); if(!fs.length) return; e.preventDefault(); closeMemoUpload(cid, col, fs, upAfter); };
     pop.querySelectorAll('[data-del]').forEach(b => b.onclick = e => { e.stopPropagation(); items.splice(Number(b.dataset.del), 1); editIdx = -1; save(); draw(); });
     // [2026.10.27] "메모 수정이 안 된다 → 마우스를 올리면 수정·삭제 버튼"(요청) - ✎를 누르면 그 자리에서 고치기(Enter 저장 · Esc 취소 · 비우고 Enter = 지우기)
     pop.querySelectorAll('[data-edit]').forEach(sp => sp.onclick = e => { e.stopPropagation(); editIdx = Number(sp.dataset.edit); draw(); });
@@ -6142,9 +6188,8 @@ function closeMemoPop(btn){
   };
   const save = () => {
     closeSetVal(cid, col, items.join('\n'));
-    btn.classList.toggle('has', items.length > 0);
-    btn.title = items.length ? items.map((x, i) => `${i + 1}) ${x}`).join('\n') : '메모 입력';
-    btn.innerHTML = ICON_MEMO_DOC + (items.length ? `<span class="vt-ic-n">${items.length}</span>` : '');
+    const t = document.createElement('div'); t.innerHTML = closeMemoBtnHtml(cid, col, items, closeFilesOf(cid, col)); const nb = t.firstElementChild;
+    btn.className = nb.className; btn.title = nb.title; btn.innerHTML = nb.innerHTML;   // [2026.11.11] 첨부파일 수도 같이
   };
   draw();
   document.body.appendChild(pop);
@@ -7150,6 +7195,7 @@ const GOOGLE_DATA_KEYS = [
   'closeColsBy','closeData',   // [2026.10.14] 결산 ([2026.11.02] 항목은 회차마다 따로 - 예전 'closeCols')
   'taxColsBy','taxColVals',   // [2026.11.02] 법인세·종소세 내 항목
   'smColOrders',   // [2026.11.02] works 표 칸 순서(끌어서 옮긴 대로)
+  'cellFiles',   // [2026.11.11] 칸 첨부파일(결산 메모·비고) { 'close|연도|거래처|항목': [{id,name,url,size,at}] } - 파일은 내 드라이브
   'calcSaves',   // [2026.11.11] 계산기 임시저장 목록(계산법별·연도별)
   'taxPlan',   // [2026.11.03] 세무일정 안내(안내 일수·숨김·내 일정)
   'quickMemos','nextMemoId',   // [2026.10.15] 홈 빠른 메모
@@ -7170,7 +7216,7 @@ function collectGoogleSnapshot(){
     links, nextLinkId, linkCats, forms, nextFormId, formCats, laws, nextLawId, lawCats,
     manuals, nextManualId, manualCats,
     accountVault, submitMine, attendMine, payColsBy: smColsPrune(payColsBy), payCustomVals, vatCustomCols, vatCustomVals, vatProgColsBy: smColsPrune(vatProgColsBy), vatProg, vatProgView, closeColsBy: smColsPrune(closeColsBy), closeData,
-    taxColsBy: { corp: smColsPrune(taxColsBy.corp), indiv: smColsPrune(taxColsBy.indiv) }, taxColVals, smColOrders, taxPlan, calcSaves: calcSaves || {}, quickMemos, nextMemoId, menuNotes,
+    taxColsBy: { corp: smColsPrune(taxColsBy.corp), indiv: smColsPrune(taxColsBy.indiv) }, taxColVals, smColOrders, taxPlan, calcSaves: calcSaves || {}, cellFiles: cellFiles || {}, quickMemos, nextMemoId, menuNotes,
   };
 }
 
@@ -7257,6 +7303,7 @@ async function loadFromGoogleSheet(guard){
     if(map.smColOrders) smColOrders = JSON.parse(map.smColOrders) || {};
     if(map.taxPlan) taxPlan = JSON.parse(map.taxPlan) || {};
     if(map.calcSaves) calcSaves = JSON.parse(map.calcSaves) || {};
+    if(map.cellFiles) cellFiles = JSON.parse(map.cellFiles) || {};
     if(smMigrateCols()) needsResaveAfterLoad = true;
     if(smNaUnify()) needsResaveAfterLoad = true;   // [2026.11.02] 예전 공통 항목 → 모든 회차에 복사하고 새 형식으로 다시 저장
     if(map.links)         links        = JSON.parse(map.links);
@@ -7671,6 +7718,7 @@ function applySnapshot(o){
   if(o.smColOrders) smColOrders = o.smColOrders;
   if(o.taxPlan) taxPlan = o.taxPlan;
   if(o.calcSaves) calcSaves = o.calcSaves;
+  if(o.cellFiles) cellFiles = o.cellFiles;
   smMigrateCols(); smNaUnify();
   if(o.links) links = o.links;
   if(o.nextLinkId) nextLinkId = o.nextLinkId;
