@@ -1559,6 +1559,7 @@ function smTogglePcView(){ try{ localStorage.setItem('sm_pc_view', window.SM_PC_
   .sm-pv-tray-it.min button[data-i]{ font-style:italic; opacity:.8; }
   .cl-att{ display:flex; flex-wrap:wrap; gap:4px; align-items:center; padding-top:6px; border-top:1px dashed var(--border); }
   .cl-att .att-chip a{ max-width:200px; }
+  .cl-att-hint{ font-size:10.5px; color:var(--muted-soft); }
   .cl-att-o{ display:flex; flex-wrap:wrap; gap:4px; padding-top:4px; }
   .cl-att-ol{ width:100%; font-size:11px; font-weight:700; color:var(--muted); }
   .att-chip.o{ background:#f3f0f6; padding-right:8px; }
@@ -5877,7 +5878,7 @@ function smAttOthers(sc, per, row, col){
 }
 function smAttHtml(sc, per, row, col, perLabel){
   const F = smAttOf(smAttKey(sc, per, row, col)), O = smAttOthers(sc, per, row, col), lab = perLabel || (x => `${x}년`);
-  return `<div class="cl-att" title="파일을 여기로 끌어다 놓거나, 입력칸에 이미지를 붙여넣어도 올라가요">${F.map((f, i) => `<span class="att-chip"><a href="${escapeAttr(f.url)}" target="_blank" rel="noopener" data-fi="${i}" title="미리보기 (Ctrl+클릭: 드라이브에서 열기)">📎 ${taxjEsc(f.name)}</a><button type="button" data-fdel="${i}" title="첨부 빼기" aria-label="첨부 빼기">×</button></span>`).join('')}<button type="button" class="cl-att-add">+ 파일</button></div>`
+  return `<div class="cl-att" title="파일을 여기로 끌어다 놓거나, 입력칸에 이미지를 붙여넣어도 올라가요">${F.map((f, i) => `<span class="att-chip"><a href="${escapeAttr(f.url)}" target="_blank" rel="noopener" data-fi="${i}" title="미리보기 (Ctrl+클릭: 드라이브에서 열기)">📎 ${taxjEsc(f.name)}</a><button type="button" data-fdel="${i}" title="첨부 빼기" aria-label="첨부 빼기">×</button></span>`).join('')}<button type="button" class="cl-att-add">+ 파일</button><span class="cl-att-hint">끌어다 놓기 · Ctrl+V 붙여넣기</span></div>`
     + (O.length ? `<div class="cl-att-o"><div class="cl-att-ol">다른 ${/^(vp|vatc)$/.test(sc) ? '기수' : sc === 'pay' ? '달' : '연도'} 첨부 (보기만)</div>${O.map(([p, L]) => L.map((f, i) => `<span class="att-chip o"><a href="${escapeAttr(f.url)}" target="_blank" rel="noopener" data-fo="${escapeAttr(p)}|${i}" title="미리보기 (Ctrl+클릭: 드라이브에서 열기)"><i>${taxjEsc(lab(p))}</i>📎 ${taxjEsc(f.name)}</a></span>`).join('')).join('')}</div>` : '');
 }
 async function smAttUpload(key, files, after){
@@ -5913,6 +5914,13 @@ function smAttWire(pop, sc, per, row, col, after, gone){
   pop.ondrop = e => { if(!e.dataTransfer || !e.dataTransfer.files.length) return; e.preventDefault(); pop.classList.remove('drop'); smAttUpload(key, e.dataTransfer.files, after); };
   pop.onpaste = e => { const fs = Array.from((e.clipboardData && e.clipboardData.files) || []); if(!fs.length) return; e.preventDefault(); smAttUpload(key, fs, after); };
 }
+// [2026.11.11] "캡처 복사한 걸 붙여넣기"(요청) - 메모 창이 열려 있으면 입력칸을 누르지 않아도 Ctrl+V로 이미지·파일이 올라가게(창 어디를 눌러 둔 상태든)
+document.addEventListener('paste', e => {
+  const pop = document.getElementById('closeDatePop');
+  if(!pop || !pop.querySelector('.cl-att') || pop.contains(e.target)) return;   // 창 안에서 붙여넣으면 창이 직접 처리
+  const fs = Array.from((e.clipboardData && e.clipboardData.files) || []); if(!fs.length || !pop.onpaste) return;
+  pop.onpaste(e);
+});
 function smAttTip(F){ return F.length ? '\n' + F.map(f => `📎 ${f.name}`).join('\n') : ''; }
 // ===== [2026.11.11] works 공통 항목 칸(요청: "항목 추가 기능 있는 곳 모두 - 입력 방식 목록을 가장 많은 목록으로 통일, 칸 표시(글자 전체/아이콘)도 고르게") =====
 //   목록 = 부가세 진행 목록(8가지) + 결산의 '월'(이미 쓰는 칸이 있어 유지). 신고현황만 '완납·미납'을 더 둠(신고서류 칸과 묶인 전용)
