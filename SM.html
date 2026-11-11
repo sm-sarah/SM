@@ -1360,6 +1360,7 @@ function smTogglePcView(){ try{ localStorage.setItem('sm_pc_view', window.SM_PC_
   .smm-chip.mon{ background:#fff; color:var(--primary-dark); border:1px solid var(--primary); }
   /* [2026.11.11] 결산 급여종류 팝업 - 회사웹 검토표 급여종류 칩과 같은 색(요청) */
   /* [2026.11.11] 기간+처리날짜 칸·창 */
+  .cl-pop-range input[type=month]{ flex:1; min-width:0; }
   .rd-dd{ margin-left:4px; font-size:11px; font-weight:800; color:#059669; }
   .rd-lab{ font-size:11.5px; font-weight:800; color:var(--muted); margin-bottom:-4px; }
   .rd-view{ display:flex; flex-direction:column; gap:4px; background:var(--primary-soft); border-radius:10px; padding:8px 10px; }
@@ -4589,7 +4590,7 @@ const VAT_VIEWS = [['overview','총괄'], ['prog','진행']];
 function setVatView(v){ vatView = v; if(activeTab !== 'vat') switchTab('vat'); else renderVat(); }
 function vatViewTabsHtml(){ return `<div class="cl-subtabs pay-maintabs">${VAT_VIEWS.map(([k, l]) => `<button class="cl-subtab ${vatView === k ? 'on' : ''}" onclick="setVatView('${k}')">${l}</button>`).join('')}</div>`; }
 // [2026.11.11] works 공통 입력 방식 목록(아래 'works 공통 항목 칸' 설명 참고)
-const SM_COL_TYPES = [['text','글자(줄글)'], ['memo','글자(팝업)'], ['check','체크'], ['checkdate','체크+날짜'], ['num','숫자'], ['date','날짜'], ['month','월'], ['range','기간'], ['rangedate','기간+처리날짜'], ['select','드롭다운']];   // [2026.11.11] 기간+처리날짜 추가(요청)
+const SM_COL_TYPES = [['text','글자(줄글)'], ['memo','글자(팝업)'], ['check','체크'], ['checkdate','체크+날짜'], ['num','숫자'], ['date','날짜'], ['month','월'], ['range','기간'], ['rangedate','기간+처리날짜'], ['monthdate','월+처리날짜'], ['select','드롭다운']];   // [2026.11.11] 월+처리날짜 추가(요청)   // [2026.11.11] 기간+처리날짜 추가(요청)
 const SM_VIEW_OPTS = ['글자 전체','아이콘 (마우스를 올리면 내용)'];
 const VAT_PROG_TYPES = SM_COL_TYPES;   // [2026.11.11] works 공통 목록으로(요청) - 원래: 글자(줄글)·글자(팝업)·체크·체크+날짜·숫자·날짜·기간·드롭다운
 const VAT_PROG_TYPES_OLD = [['text','글자(줄글)'], ['memo','글자(팝업)'], ['check','체크'], ['checkdate','체크+날짜'], ['num','숫자'], ['date','날짜'], ['range','기간'], ['select','드롭다운']];   // [2026.10.20] 체크+날짜(요청) - 체크하면 날짜 입력 창, 값은 날짜(YYYY-MM-DD) 또는 true(날짜 없이 체크), 마우스를 올리면 날짜
@@ -5140,7 +5141,7 @@ function vatProgHtml(docs){
   // 내 항목 칸 폭: 이름·값 길이에 맞춰(긴 글은 최대 240px, 마우스를 올리면 전체)
   const w = {};
   vatProgCols.forEach(c => {
-    if(c.type === 'check' || c.type === 'checkdate' || c.type === 'memo' || c.type === 'rangedate') return;
+    if(c.type === 'check' || c.type === 'checkdate' || c.type === 'memo' || c.type === 'rangedate' || c.type === 'monthdate') return;
     const len = Math.max(...String(c.label).split('\n').map(s => s.length), ...list.map(x => vatProgFmtNum((per[x.c.id] || {})[c.id]).length));
     w[c.id] = Math.max(56, Math.min(240, len * 12 + 14));
   });
@@ -5385,7 +5386,7 @@ function closeRowHistDel(cid, i){
   else { delete d.v[cid]; delete d.rh[cid]; }
   scheduleGoogleSave();
 }
-function closeHistFmt(colId, v){ const c = closeCols.find(x => x.id === colId) || {}; if(v === true) return '✓'; if(c.type === 'rangedate' || (v && typeof v === 'object')) return smcFmt('rangedate', v, closeYear); return c.type === 'month' ? closeFmtMonth(v) : c.type === 'range' ? closeFmtRange(v) : c.type === 'date' ? closeFmtDate(v) : typeof v === 'number' ? v.toLocaleString('ko-KR') : c.type === 'memo' ? closeMemoLines(v).join(' · ') : String(v == null ? '' : v); }
+function closeHistFmt(colId, v){ const c = closeCols.find(x => x.id === colId) || {}; if(v === true) return '✓'; if(c.type === 'monthdate') return smcFmt('monthdate', v, closeYear); if(c.type === 'rangedate' || (v && typeof v === 'object')) return smcFmt('rangedate', v, closeYear); return c.type === 'month' ? closeFmtMonth(v) : c.type === 'range' ? closeFmtRange(v) : c.type === 'date' ? closeFmtDate(v) : typeof v === 'number' ? v.toLocaleString('ko-KR') : c.type === 'memo' ? closeMemoLines(v).join(' · ') : String(v == null ? '' : v); }
 function closeRoundLabel(x){ return x.r ? x.r : x.at ? `${Number(x.at.slice(5, 7))}/${Number(x.at.slice(8))}` : ''; }
 function closeHistBadge(){ return ''; }   // 칸마다 숫자 대신 상호명 옆에 줄 회차
 function closeRowBadge(cid){
@@ -5555,7 +5556,9 @@ function closeFmtRange(v){
 function closeIsRangeish(v){ const s = String(v == null ? '' : v).trim(); return /[~∼〜]/.test(s) && closeIsRange(closeParseRange(s, '2026')); }
 // 입력 방식을 바꾸면 이미 적힌 값도 새 방식으로 바꿈(못 읽는 값은 글자 그대로 둠)
 function closeConvertVal(v, from, to, year){
+  if(v && typeof v === 'object' && !Array.isArray(v) && from !== to && from === 'monthdate'){ const o = smcMd(v); v = to === 'month' ? o.mo : to === 'date' ? o.d : to === 'monthdate' ? v : smcFmt('monthdate', v, year); }   // [2026.11.11]
   if(v && typeof v === 'object' && !Array.isArray(v) && from !== to){ const o = smcRd(v); v = to === 'range' ? o.r : to === 'date' ? o.d : to === 'rangedate' ? v : smcFmt('rangedate', v, year); }   // [2026.11.11] 기간+처리날짜 값에서 바꿀 때
+  if(to === 'monthdate') return typeof v === 'string' ? (v ? smcMd(/^\d{4}-\d{2}$/.test(v) ? v : (closeParseMonth(v, year) || v)) : v) : v;   // [2026.11.11]
   if(to === 'rangedate') return typeof v === 'string' ? (v ? smcRd(closeIsRangeish(v) ? closeParseRange(v, year) : CLOSE_ISO_RE.test(v) ? v : v) : v) : v;
   if(v == null || v === '' || from === to) return v;
   if(to === 'date') return typeof v === 'string' ? closeParseDate(v, year) : v;
@@ -5972,8 +5975,8 @@ function smAttTip(F){ return F.length ? '\n' + F.map(f => `📎 ${f.name}`).join
 function smSearchIndex(){
   const out = [], docs = (taxjFull && taxjFull.docs) || {}, idx = (() => { try{ return (taxjFull && taxjFull.docs && taxjClientIndex(docs).byId) || {}; }catch(e){ return {}; } })();
   const nm = cid => { const c = idx[String(cid).split('|')[0]]; return c ? c.name : (((clients || []).find(x => String(x.id) === String(cid).split('|')[0]) || {}).name || ''); };
-  const txt = (v, t) => v == null || v === '' || v === true || v === false ? '' : typeof v === 'object' ? (t === 'rangedate' || !Array.isArray(v) ? smcFmt('rangedate', v, '') : '') : String(v);
-  const TXT = ['text','memo','rangedate','select'];
+  const txt = (v, t) => v == null || v === '' || v === true || v === false ? '' : typeof v === 'object' ? (t === 'monthdate' ? smcFmt('monthdate', v, '') : t === 'rangedate' || !Array.isArray(v) ? smcFmt('rangedate', v, '') : '') : String(v);
+  const TXT = ['text','memo','rangedate','monthdate','select'];
   const scan = (scr, scrLab, map, colsOf, perLab, go) => Object.keys(map || {}).forEach(per => { const cols = colsOf(per) || []; Object.entries(map[per] || {}).forEach(([cid, row]) => cols.filter(c => TXT.includes(c.type)).forEach(c => { const t = txt((row || {})[c.id], c.type); if(t) out.push({ scr, scrLab, per, perLab: perLab(per), cid, name: nm(cid), col: c.label, text: t, go }); })); });
   try{ scan('close', '결산', Object.fromEntries(Object.entries(closeData || {}).map(([k, d]) => [k, (d || {}).v || {}])), k => closeColsBy[k], closeKeyLabel, k => { const [y, r] = k.split('-'); closeYear = y; closeRound = r; switchTab('close'); }); }catch(e){}
   try{ scan('vp', '부가세 진행', vatProg, k => vatProgColsBy[k], vatProgKeyLabel, k => { const m = /^(\d{4})-(\d)기(예정|확정)$/.exec(k); if(m){ vatYear = m[1]; vatHalf = m[2]; vatKind = m[3] === '예정' ? 'pre' : 'final'; } setVatView('prog'); }); }catch(e){}
@@ -6037,6 +6040,18 @@ document.addEventListener('keydown', e => { if((e.ctrlKey || e.metaKey) && !e.sh
 // (SM_COL_TYPES·SM_VIEW_OPTS는 먼저 쓰이는 부가세 진행 목록 바로 위에 둠)
 function smcIsIcon(c){ return c.view ? c.view === 'icon' : (c.type === 'range' || c.type === 'memo' || c.type === 'rangedate'); }
 function smViewField(col){ return { label:'칸 표시 (체크는 그대로)', options: SM_VIEW_OPTS, value: col && smcIsIcon(col) ? SM_VIEW_OPTS[1] : SM_VIEW_OPTS[0] }; }
+// [2026.11.11] "칸 표시는 아이콘으로 쓸 수 있는 것만 활성화"(요청) - 항목 추가·수정 창에서 입력 방식이 체크·체크+날짜·완납·미납이면 칸 표시 칸을 끄고 '글자 전체'로(바꾸면 바로 따라 바뀜)
+const SM_VIEW_NO_ICON = ['체크', '체크+날짜', '완납·미납'];
+function smViewSync(root){
+  (root || document).querySelectorAll('.sm-modal-backdrop').forEach(m => {
+    const sels = Array.from(m.querySelectorAll('select')), vs = sels.find(x => Array.from(x.options).some(o => o.text === SM_VIEW_OPTS[1])), ts = sels.find(x => Array.from(x.options).some(o => o.text === '체크+날짜'));
+    if(!vs || !ts) return;
+    const off = SM_VIEW_NO_ICON.includes(ts.value);
+    if(off){ vs.value = SM_VIEW_OPTS[0]; } vs.disabled = off; vs.style.opacity = off ? '.5' : ''; vs.title = off ? '체크 칸은 아이콘으로 바꿀 수 없어요' : '';
+    if(!ts._smv){ ts._smv = 1; ts.addEventListener('change', () => smViewSync(m.parentNode || document)); }
+  });
+}
+(function(){ const go = () => new MutationObserver(ms => { if(ms.some(x => Array.from(x.addedNodes).some(n => n.nodeType === 1 && n.classList && n.classList.contains('sm-modal-backdrop')))) setTimeout(() => smViewSync(document), 0); }).observe(document.body, { childList:true }); if(document.body) go(); else document.addEventListener('DOMContentLoaded', go); })();
 function smViewOf(v){ return String(v || '').startsWith('아이콘') ? 'icon' : 'text'; }
 function smTypeOf(label, list){ return ((list || SM_COL_TYPES).find(x => x[1] === label) || (list || SM_COL_TYPES)[0])[0]; }
 function smTypeLabel(type, list){ return ((list || SM_COL_TYPES).find(x => x[0] === type) || (list || SM_COL_TYPES)[0])[1]; }
@@ -6060,6 +6075,7 @@ function smcFmt(type, v, year){
   if(type === 'num') return typeof v === 'number' ? v.toLocaleString('ko-KR') : String(v);
   if(type === 'checkdate') return v === true ? '체크됨(날짜 없음)' : smcIso(v) ? String(v).replace(/-/g, '.') : String(v);
   if(type === 'memo') return String(v).split('\n').map(x => x.trim()).filter(Boolean).join(' / ');
+  if(type === 'monthdate'){ const o = smcMd(v); return [o.mo ? smcFmt('month', o.mo, y) : '', o.m, o.d ? '처리 ' + d(o.d) : ''].filter(Boolean).join(' · '); }
   if(type === 'rangedate'){ const o = smcRd(v); return [o.r ? smcFmt('range', o.r, y) + (smcRdName(o.r, y) ? ` (${smcRdName(o.r, y)})` : '') : '', o.m, o.d ? '처리 ' + d(o.d) : ''].filter(Boolean).join(' · '); }
   return String(v);
 }
@@ -6075,6 +6091,61 @@ const SMC_RD_QUICK = [['1분기','01-01','03-31'], ['2분기','04-01','06-30'], 
 // [2026.11.11] 분기 여러 개(이어진 분기)도 이름 - 1~2분기 = 상반기, 3~4 = 하반기, 1~4 = 연간, 그 밖 'a~b분기'
 const SMC_Q = [['01-01','03-31'], ['04-01','06-30'], ['07-01','09-30'], ['10-01','12-31']];
 function smcRdQs(r, y){ const [a, b] = String(r || '').split('~'); const qa = SMC_Q.findIndex(q => a === `${y}-${q[0]}`), qb = SMC_Q.findIndex(q => b === `${y}-${q[1]}`); return qa >= 0 && qb >= qa ? [qa + 1, qb + 1] : null; }
+// [2026.11.11] 월+처리날짜(요청) - 값 { mo:'YYYY-MM', m:'메모', d:'처리날짜' }. 예전 월·날짜·글자 값도 읽음
+function smcMd(v){
+  if(v && typeof v === 'object' && !Array.isArray(v)) return { mo: v.mo || '', m: v.m || '', d: v.d || '' };
+  const t = v == null || v === false ? '' : String(v);
+  if(/^\d{4}-\d{2}$/.test(t)) return { mo: t, m: '', d: '' };
+  if(smcIso(t)) return { mo: '', m: '', d: t };
+  return { mo: '', m: t, d: '' };
+}
+function smcMdPop(btn){
+  const { s, k, c } = btn.dataset, r = btn.getBoundingClientRect();
+  const pop = document.createElement('div');
+  pop.id = 'closeDatePop'; pop.className = 'cl-pop'; pop.style.width = '280px';
+  document.body.appendChild(pop);
+  const place = () => { const pw = pop.offsetWidth, ph = pop.offsetHeight; pop.style.left = Math.max(8, Math.min(window.innerWidth - pw - 8, r.left)) + 'px'; pop.style.top = (r.bottom + ph + 8 > window.innerHeight ? Math.max(8, r.top - ph - 4) : r.bottom + 4) + 'px'; };
+  const S = SMC[s], y = S.year(), hist = () => (S.hist ? S.hist(k, c) : '');
+  const ym = n => { const t = new Date(); t.setDate(1); t.setMonth(t.getMonth() + n); return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}`; };
+  const view = () => {
+    const o = smcMd(S.get(k, c)); if(!o.mo && !o.m && !o.d) return edit();
+    const row = (l, v) => v ? `<div class="rd-row"><span>${l}</span><b>${taxjEsc(v)}</b></div>` : '';
+    const hh = hist();
+    pop.innerHTML = `${closePopX()}${hh}<div class="rd-view${hh ? '' : ' top'}">${row('월', o.mo ? `${o.mo.slice(0, 4)}년 ${Number(o.mo.slice(5))}월` : '')}${row('메모', o.m)}${row('처리날짜', o.d ? (smcIso(o.d) ? o.d.replace(/-/g, '.') : o.d) : '')}</div>
+      <div class="cl-pop-row" style="justify-content:flex-end;"><button type="button" data-a="edit">수정</button><button type="button" data-a="del" class="del">삭제</button></div>`;
+    closePopWire(pop);
+    pop.querySelector('[data-a=edit]').onclick = e => { e.stopPropagation(); edit(); };
+    pop.querySelector('[data-a=del]').onclick = async e => { e.stopPropagation(); closeDatePopClose(); if(await smConfirm('이 칸을 지울까요?', '월·메모·처리날짜가 모두 지워져요.', { tone:'danger', icon:'!', okText:'삭제' })) S.set(k, c, ''); };
+    place();
+  };
+  const edit = () => {
+    const o = smcMd(S.get(k, c)), has = !!(o.mo || o.m || o.d);
+    pop.innerHTML = `${closePopX()}${hist()}<div class="rd-lab">월</div>
+      <div class="cl-pop-range"><input type="month" class="rd-mo" value="${/^\d{4}-\d{2}$/.test(o.mo) ? o.mo : ''}"><button type="button" data-a="prev">지난달</button><button type="button" data-a="cur">이번 달</button></div>
+      <input type="text" class="cl-pop-text rd-m" placeholder="메모 (예: 예정, 미해당)" value="${escapeAttr(o.m)}">
+      <div class="rd-lab">처리날짜</div>
+      <div class="cl-pop-range"><input type="date" class="rd-d" value="${smcIso(o.d) ? o.d : ''}"><button type="button" data-a="today">오늘</button></div>
+      <div class="cl-pop-row" style="justify-content:space-between;"><button type="button" data-a="${has ? 'back' : 'close'}">${has ? '취소' : '닫기'}</button><button type="button" data-a="ok" style="font-weight:800; color:var(--primary-dark);">저장</button></div>`;
+    closePopWire(pop);
+    const imo = pop.querySelector('.rd-mo'), im = pop.querySelector('.rd-m'), id = pop.querySelector('.rd-d');
+    pop.querySelector('[data-a=prev]').onclick = () => { imo.value = ym(-1); };
+    pop.querySelector('[data-a=cur]').onclick = () => { imo.value = ym(0); };
+    pop.querySelector('[data-a=today]').onclick = () => { id.value = todayStr(); };
+    pop.querySelector('[data-a=back], [data-a=close]').onclick = e => { e.stopPropagation(); if(has) view(); else closeDatePopClose(); };
+    const save = () => {
+      if([imo, id].some(i => i.value && !/^\d{4}-/.test(i.value))) return smAlert('날짜를 확인해 주세요', '연도는 4자리로 입력해요.');
+      const v = {}; if(imo.value) v.mo = imo.value; if(im.value.trim()) v.m = im.value.trim(); if(id.value) v.d = id.value;
+      S.set(k, c, Object.keys(v).length ? v : '');
+      if(!document.body.contains(pop)) document.body.appendChild(pop);
+      view();
+    };
+    pop.querySelector('[data-a=ok]').onclick = save;
+    im.addEventListener('keydown', e => { if(e.key === 'Enter' && !e.isComposing){ e.preventDefault(); save(); } if(e.key === 'Escape') closeDatePopClose(); });
+    place();
+  };
+  view();
+  setTimeout(() => document.addEventListener('mousedown', closeDatePopOutside, true), 0);
+}
 function smcRdName(r, y){ const q = smcRdQs(r, y); if(!q) return ''; const [a, b] = q; return a === b ? `${a}분기` : a === 1 && b === 2 ? '상반기' : a === 3 && b === 4 ? '하반기' : a === 1 && b === 4 ? '연간' : `${a}~${b}분기`; }
 function smcAttr(s, k, c){ return `data-s="${escapeAttr(s)}" data-k="${escapeAttr(String(k))}" data-c="${escapeAttr(c)}"`; }
 function smcTd(s, k, col, val, tdCls){
@@ -6083,8 +6154,9 @@ function smcTd(s, k, col, val, tdCls){
   if(t === 'checkdate') return `${td}<input type="checkbox" ${val ? 'checked' : ''} ${at} title="${escapeAttr(val ? smcFmt(t, val, y) + ' · 누르면 해제' : '체크하면 날짜 입력')}" onclick="smcCheckDate(this, event)"></td>`;
   const has = val != null && val !== '';
   const AF = t === 'memo' ? smAttOf(smAttKey(s === 'close' ? 'close' : s, smcPer(s), k, col.id)) : [];   // [2026.11.11] 글자(팝업) 첨부파일
-  if(smcIsIcon(col)) return `${td}<button type="button" class="cl-dt vp-memo${has || AF.length ? ' has' : ''}" ${at} title="${escapeAttr((has ? (t === 'memo' ? String(val) : smcFmt(t, val, y)) : AF.length ? '' : '입력') + smAttTip(AF))}" onclick="smcPop(this)">${AF.length ? ICON_CL_CLIP + `<span class="vt-ic-n">${AF.length}</span>` : has ? (/^(date|month|range)$/.test(t) ? ICON_CL_CAL : ICON_MEMO_DOC) : ''}</button></td>`;
+  if(smcIsIcon(col)) return `${td}<button type="button" class="cl-dt vp-memo${has || AF.length ? ' has' : ''}" ${at} title="${escapeAttr((has ? (t === 'memo' ? String(val) : smcFmt(t, val, y)) : AF.length ? '' : '입력') + smAttTip(AF))}" onclick="smcPop(this)">${AF.length ? ICON_CL_CLIP + `<span class="vt-ic-n">${AF.length}</span>` : has ? (/^(date|month|range|rangedate|monthdate)$/.test(t) ? ICON_CL_CAL : ICON_MEMO_DOC) : ''}</button></td>`;
   if(t === 'select'){ const opts = col.opts || [], sv = has ? String(val) : ''; return `<td><select class="vp-in" style="min-width:84px;" ${at} onchange="smcSet(this, this.value)"><option value=""></option>${(sv && !opts.includes(sv) ? [sv] : []).concat(opts).map(o => `<option ${o === sv ? 'selected' : ''}>${taxjEsc(o)}</option>`).join('')}</select></td>`; }
+  if(t === 'monthdate' && !smcIsIcon(col)){ const o = smcMd(val), y2 = S.year(); return `${td}<button type="button" class="cl-dt" ${at} title="${escapeAttr(has ? smcFmt(t, val, y2) : '입력')}" onclick="smcPop(this)">${has ? `${taxjEsc([o.mo ? smcFmt('month', o.mo, y2) : '', o.m].filter(Boolean).join(' · '))}${o.d ? `<span class="rd-dd">✓${taxjEsc(smcFmt('date', o.d, y2))}</span>` : ''}` : ''}</button></td>`; }   // [2026.11.11] 월+처리날짜
   if(t === 'rangedate'){ const o = smcRd(val), y2 = S.year(); return `${td}<button type="button" class="cl-dt" ${at} title="${escapeAttr(has ? smcFmt(t, val, y2) : '입력')}" onclick="smcPop(this)">${has ? `${taxjEsc([o.r ? smcFmt('range', o.r, y2) : '', o.m].filter(Boolean).join(' · '))}${o.d ? `<span class="rd-dd">✓${taxjEsc(smcFmt('date', o.d, y2))}</span>` : ''}` : ''}</button></td>`; }
   if(t === 'text' || t === 'num') return `<td class="note-cell"><input type="text" value="${escapeAttr(smcFmt(t, val, y))}" ${at}${t === 'num' ? ' inputmode="numeric"' : ''} onchange="smcText(this)" style="width:100%;${t === 'num' ? ' text-align:right;' : ''}"></td>`;
   return `${td}<button type="button" class="cl-dt" ${at} title="${escapeAttr(has ? String(val) : '입력')}" onclick="smcPop(this)">${taxjEsc(smcFmt(t, val, y))}</button></td>`;
@@ -6162,6 +6234,7 @@ function smcCheckDate(cb, e){
 function smcPop(btn, as){
   closeDatePopClose();
   if(!as && (smcCtx(btn).col || {}).type === 'rangedate') return smcRdPop(btn);
+  if(!as && (smcCtx(btn).col || {}).type === 'monthdate') return smcMdPop(btn);
   const { S, k, c, col, cur } = smcCtx(btn), t = as || col.type, y = S.year(), s0 = btn.dataset.s;
   const pop = document.createElement('div');
   pop.id = 'closeDatePop'; pop.className = 'cl-pop';
@@ -6244,7 +6317,7 @@ function closeTableHtml(docs){
   const w = {};
   closeCols.forEach(c => {
     if(c.type === 'check') return;
-    if(c.type === 'date' || c.type === 'month' || c.type === 'range' || c.type === 'memo' || c.type === 'rangedate'){ w[c.id] = 0; return; }
+    if(c.type === 'date' || c.type === 'month' || c.type === 'range' || c.type === 'memo' || c.type === 'rangedate' || c.type === 'monthdate'){ w[c.id] = 0; return; }
     const len = Math.max(...String(c.label).split('\n').map(s => s.length), ...rows.map(x => String((d.v[x.id] || {})[c.id] ?? '').length));
     w[c.id] = Math.max(56, Math.min(240, len * 12 + 14));
   });
@@ -6258,7 +6331,7 @@ function closeTableHtml(docs){
     const cells = closeCols.map(c => {
       const val = v[c.id];
       if(c.type === 'check') return `<td style="text-align:center;"><input type="checkbox" ${val ? 'checked' : ''} onchange="closeSetVal('${cid}','${c.id}',this.checked)"></td>`;
-      if(c.type === 'checkdate' || c.type === 'select' || c.type === 'rangedate') return smcTd('close', x.id, c, val);   // [2026.11.11] 공통 목록에서 새로 생긴 입력 방식
+      if(c.type === 'checkdate' || c.type === 'select' || c.type === 'rangedate' || c.type === 'monthdate') return smcTd('close', x.id, c, val);   // [2026.11.11] 공통 목록에서 새로 생긴 입력 방식
       const ic = closeColIcon(c);
       if(c.type === 'memo'){ const L = closeMemoLines(val); return ic || !L.length ? `<td style="text-align:center;">${closeMemoBtn(cid, c.id, val)}</td>` : `<td style="text-align:center;"><button type="button" class="cl-dt" data-cid="${cid}" data-col="${c.id}" title="${escapeAttr(L.map((x, i) => `${i + 1}) ${x}`).join('\n'))}" onclick="closeMemoPop(this)">${taxjEsc(L.join(' / '))}</button></td>`; }   // [2026.11.11] 글자 전체면 줄을 이어서 보임   // [2026.10.23] 메모(목록) - 아이콘(개수), 눌러서 목록 보기·추가
       const hb = closeHistBadge(x.id, c.id);   // [2026.11.04] 2회 이상 입력한 칸은 오른쪽 위에 횟수
