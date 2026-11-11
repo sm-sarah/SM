@@ -7022,7 +7022,7 @@ function collectGoogleSnapshot(){
 }
 
 let needsResaveAfterLoad = false;
-let smSheetExtra = {}, smLoadBroken = '', smDropOk = null, smDropAsking = false;   // [2026.11.11] 데이터 안전: 모르는 칸 보관 · 시트 읽기 실패 · 급감 확인 통과한 내용
+let smSheetExtra = {}, smLoadBroken = '', smDropOk = null, smDropAsking = false, smVerifyUntil = 0, smLastSave = null;   // [2026.11.11] 데이터 안전: 모르는 칸 보관 · 시트 읽기 실패 · 급감 확인 통과한 내용
 let sheetLoadedOnce = false;
 async function loadFromGoogleSheet(guard){
   const res = await gapi.client.sheets.spreadsheets.values.get({
@@ -7246,6 +7246,33 @@ async function smDriveDailyBackup(){
   }catch(e){ console.warn('드라이브 날짜별 백업 실패', e); }
   finally{ smDriveBackupBusy = false; }
 }
+// [2026.11.11] 하루 중간 백업(요청: "한계는 어떻게?") - 날짜별 파일은 그날 첫 저장 상태라, 그 뒤 입력은 다음 날 백업에야 들어갔음.
+//   3시간마다(0·3·6…21시 칸) 저장할 때 'SM_백업_YYYY-MM-DD_HH시.json'(works 데이터만)을 따로 남김. 덮어쓰지 않고 최근 3일치만 두고 지울 땐 휴지통으로
+const SM_BACKUP_SLOT_H = 3, SM_BACKUP_SLOT_KEEP_DAYS = 3;
+let smSlotBackupBusy = false;
+async function smDriveSlotBackup(){
+  if(!googleAccessToken || smSlotBackupBusy) return;
+  const d = new Date(), slot = `${todayStr()}_${String(Math.floor(d.getHours() / SM_BACKUP_SLOT_H) * SM_BACKUP_SLOT_H).padStart(2, '0')}시`;
+  try{ if(localStorage.getItem('sm_drive_slot_backup') === slot) return; }catch(e){}
+  smSlotBackupBusy = true;
+  try{
+    const folder = await smBackupFolder(), name = `SM_백업_${slot}.json`;
+    const q = encodeURIComponent(`name='${name}' and '${folder}' in parents and trashed=false`);
+    const ex = await smDriveFetch(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id)&spaces=drive`);
+    if(!(ex.files && ex.files.length)){
+      const fd = new FormData();
+      fd.append('metadata', new Blob([JSON.stringify({ name, parents: [folder] })], { type:'application/json' }));
+      fd.append('file', new Blob([JSON.stringify({ savedAt: new Date().toISOString(), note: 'Sunmin\'s Works 3시간 백업(덮어쓰지 않음)', works: collectGoogleSnapshot() })], { type:'application/json' }));
+      await smDriveFetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id', { method:'POST', body: fd });
+    }
+    try{ localStorage.setItem('sm_drive_slot_backup', slot); }catch(e){}
+    const lq = encodeURIComponent(`'${folder}' in parents and trashed=false and name contains '시.json'`);
+    const all = await smDriveFetch(`https://www.googleapis.com/drive/v3/files?q=${lq}&fields=files(id,name)&pageSize=1000&spaces=drive`);
+    const cut = new Date(Date.now() - SM_BACKUP_SLOT_KEEP_DAYS * 86400000).toISOString().slice(0, 10);
+    for(const f of (all.files || [])){ const dd = (/SM_백업_(\d{4}-\d{2}-\d{2})_\d{2}시\.json$/.exec(f.name) || [])[1]; if(dd && dd < cut) await smDriveTrash(f.id); }
+  }catch(e){ console.warn('드라이브 3시간 백업 실패', e); }
+  finally{ smSlotBackupBusy = false; }
+}
 async function smOpenBackupFolder(){
   try{ const id = await smBackupFolder(); window.open(`https://drive.google.com/drive/folders/${id}`, '_blank', 'noopener'); }catch(e){ smAlert('백업 폴더를 열지 못했어요', String(e && e.message || e)); }
 }
@@ -7255,7 +7282,7 @@ async function showBackups(){
   const html = list.length ? list.map(p => `<div class="cl-hist-item"><div class="cl-hist-head"><b>${p.title.replace('backup_','')}</b>
       <button class="btn xs" onclick="document.querySelector('.sm-modal-ok').click(); setTimeout(() => restoreBackup('${p.title}'), 180);">이 날짜로 되돌리기</button></div></div>`).join('')
     : '<div class="cl-hist-empty">아직 백업이 없어요. 오늘 첫 저장 때 만들어져요.</div>';
-  smDialog({ title:'백업 목록', html:`<div class="cl-hist"><div class="cl-hist-meta">하루 한 번 자동 저장 · 최근 ${BACKUP_KEEP}일치 보관 · 드라이브에도 날짜별 파일(works + 회사 자료, 60일·매달 1일) <button class="btn ghost xs" onclick="smOpenBackupFolder()">드라이브 백업 폴더</button></div>${html}</div>`, icon:'⟲', cancelText:null, okText:'닫기', wide:true });
+  smDialog({ title:'백업 목록', html:`<div class="cl-hist"><div class="cl-hist-meta">하루 한 번 자동 저장 · 최근 ${BACKUP_KEEP}일치 보관 · 드라이브에도 날짜별 파일(works + 회사 자료, 60일·매달 1일)·3시간마다 중간 파일(works, 3일) <button class="btn ghost xs" onclick="smOpenBackupFolder()">드라이브 백업 폴더</button></div>${html}</div>`, icon:'⟲', cancelText:null, okText:'닫기', wide:true });
 }
 async function restoreBackup(title){
   if(!(await smConfirm(`${title.replace('backup_','')} 백업으로 되돌릴까요?`, '지금 데이터는 그 날짜 상태로 바뀌어요. (지금 상태도 오늘 백업에 남아 있어요)', { tone:'danger', icon:'!', okText:'되돌리기' }))) return;
@@ -7276,7 +7303,10 @@ async function saveToGoogleSheet(){
       // 다른 창/기기에서 먼저 저장함 → 덮어쓰지 않고 최신 내용을 불러옴
       // [2026.11.03] 요청: "저장이 바로 안 돼서 두 번 입력" - 예전엔 이때 방금 입력한 걸 버리고 "한 번 더 해주세요"였음
       //   → 마지막으로 맞춘 내용(기준) · 이 기기 · 시트 세 가지를 비교해, 이 기기에서 바꾼 부분은 살리고 다른 곳에서 바꾼 부분도 받아서 합친 뒤 다시 저장
-      const baseSnap = lastSyncedContent ? JSON.parse(lastSyncedContent) : null;
+      // [2026.11.11] 방금 내가 저장한 직후라면 그 저장 '전' 내용을 기준으로 합침 - 동시 저장으로 내 저장이 덮였어도 내가 바꾼 부분이 살아남음(덮이지 않았으면 결과는 같음). 저장 1분 안에만 - 그 뒤 다른 기기에서 일부러 지운 걸 되살리지 않게
+      const bStr = (smLastSave && smLastSave.v === lastSyncedVersion && smLastSave.prev && Date.now() - smLastSave.at < 60000) ? smLastSave.prev : lastSyncedContent;
+      smLastSave = null;
+      const baseSnap = bStr ? JSON.parse(bStr) : null;
       const localSnap = JSON.parse(JSON.stringify(collectGoogleSnapshot()));
       await loadFromGoogleSheet();
       const remoteSnap = JSON.parse(JSON.stringify(collectGoogleSnapshot()));
@@ -7343,11 +7373,27 @@ async function saveToGoogleSheet(){
     await gapi.client.sheets.spreadsheets.values.clear({
       spreadsheetId: googleSpreadsheetId, range: `data!A${rows.length + 2}:B1000`,
     });
+    smLastSave = { v: newVersion, prev: lastSyncedContent, at: Date.now() };   // [2026.11.11] 동시 저장 대비 - 저장 전 기준
     lastSyncedVersion = newVersion;
     lastSyncedContent = snapStr;
     writeLocalCache();
+    // [2026.11.11] 동시 저장 확인(요청: "한계는 어떻게?") - 시트는 한 번에 한 쪽만 잠글 수 없어서, 두 기기가 거의 동시에 저장하면 나중 쪽이 앞 쪽을 덮을 수 있음.
+    //   저장 3초 뒤 시트 버전을 다시 보고 내 버전이 아니면 저장을 다시 돌림 → 저장 앞부분 합치기가 '내 저장 전' 내용을 기준으로 시트 최신본과 합쳐 저장함.
+    //   다른 기기가 내 저장을 받은 뒤 정상 저장한 경우엔 합쳐도 결과가 같아 다시 저장하지 않음
+    smVerifyUntil = Date.now() + 6000;
+    setTimeout(async () => {
+      smVerifyUntil = 0;
+      if(lastSyncedVersion !== newVersion || savingNow) return;   // 그 사이 이 기기에서 또 저장·불러오기 함
+      try{
+        const rv = await readRemoteVersion();
+        if(!rv || rv === newVersion || lastSyncedVersion !== newVersion) return;
+        setSyncStatus('다른 기기와 동시에 저장돼서 다시 합치는 중...');
+        scheduleGoogleSave();
+      }catch(e){ console.warn('저장 확인 실패', e); }
+    }, 3000);
     dailyBackupIfNeeded(rows).catch(e => console.warn('백업 실패', e));
     smDriveDailyBackup();   // [2026.10.15] 드라이브 날짜별 파일도
+    smDriveSlotBackup();   // [2026.11.11] 3시간마다 중간 백업도
     // 저장하는 동안 또 바뀐 게 없으면 보관본 삭제
     if(JSON.stringify(collectGoogleSnapshot()) === snapStr) clearPendingChanges();
     const t = new Date();
@@ -12297,6 +12343,7 @@ function isEditingNow(){
 async function pollGoogleSheetForUpdates(){
   if(!googleAccessToken || !googleSpreadsheetId) return;
   if(saveTimer || savingNow) return;
+  if(smVerifyUntil > Date.now()) return;   // [2026.11.11] 방금 저장한 걸 확인하는 동안은 다시 읽지 않음(동시 저장이면 합쳐야 해서)
   if(isEditingNow()) return;
   if(smModalOpen()) return;   // [2026.11.03] 팝업에 입력하는 중에는 다시 읽지 않음(열린 팝업이 고치는 항목이 바뀌어 저장이 사라지던 문제)
   if(window.smUploadingN > 0) return;   // [2026.10.21] 파일을 올리는 동안은 시트를 다시 읽지 않음(아래 libUpload 주석 참고)
