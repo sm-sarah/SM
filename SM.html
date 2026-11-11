@@ -4292,6 +4292,27 @@ const ICON_BULB = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" s
 const ICON_MEMO_DOC = '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="13" y2="17"/></svg>';
 const ICON_CLIP = '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>';
 const ICON_PREV_PERIOD = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 4h9a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z"/><path d="M6 7H5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h1"/><path d="M14.5 9.5L12 12l2.5 2.5"/><path d="M12 12h4.5"/></svg>';
+// [2026.11.11] "결산 회사 메모 옆에 부가세 TIP - 여러 해·분기별 내역을 한 번에"(요청) - 회사웹 부가세 Tip(s__vatFilingTargets[거래처].__help, 조회만)
+//   위: 지금 Tip(차량·신고유형·수령자료·특이사항), 아래: 적힌 모든 해의 기수별 직원(최근 해부터, 결산 연도는 표시)
+const VAT_T_PDS = [['1기예정', '1기 예정', '3.31'], ['1기확정', '1기 확정', '6.30'], ['2기예정', '2기 예정', '9.30'], ['2기확정', '2기 확정', '12.31']];
+function closeTipHas(h){ return !!(h && ((h.vehicles || []).some(v => v && (v.type || v.no || v.own)) || h.vehicleYn || (h.kinds || []).length || (h.recv || []).length || String(h.memo || '').trim() || Object.keys(h.staff || {}).length)); }
+function closeTipTd(cid){
+  const docs = taxjFull && taxjFull.docs; if(!docs) return '<td style="text-align:center;"><span style="color:#d4c6cd;">-</span></td>';
+  const h = vatTHelp(docs, cid);
+  return `<td style="text-align:center;">${closeTipHas(h) ? `<button type="button" class="sm-tool-ic vt-ic" onclick="closeShowTip('${escapeAttr(cid)}')" title="부가세 Tip - 눌러서 여러 해·기수별로 보기" aria-label="Tip">${ICON_BULB}</button>` : '<span style="color:#d4c6cd;">-</span>'}</td>`;
+}
+function closeShowTip(cid){
+  const docs = taxjFull && taxjFull.docs; if(!docs) return;
+  const c = taxjClientIndex(docs).byId[cid] || {}, h = vatTHelp(docs, cid), e = taxjEsc;
+  const common = vatTHelpHtml(Object.assign({}, h, { staff: {} }), '', '', false).replace('<span>Tip</span>', '<span>Tip</span><span class="vtip-period">지금 기준</span>');
+  const byY = {};
+  Object.entries(h.staff || {}).forEach(([k, st]) => { const m = /^(\d{4})-(.+)$/.exec(k); if(!m) return; if(Array.isArray(st)){ const o = {}; st.forEach(x => o[x] = 0); st = o; } (byY[m[1]] = byY[m[1]] || {})[m[2]] = st || {}; });
+  const ys = Object.keys(byY).sort().reverse();
+  const stTxt = st => Object.keys(st).length ? Object.entries(st).map(([k, n]) => k === '있음' ? '유' : `${e(k)}${n ? ` <b>${n}명</b>` : ''}`).join(' · ') : '무';
+  const staff = ys.length ? `<div class="vtip" style="margin-top:12px;"><div class="vtip-h"><span>기수별 직원</span><span class="vtip-period">${ys[ys.length - 1]}~${ys[0]}년</span></div>${ys.map(y => `<div class="vtip-sec"><div class="vtip-k">${y}년${String(y) === String(closeYear) ? ' <i>결산 연도</i>' : ''}</div><div class="vtip-v">${VAT_T_PDS.filter(([pd]) => byY[y][pd]).map(([pd, lab, end]) => `<div><span class="vtip-dim" style="display:inline-block; min-width:96px;">${lab} (${end})</span> ${stTxt(byY[y][pd])}</div>`).join('')}</div></div>`).join('')}</div>`
+    : '<div class="hint" style="margin:12px 0 0;">기수별 직원 기록이 없어요.</div>';
+  smDialog({ title: c.name || '', html: common + staff, icon:'i', okText:'닫기', cancelText:null, wide:true });
+}
 function vatTShowHelp(cid){
   const docs = taxjFull && taxjFull.docs; if(!docs) return;
   const c = taxjClientIndex(docs).byId[cid] || {};
@@ -6323,7 +6344,7 @@ function closeTableHtml(docs){
     w[c.id] = Math.max(56, Math.min(240, len * 12 + 14));
   });
   const head = `<th class="tx-seq"><input type="checkbox" title="날짜 일괄 입력할 거래처 모두 고르기" onchange="closePickAll(this.checked)"></th><th class="tx-seq cl-lk">순번</th>`
-    + ['상호명','법인등록번호','사업자번호','개업일','회사 메모','급여종류'].map((l, i) => `<th class="vp-link cl-lk${i === 0 ? ' vp-sticky' : ''}${i === 5 ? ' vp-div' : ''}" title="${i === 5 ? '회사웹 원천세 검토표 이 해 1~12월 발생급여(조회만) - 아이콘을 누르면 달별로 보여요' : '회사웹 값(조회만)'}">${l}</th>`).join('')   // [2026.11.05] 급여종류 고정 칸(요청)   // [2026.11.03] 회사웹 결산 메모(1차·2차)
+    + ['상호명','법인등록번호','사업자번호','개업일','회사 메모','TIP','급여종류'].map((l, i) => `<th class="vp-link cl-lk${i === 0 ? ' vp-sticky' : ''}${i === 6 ? ' vp-div' : ''}" title="${i === 6 ? '회사웹 원천세 검토표 이 해 1~12월 발생급여(조회만) - 아이콘을 누르면 달별로 보여요' : i === 5 ? '회사웹 부가세 Tip(차량·신고유형·수령자료·특이사항 + 여러 해 기수별 직원) - 조회만' : '회사웹 값(조회만)'}">${l}</th>`).join('')   // [2026.11.11] 회사 메모 옆 부가세 TIP(요청)   // [2026.11.05] 급여종류 고정 칸(요청)   // [2026.11.03] 회사웹 결산 메모(1차·2차)
     + closeCols.map(c => `<th data-smdrag="close" data-smcol="${c.id}" draggable="true"><button class="vp-th" onclick="closeEditCol('${c.id}')" title="눌러서 이름·입력 방식·이어받기 수정 또는 삭제 · 끌어서 위치 옮기기${c.carry ? '\n(다음 해 결산으로 이어받는 항목)' : ''}">${taxjEsc(c.label).replace(/\n/g, '<br>')}${c.carry ? '<span class="vp-carry">↻</span>' : ''}</button></th>`).join('');
   const body = rows.map((x, n) => {
     const cid = escapeAttr(x.id), v = d.v[x.id] || {}, t = s => s ? taxjEsc(String(s)) : '-';
@@ -6351,10 +6372,10 @@ function closeTableHtml(docs){
     }).join('');
     return `<tr${x.gone ? ' class="cl-gone"' : ''}><td class="tx-seq"><input type="checkbox" class="cl-pick" data-cid="${cid}" ${closePicked.has(x.id) ? 'checked' : ''} onchange="closePick(this.dataset.cid, this.checked)"></td><td class="tx-seq cl-lk cl-num">${n + 1}</td>
       <td class="vp-sticky cl-lk" style="${smEntCss(x.c.entityType)}">${taxjEsc(x.c.name || '')}${x.gone ? ' <span class="cl-gone-tag">해지</span>' : ''}${closeRowBadge(x.id)}</td>
-      ${x.c.entityType === '개인' ? `<td class="cl-lk cl-num cl-off">${t(x.c.corpRegNo)}</td>` : lk(x.c.corpRegNo)}${lk(innerBizNo(x.c.bizNo || ''))}${lk(x.c.openDate)}${smCoMemoTd(closeCoMemo(x.id), `${x.c.name || ''} · ${closeYear}년 결산 회사 메모`, closeCoMemoFiles(x.id))}${closePayKindsTd(x.id, x.c.name)}${cells}</tr>`;
+      ${x.c.entityType === '개인' ? `<td class="cl-lk cl-num cl-off">${t(x.c.corpRegNo)}</td>` : lk(x.c.corpRegNo)}${lk(innerBizNo(x.c.bizNo || ''))}${lk(x.c.openDate)}${smCoMemoTd(closeCoMemo(x.id), `${x.c.name || ''} · ${closeYear}년 결산 회사 메모`, closeCoMemoFiles(x.id))}${closeTipTd(x.id)}${closePayKindsTd(x.id, x.c.name)}${cells}</tr>`;
   }).join('');
   return `<div class="table-scroll vat-prog" style="margin-top:8px;"><table><thead><tr>${head}</tr></thead>
-    <tbody>${body || `<tr><td colspan="${closeCols.length + 8}"><div class="empty" style="padding:18px;">${q ? '검색 결과가 없어요.' : '거래처가 없어요.'}</div></td></tr>`}</tbody></table></div>`;
+    <tbody>${body || `<tr><td colspan="${closeCols.length + 9}"><div class="empty" style="padding:18px;">${q ? '검색 결과가 없어요.' : '거래처가 없어요.'}</div></td></tr>`}</tbody></table></div>`;
 }
 // [2026.10.23] "결산 메뉴 메모랑 비고 합치고, 리스트 형태로 입력해서 팝업으로 보기"(요청)
 //   메모(목록) = 한 줄이 한 항목('\n'으로 이어 저장 - 예전 글자 값도 그대로 읽힘). 칸에는 아이콘 + 개수, 마우스를 올리면 번호 목록, 누르면 목록 창(추가·삭제)
