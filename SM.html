@@ -2166,6 +2166,26 @@ function smOrdApplyTab(tab){
   el.querySelectorAll('table').forEach((t, i) => { if(t.closest('.vp-ordering')) return; try{ smOrdApply(t, `${tab}:${v}:${i}`); }catch(e){ console.warn('칸 순서', e); } });
 }
 let smOrdDrag = null;
+// [2026.11.11] "항목을 끌어 옮길 때 표에 가로 스크롤이 있으면 안 넘어감"(요청) - 표 안의 칸을 끌고 있는 동안 마우스가 표 왼쪽·오른쪽 끝(70px 안, 표 밖 포함)에
+//   가면 그쪽으로 표를 자동으로 굴림(끝에 가까울수록 빠르게). 위·아래 끝은 화면(창) 스크롤. 모든 표 끌기(칸 순서·부가세 진행·내 항목) 공통
+(function smDragAutoScroll(){
+  let box = null, x = 0, y = 0, raf = 0;
+  const EDGE = 70, MAX = 22;
+  const step = () => {
+    raf = 0; if(!box) return;
+    const r = box.getBoundingClientRect(); let dx = 0;
+    if(x < r.left + EDGE) dx = -Math.ceil(MAX * Math.min(1, (r.left + EDGE - x) / EDGE));
+    else if(x > r.right - EDGE) dx = Math.ceil(MAX * Math.min(1, (x - (r.right - EDGE)) / EDGE));
+    let dy = 0; if(y < EDGE) dy = -MAX; else if(y > window.innerHeight - EDGE) dy = MAX;
+    if(dx) box.scrollLeft += dx;
+    if(dy) window.scrollBy(0, dy);
+    if(dx || dy) raf = requestAnimationFrame(step);
+  };
+  document.addEventListener('dragstart', e => { const t = e.target && e.target.closest && e.target.closest('th'); const sc = t && t.closest('.table-scroll'); box = sc && sc.scrollWidth > sc.clientWidth ? sc : null; }, true);
+  document.addEventListener('dragover', e => { if(!box) return; x = e.clientX; y = e.clientY; if(!raf) raf = requestAnimationFrame(step); }, true);
+  const end = () => { box = null; if(raf){ cancelAnimationFrame(raf); raf = 0; } };
+  document.addEventListener('dragend', end, true); document.addEventListener('drop', end, true);
+})();
 const smOrdTh = (e, table) => { const th = e.target && e.target.closest && e.target.closest('th[data-smord-key]'); return th && th.parentElement === th.closest('table').tHead.rows[0] && (!table || th.closest('table') === table) && !th.closest('.vp-ordering') ? th : null; };
 function smOrdClear(){ document.querySelectorAll('.sm-drop-l, .sm-drop-r, .sm-col-dragging').forEach(x => x.classList.remove('sm-drop-l', 'sm-drop-r', 'sm-col-dragging')); }
 document.addEventListener('dragstart', e => { const th = smOrdTh(e); if(!th) return; smOrdDrag = { table: th.closest('table'), key: th.dataset.smordKey }; th.classList.add('sm-col-dragging'); e.dataTransfer.effectAllowed = 'move'; try{ e.dataTransfer.setData('text/plain', smOrdDrag.key); }catch(_){} });
