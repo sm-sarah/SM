@@ -5167,6 +5167,8 @@ function closeGet(cid, colId){ const d = closeData[closeKey()]; return d && d.v[
 //   d.v[거래처][항목] = 마지막 값(예전처럼 화면·일괄·엑셀이 그대로 읽음), d.h[거래처][항목] = [{ v, at, r }] 기록(at = 입력 시각, r = 예전 회차 이름)
 //   체크·메모(목록) 항목은 기록을 쌓지 않음(메모는 원래 목록). '지우기' = 마지막 기록만 지우고 그 전 값으로 돌아감
 // [2026.11.04] "칸을 누르니 달력이 화면 왼쪽 아래에 갑자기 뜸"(요청) - 작은 창이 자리 잡기 전에 달력을 열어 엉뚱한 곳에 떴음 → 자리 잡은 뒤(두 프레임 뒤) 열기
+// [2026.11.11] 날짜칸 연도에 숫자를 이어 치면 6자리 연도(202606-06-30)가 들어가 꼬임(요청) - 모든 날짜칸 연도를 4자리로 막음
+document.addEventListener('focusin', e => { const t = e.target; if(t && t.type === 'date' && !t.max) t.max = '9999-12-31'; }, true);
 function smShowPicker(di){
   di.focus({ preventScroll:true });
   requestAnimationFrame(() => requestAnimationFrame(() => { if(!di.isConnected || document.activeElement !== di) return; try{ di.showPicker(); }catch(e){} }));
@@ -5604,7 +5606,7 @@ function closeRangePop(btn){
   const ia = pop.querySelector('.cl-r-a'), ib = pop.querySelector('.cl-r-b');
   const set = v => { closeSetVal(cid, col, v); closeDatePopClose(); renderClose(); };
   closePopWire(pop);
-  const save = () => { if(ia.value || ib.value) set(`${ia.value}~${ib.value}`); else closeDatePopClose(); };
+  const save = () => { if([ia, ib].some(i => i.value && !/^\d{4}-/.test(i.value))) return smAlert('날짜를 확인해 주세요', '연도는 4자리로 입력해요.'); if(ia.value || ib.value) set(`${ia.value}~${ib.value}`); else closeDatePopClose(); };
   pop.querySelectorAll('[data-v]').forEach(b => b.onclick = () => {
     const v = b.dataset.v;
     if(v === '__ystart'){ ia.value = `${closeYear}-01-01`; return; }
