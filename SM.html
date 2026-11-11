@@ -1346,7 +1346,8 @@ function smTogglePcView(){ try{ localStorage.setItem('sm_pc_view', window.SM_PC_
   /* [2026.11.11] "아이콘에 숫자가 들어가는 곳은 아이콘 스타일을 다르게"(요청 - 알림 배지형) - 숫자는 아이콘 오른쪽 위 분홍 동그라미(흰 글씨), 숫자 없는 아이콘은 그대로 */
   /* [2026.11.11] "숫자는 아이콘 오른쪽 위 첨자로 두되 아이콘과 겹치지 않게"(요청) - 아이콘 동그라미 바로 바깥 오른쪽 위에 붙임(동그라미 크기는 그대로) */
   :is(button, span):has(> .vt-ic-n){ position:relative; overflow:visible; }
-  .vt-ic-n{ position:absolute; left:calc(100% + 1px); bottom:calc(100% - 9px); min-width:13px; height:13px; padding:0 3px; margin:0; box-sizing:border-box; border-radius:7px; background:var(--primary); color:#fff; font-size:9px; font-weight:800; line-height:13px; text-align:center; pointer-events:none; font-variant-numeric:tabular-nums; }
+  /* [2026.11.11] "메모 표시가 이상해"(요청) - 숫자가 동그라미에서 떨어져 옆 칸 경계에 걸려 보여서, 동그라미 오른쪽 위 테두리에 붙임(글자 아이콘과는 안 겹침) */
+  .vt-ic-n{ position:absolute; left:calc(100% - 9px); bottom:calc(100% - 7px); box-shadow:0 0 0 1.5px #fff; min-width:13px; height:13px; padding:0 3px; margin:0; box-sizing:border-box; border-radius:7px; background:var(--primary); color:#fff; font-size:9px; font-weight:800; line-height:13px; text-align:center; pointer-events:none; font-variant-numeric:tabular-nums; }
   .sm-tool-ic.pay-memo-ic, .sm-tool-ic.pay-memo-ic:hover{ border-color:transparent; background:transparent; }   /* [2026.11.10] 원천세 신고현황 메모 아이콘은 바깥 테두리(원) 없이(요청) */
   /* [2026.11.05] 원천세 메모 팝업 - 건마다 줄바꿈·번호 칸 고정(왼쪽 정렬)·점선 구분, 전체/월별 묶음(요청) */
   .smm-box{ background:var(--primary-soft); border-radius:10px; padding:4px 12px; text-align:left; }
@@ -4997,7 +4998,7 @@ function vatProgPeriodRanges(){
 // [2026.10.19] "글자로 입력하면 가로 여백이 계속 늘어난다 - 아이콘으로 표시하고 마우스를 올리면 메모가 보이게"(요청) - 입력 방식 '글자(팝업)'
 function vatProgMemoBtn(cid, colId, v){
   const has = v != null && String(v).trim() !== '', F = smAttOf(smAttKey('vp', vatProgKey(), cid, colId));   // [2026.11.11] 첨부파일
-  return `<button type="button" class="cl-dt vp-dt vp-memo${has || F.length ? ' has' : ''}" data-cid="${cid}" data-col="${colId}" title="${escapeAttr((has ? String(v) : F.length ? '' : '메모 입력') + smAttTip(F))}" aria-label="메모" onclick="vatProgMemoPop(this)">${F.length ? ICON_CL_CLIP + `<span class="vt-ic-n">${F.length}</span>` : ICON_MEMO_DOC}</button>`;
+  return `<button type="button" class="cl-dt vp-dt vp-memo${has || F.length ? ' has' : ''}" data-cid="${cid}" data-col="${colId}" title="${escapeAttr((has ? String(v) : F.length ? '' : '메모 입력') + smAttTip(F))}" aria-label="메모" onclick="vatProgMemoPop(this)">${F.length ? ICON_CL_CLIP + (F.length > 1 ? `<span class="vt-ic-n">${F.length}</span>` : '') : ICON_MEMO_DOC}</button>`;
 }
 function vatProgMemoPop(btn){
   closeDatePopClose();
@@ -6154,7 +6155,7 @@ function smcTd(s, k, col, val, tdCls){
   if(t === 'checkdate') return `${td}<input type="checkbox" ${val ? 'checked' : ''} ${at} title="${escapeAttr(val ? smcFmt(t, val, y) + ' · 누르면 해제' : '체크하면 날짜 입력')}" onclick="smcCheckDate(this, event)"></td>`;
   const has = val != null && val !== '';
   const AF = t === 'memo' ? smAttOf(smAttKey(s === 'close' ? 'close' : s, smcPer(s), k, col.id)) : [];   // [2026.11.11] 글자(팝업) 첨부파일
-  if(smcIsIcon(col)) return `${td}<button type="button" class="cl-dt vp-memo${has || AF.length ? ' has' : ''}" ${at} title="${escapeAttr((has ? (t === 'memo' ? String(val) : smcFmt(t, val, y)) : AF.length ? '' : '입력') + smAttTip(AF))}" onclick="smcPop(this)">${AF.length ? ICON_CL_CLIP + `<span class="vt-ic-n">${AF.length}</span>` : has ? (/^(date|month|range|rangedate|monthdate)$/.test(t) ? ICON_CL_CAL : ICON_MEMO_DOC) : ''}</button></td>`;
+  if(smcIsIcon(col)) return `${td}<button type="button" class="cl-dt vp-memo${has || AF.length ? ' has' : ''}" ${at} title="${escapeAttr((has ? (t === 'memo' ? String(val) : smcFmt(t, val, y)) : AF.length ? '' : '입력') + smAttTip(AF))}" onclick="smcPop(this)">${AF.length ? ICON_CL_CLIP + (AF.length > 1 ? `<span class="vt-ic-n">${AF.length}</span>` : '') : has ? (/^(date|month|range|rangedate|monthdate)$/.test(t) ? ICON_CL_CAL : ICON_MEMO_DOC) : ''}</button></td>`;
   if(t === 'select'){ const opts = col.opts || [], sv = has ? String(val) : ''; return `<td><select class="vp-in" style="min-width:84px;" ${at} onchange="smcSet(this, this.value)"><option value=""></option>${(sv && !opts.includes(sv) ? [sv] : []).concat(opts).map(o => `<option ${o === sv ? 'selected' : ''}>${taxjEsc(o)}</option>`).join('')}</select></td>`; }
   if(t === 'monthdate' && !smcIsIcon(col)){ const o = smcMd(val), y2 = S.year(); return `${td}<button type="button" class="cl-dt" ${at} title="${escapeAttr(has ? smcFmt(t, val, y2) : '입력')}" onclick="smcPop(this)">${has ? `${taxjEsc([o.mo ? smcFmt('month', o.mo, y2) : '', o.m].filter(Boolean).join(' · '))}${o.d ? `<span class="rd-dd">✓${taxjEsc(smcFmt('date', o.d, y2))}</span>` : ''}` : ''}</button></td>`; }   // [2026.11.11] 월+처리날짜
   if(t === 'rangedate'){ const o = smcRd(val), y2 = S.year(); return `${td}<button type="button" class="cl-dt" ${at} title="${escapeAttr(has ? smcFmt(t, val, y2) : '입력')}" onclick="smcPop(this)">${has ? `${taxjEsc([o.r ? smcFmt('range', o.r, y2) : '', o.m].filter(Boolean).join(' · '))}${o.d ? `<span class="rd-dd">✓${taxjEsc(smcFmt('date', o.d, y2))}</span>` : ''}` : ''}</button></td>`; }
@@ -6366,11 +6367,11 @@ function closeMemoBtn(cid, colId, v){
   const F = closeFilesOf(cid, colId);
   if(F.length) return closeMemoBtnHtml(cid, colId, closeMemoLines(v), F);
   const L = closeMemoLines(v);
-  return `<button type="button" class="cl-dt vp-dt vp-memo${L.length ? ' has' : ''}" data-cid="${cid}" data-col="${colId}" title="${escapeAttr(L.length ? L.map((x, i) => `${i + 1}) ${x}`).join('\n') : '메모 입력')}" aria-label="메모" onclick="closeMemoPop(this)">${ICON_MEMO_DOC}${L.length ? `<span class="vt-ic-n">${L.length}</span>` : ''}</button>`;
+  return `<button type="button" class="cl-dt vp-dt vp-memo${L.length ? ' has' : ''}" data-cid="${cid}" data-col="${colId}" title="${escapeAttr(L.length ? L.map((x, i) => `${i + 1}) ${x}`).join('\n') : '메모 입력')}" aria-label="메모" onclick="closeMemoPop(this)">${ICON_MEMO_DOC}${L.length > 1 ? `<span class="vt-ic-n">${L.length}</span>` : ''}</button>`;
 }
 function closeMemoBtnHtml(cid, colId, L, F){
   const n = L.length + F.length, tip = L.map((x, i) => `${i + 1}) ${x}`).concat(F.map(f => `📎 ${f.name}`)).join('\n');
-  return `<button type="button" class="cl-dt vp-dt vp-memo${n ? ' has' : ''}" data-cid="${cid}" data-col="${colId}" title="${escapeAttr(n ? tip : '메모 입력')}" aria-label="메모" onclick="closeMemoPop(this)">${F.length ? ICON_CL_CLIP : ICON_MEMO_DOC}${n ? `<span class="vt-ic-n">${n}</span>` : ''}</button>`;
+  return `<button type="button" class="cl-dt vp-dt vp-memo${n ? ' has' : ''}" data-cid="${cid}" data-col="${colId}" title="${escapeAttr(n ? tip : '메모 입력')}" aria-label="메모" onclick="closeMemoPop(this)">${F.length ? ICON_CL_CLIP : ICON_MEMO_DOC}${n > 1 ? `<span class="vt-ic-n">${n}</span>` : ''}</button>`;
 }
 const ICON_CL_CLIP = '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M21.4 11.1l-9.2 9.2a6 6 0 0 1-8.5-8.5l9.2-9.2a4 4 0 0 1 5.7 5.7l-9.2 9.2a2 2 0 0 1-2.8-2.8l8.5-8.5"/></svg>';
 function closeMemoPop(btn){
