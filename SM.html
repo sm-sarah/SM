@@ -1559,6 +1559,10 @@ function smTogglePcView(){ try{ localStorage.setItem('sm_pc_view', window.SM_PC_
   .sm-pv-tray-it.min button[data-i]{ font-style:italic; opacity:.8; }
   .cl-att{ display:flex; flex-wrap:wrap; gap:4px; align-items:center; padding-top:6px; border-top:1px dashed var(--border); }
   .cl-att .att-chip a{ max-width:200px; }
+  .cl-att-o{ display:flex; flex-wrap:wrap; gap:4px; padding-top:4px; }
+  .cl-att-ol{ width:100%; font-size:11px; font-weight:700; color:var(--muted); }
+  .att-chip.o{ background:#f3f0f6; padding-right:8px; }
+  .att-chip.o i{ font-style:normal; font-size:10.5px; font-weight:800; color:var(--primary-dark); margin-right:4px; }
   .cl-att-add{ font:inherit; font-size:11.5px; font-weight:700; border:1px dashed var(--primary); background:transparent; color:var(--primary-dark); border-radius:8px; padding:2px 8px; cursor:pointer; }
   .cl-pop.drop{ outline:2px dashed var(--primary); outline-offset:2px; }   /* [2026.11.11] 메모 창에 파일 끌어다 놓기 */
   .att-chip button{ border:none; background:transparent; color:var(--muted); cursor:pointer; font-size:14px; line-height:1; padding:0 3px; }
@@ -4958,8 +4962,8 @@ function vatProgPeriodRanges(){
 }
 // [2026.10.19] "글자로 입력하면 가로 여백이 계속 늘어난다 - 아이콘으로 표시하고 마우스를 올리면 메모가 보이게"(요청) - 입력 방식 '글자(팝업)'
 function vatProgMemoBtn(cid, colId, v){
-  const has = v != null && String(v).trim() !== '';
-  return `<button type="button" class="cl-dt vp-dt vp-memo${has ? ' has' : ''}" data-cid="${cid}" data-col="${colId}" title="${escapeAttr(has ? String(v) : '메모 입력')}" aria-label="메모" onclick="vatProgMemoPop(this)">${ICON_MEMO_DOC}</button>`;
+  const has = v != null && String(v).trim() !== '', F = smAttOf(smAttKey('vp', vatProgKey(), cid, colId));   // [2026.11.11] 첨부파일
+  return `<button type="button" class="cl-dt vp-dt vp-memo${has || F.length ? ' has' : ''}" data-cid="${cid}" data-col="${colId}" title="${escapeAttr((has ? String(v) : F.length ? '' : '메모 입력') + smAttTip(F))}" aria-label="메모" onclick="vatProgMemoPop(this)">${F.length ? ICON_CL_CLIP + `<span class="vt-ic-n">${F.length}</span>` : ICON_MEMO_DOC}</button>`;
 }
 function vatProgMemoPop(btn){
   closeDatePopClose();
@@ -4967,11 +4971,13 @@ function vatProgMemoPop(btn){
   const pop = document.createElement('div');
   pop.id = 'closeDatePop'; pop.className = 'cl-pop'; pop.style.width = '280px';
   pop.innerHTML = `<textarea class="cl-pop-memo" rows="4" placeholder="내용 입력 후 Enter 저장 (Shift+Enter 줄바꿈)">${taxjEsc(cur)}</textarea>
-    <div class="cl-pop-row" style="justify-content:space-between;"><button type="button" data-v="__clear" class="del">지우기</button><button type="button" data-v="__ok" style="font-weight:800; color:var(--primary-dark); border-color:var(--primary);">저장</button></div>`;
+    <div class="cl-pop-row" style="justify-content:space-between;"><button type="button" data-v="__clear" class="del">지우기</button><button type="button" data-v="__ok" style="font-weight:800; color:var(--primary-dark); border-color:var(--primary);">저장</button></div>
+    ${smAttHtml('vp', vatProgKey(), cid, col, vatProgKeyLabel)}`;
   document.body.appendChild(pop);
   const r = btn.getBoundingClientRect(), pw = pop.offsetWidth, ph = pop.offsetHeight;
   pop.style.left = Math.max(8, Math.min(window.innerWidth - pw - 8, r.left)) + 'px';
-  pop.style.top = (r.bottom + ph + 8 > window.innerHeight ? r.top - ph - 4 : r.bottom + 4) + 'px';
+  pop.style.top = (r.bottom + ph + 8 > window.innerHeight ? Math.max(8, r.top - ph - 4) : r.bottom + 4) + 'px';
+  smAttWire(pop, 'vp', vatProgKey(), cid, col, () => { closeDatePopClose(); renderVat(); }, () => renderVat());   // [2026.11.11] 첨부파일(다른 기수 첨부는 보기만)
   const ta = pop.querySelector('textarea');
   const set = v => { v = String(v).trim(); vatProgSet(cid, col, v); btn.classList.toggle('has', !!v); btn.title = v || '메모 입력'; closeDatePopClose(); };
   pop.querySelectorAll('[data-v]').forEach(b => b.onclick = () => set(b.dataset.v === '__clear' ? '' : ta.value));
@@ -5859,6 +5865,55 @@ document.addEventListener('keydown', e => {
   else { const a = el.selectionStart ?? el.value.length, b = el.selectionEnd ?? a; el.value = el.value.slice(0, a) + '000' + el.value.slice(b); try{ el.setSelectionRange(a + 3, a + 3); }catch(err){} }
   el.dispatchEvent(new Event('input', { bubbles:true }));
 }, true);
+// ===== [2026.11.11] 칸 첨부파일 공통(요청: "메모에 첨부 - 다른 화면에도, 연도별로 저장되지만 다른 연도 것도 지금 연도에서 보이게")
+//   cellFiles 키 = '화면|기간|거래처|항목'(기간 = 그 화면 자료의 단위: 결산 = 연도, 부가세 = 연도-기수, 신고현황 = 연-월 …)
+//   창에는 지금 기간 파일(빼기·추가) + 같은 칸의 다른 기간 파일(미리보기만, 기간 표시)
+function smAttKey(sc, per, row, col){ return `${sc}|${per}|${row}|${col}`; }
+function smAttOf(key){ cellFiles = cellFiles || {}; return Array.isArray(cellFiles[key]) ? cellFiles[key] : []; }
+function smAttOthers(sc, per, row, col){
+  cellFiles = cellFiles || {}; const head = sc + '|', tail = `|${row}|${col}`, out = [];
+  Object.keys(cellFiles).forEach(k => { if(!k.startsWith(head) || !k.endsWith(tail)) return; const p = k.slice(head.length, k.length - tail.length); if(p !== String(per) && !p.includes('|') && (cellFiles[k] || []).length) out.push([p, cellFiles[k]]); });
+  return out.sort((a, b) => String(b[0]).localeCompare(String(a[0])));
+}
+function smAttHtml(sc, per, row, col, perLabel){
+  const F = smAttOf(smAttKey(sc, per, row, col)), O = smAttOthers(sc, per, row, col), lab = perLabel || (x => `${x}년`);
+  return `<div class="cl-att" title="파일을 여기로 끌어다 놓거나, 입력칸에 이미지를 붙여넣어도 올라가요">${F.map((f, i) => `<span class="att-chip"><a href="${escapeAttr(f.url)}" target="_blank" rel="noopener" data-fi="${i}" title="미리보기 (Ctrl+클릭: 드라이브에서 열기)">📎 ${taxjEsc(f.name)}</a><button type="button" data-fdel="${i}" title="첨부 빼기" aria-label="첨부 빼기">×</button></span>`).join('')}<button type="button" class="cl-att-add">+ 파일</button></div>`
+    + (O.length ? `<div class="cl-att-o"><div class="cl-att-ol">다른 ${/^(vp|vatc)$/.test(sc) ? '기수' : sc === 'pay' ? '달' : '연도'} 첨부 (보기만)</div>${O.map(([p, L]) => L.map((f, i) => `<span class="att-chip o"><a href="${escapeAttr(f.url)}" target="_blank" rel="noopener" data-fo="${escapeAttr(p)}|${i}" title="미리보기 (Ctrl+클릭: 드라이브에서 열기)"><i>${taxjEsc(lab(p))}</i>📎 ${taxjEsc(f.name)}</a></span>`).join('')).join('')}</div>` : '');
+}
+async function smAttUpload(key, files, after){
+  files = Array.from(files || []).filter(Boolean); if(!files.length || !smUploadReady()) return;
+  const big = files.find(f => f.size > 50 * 1024 * 1024); if(big) return smAlert('파일이 너무 커요', `${big.name}: 50MB 이하만 올릴 수 있어요.`);
+  window.smUploadingN = (window.smUploadingN || 0) + 1;
+  smToast(`파일 ${files.length}개 올리는 중...`, 60000);
+  try{
+    for(const f of files){
+      const up = await smDriveUpload(f.name ? f : new File([f], `붙여넣은 이미지_${Date.now()}.png`, { type: f.type || 'image/png' }));
+      cellFiles = cellFiles || {}; (cellFiles[key] = Array.isArray(cellFiles[key]) ? cellFiles[key] : []).push(Object.assign(up, { at: todayStr() }));
+    }
+    smToast('파일을 올렸어요', 1800);
+  }catch(e){ console.error(e); smToast('', 1); smAlert('올리지 못했어요', String(e && e.message || e), { tone:'danger' }); }
+  finally{ window.smUploadingN = Math.max(0, (window.smUploadingN || 1) - 1); scheduleGoogleSave(); if(after) after(); }
+}
+// pop 안의 첨부 칸 연결. after = 올리기·빼기 뒤(창이 열려 있으면 다시 그리기 등), gone = 빼기 확인창을 띄우려고 창을 닫은 뒤 화면 다시 그리기
+function smAttWire(pop, sc, per, row, col, after, gone){
+  const key = smAttKey(sc, per, row, col), F = smAttOf(key);
+  pop.querySelectorAll('[data-fi]').forEach(a => a.onclick = e => { if(e.ctrlKey || e.metaKey || e.shiftKey) return; e.preventDefault(); const f = F[+a.dataset.fi]; smPreviewFile({ id: f.id, name: f.name, url: f.url }); });
+  pop.querySelectorAll('[data-fo]').forEach(a => a.onclick = e => { if(e.ctrlKey || e.metaKey || e.shiftKey) return; e.preventDefault(); const [p, i] = a.dataset.fo.split('|'); const f = smAttOf(smAttKey(sc, p, row, col))[+i]; if(f) smPreviewFile({ id: f.id, name: f.name, url: f.url }); });
+  pop.querySelectorAll('[data-fdel]').forEach(b => b.onclick = async e => {
+    e.stopPropagation(); const f = F[+b.dataset.fdel]; if(!f) return;
+    closeDatePopClose();
+    if(!(await smConfirm('첨부파일을 뺄까요?', `${f.name}\n드라이브에서는 휴지통으로 옮겨져요(30일 안에 되살릴 수 있어요).`, { tone:'danger', icon:'!', okText:'빼기' }))) return;
+    cellFiles[key] = (cellFiles[key] || []).filter(x => x.id !== f.id); if(!cellFiles[key].length) delete cellFiles[key];
+    scheduleGoogleSave(); if(gone) gone(); smDriveTrash(f.id);
+  });
+  const add = pop.querySelector('.cl-att-add');
+  if(add) add.onclick = e => { e.stopPropagation(); if(!smUploadReady()) return; const fi = document.createElement('input'); fi.type = 'file'; fi.multiple = true; fi.onchange = () => smAttUpload(key, fi.files, after); fi.click(); };
+  pop.ondragover = e => { if(Array.from(e.dataTransfer.types || []).includes('Files')){ e.preventDefault(); pop.classList.add('drop'); } };
+  pop.ondragleave = () => pop.classList.remove('drop');
+  pop.ondrop = e => { if(!e.dataTransfer || !e.dataTransfer.files.length) return; e.preventDefault(); pop.classList.remove('drop'); smAttUpload(key, e.dataTransfer.files, after); };
+  pop.onpaste = e => { const fs = Array.from((e.clipboardData && e.clipboardData.files) || []); if(!fs.length) return; e.preventDefault(); smAttUpload(key, fs, after); };
+}
+function smAttTip(F){ return F.length ? '\n' + F.map(f => `📎 ${f.name}`).join('\n') : ''; }
 // ===== [2026.11.11] works 공통 항목 칸(요청: "항목 추가 기능 있는 곳 모두 - 입력 방식 목록을 가장 많은 목록으로 통일, 칸 표시(글자 전체/아이콘)도 고르게") =====
 //   목록 = 부가세 진행 목록(8가지) + 결산의 '월'(이미 쓰는 칸이 있어 유지). 신고현황만 '완납·미납'을 더 둠(신고서류 칸과 묶인 전용)
 //   각 화면에 원래 있던 입력 방식은 원래 모양 그대로 쓰고, 없던 입력 방식·아이콘 표시만 아래 공통 칸(smcTd)으로 그림
@@ -5911,16 +5966,17 @@ function smcTd(s, k, col, val, tdCls){
   if(t === 'check') return `${td}<input type="checkbox" ${val ? 'checked' : ''} ${at} onchange="smcSet(this, this.checked)"></td>`;
   if(t === 'checkdate') return `${td}<input type="checkbox" ${val ? 'checked' : ''} ${at} title="${escapeAttr(val ? smcFmt(t, val, y) + ' · 누르면 해제' : '체크하면 날짜 입력')}" onclick="smcCheckDate(this, event)"></td>`;
   const has = val != null && val !== '';
-  if(smcIsIcon(col)) return `${td}<button type="button" class="cl-dt vp-memo${has ? ' has' : ''}" ${at} title="${escapeAttr(has ? (t === 'memo' ? String(val) : smcFmt(t, val, y)) : '입력')}" onclick="smcPop(this)">${has ? (/^(date|month|range)$/.test(t) ? ICON_CL_CAL : ICON_MEMO_DOC) : ''}</button></td>`;
+  const AF = t === 'memo' ? smAttOf(smAttKey(s === 'close' ? 'close' : s, smcPer(s), k, col.id)) : [];   // [2026.11.11] 글자(팝업) 첨부파일
+  if(smcIsIcon(col)) return `${td}<button type="button" class="cl-dt vp-memo${has || AF.length ? ' has' : ''}" ${at} title="${escapeAttr((has ? (t === 'memo' ? String(val) : smcFmt(t, val, y)) : AF.length ? '' : '입력') + smAttTip(AF))}" onclick="smcPop(this)">${AF.length ? ICON_CL_CLIP + `<span class="vt-ic-n">${AF.length}</span>` : has ? (/^(date|month|range)$/.test(t) ? ICON_CL_CAL : ICON_MEMO_DOC) : ''}</button></td>`;
   if(t === 'select'){ const opts = col.opts || [], sv = has ? String(val) : ''; return `<td><select class="vp-in" style="min-width:84px;" ${at} onchange="smcSet(this, this.value)"><option value=""></option>${(sv && !opts.includes(sv) ? [sv] : []).concat(opts).map(o => `<option ${o === sv ? 'selected' : ''}>${taxjEsc(o)}</option>`).join('')}</select></td>`; }
   if(t === 'rangedate'){ const o = smcRd(val), y2 = S.year(); return `${td}<button type="button" class="cl-dt" ${at} title="${escapeAttr(has ? smcFmt(t, val, y2) : '입력')}" onclick="smcPop(this)">${has ? `${taxjEsc([o.r ? smcFmt('range', o.r, y2) : '', o.m].filter(Boolean).join(' · '))}${o.d ? `<span class="rd-dd">✓${taxjEsc(smcFmt('date', o.d, y2))}</span>` : ''}` : ''}</button></td>`; }
   if(t === 'text' || t === 'num') return `<td class="note-cell"><input type="text" value="${escapeAttr(smcFmt(t, val, y))}" ${at}${t === 'num' ? ' inputmode="numeric"' : ''} onchange="smcText(this)" style="width:100%;${t === 'num' ? ' text-align:right;' : ''}"></td>`;
   return `${td}<button type="button" class="cl-dt" ${at} title="${escapeAttr(has ? String(val) : '입력')}" onclick="smcPop(this)">${taxjEsc(smcFmt(t, val, y))}</button></td>`;
 }
 SMC.close = { get: (k, c) => closeGet(k, c), set: (k, c, v) => { closeSetVal(k, c, v); renderClose(); }, year: () => closeYear, hist: (k, c) => closeHistListHtml(k, c), col: id => closeCols.find(x => x.id === id) };
-SMC.vp = { get: (k, c) => ((vatProg[vatProgKey()] || {})[k] || {})[c], set: (k, c, v) => vatProgSet(k, c, v, true), year: () => vatYear, col: id => vatProgCols.find(x => x.id === id) };
-SMC.vatc = { get: (k, c) => ((vatCustomVals[`${vatYear}-${vatTPeriod()}`] || {})[k] || {})[c], set: (k, c, v) => setVatCustomVal(k, c, v), year: () => vatYear, col: id => vatCustomCols.find(x => x.id === id) };
-SMC.pay = { get: (k, c) => ((payCustomVals[payMonth] || {})[k] || {})[c], set: (k, c, v) => setPayCustomVal(k, c, v), year: () => String(payMonth).slice(0, 4), col: id => payCustomCols.find(x => x.id === id) };
+SMC.vp = { per: () => vatProgKey(), perLabel: vatProgKeyLabel, get: (k, c) => ((vatProg[vatProgKey()] || {})[k] || {})[c], set: (k, c, v) => vatProgSet(k, c, v, true), year: () => vatYear, col: id => vatProgCols.find(x => x.id === id) };
+SMC.vatc = { per: () => `${vatYear}-${vatTPeriod()}`, perLabel: vatProgKeyLabel, get: (k, c) => ((vatCustomVals[`${vatYear}-${vatTPeriod()}`] || {})[k] || {})[c], set: (k, c, v) => setVatCustomVal(k, c, v), year: () => vatYear, col: id => vatCustomCols.find(x => x.id === id) };
+SMC.pay = { per: () => String(payMonth), perLabel: p => { const [y, m] = String(p).split('-'); return m ? `${y}년 ${Number(m)}월` : p; }, get: (k, c) => ((payCustomVals[payMonth] || {})[k] || {})[c], set: (k, c, v) => setPayCustomVal(k, c, v), year: () => String(payMonth).slice(0, 4), col: id => payCustomCols.find(x => x.id === id) };
 ['corp', 'indiv'].forEach(kind => { SMC['tax-' + kind] = { get: (k, c) => taxColVal(kind, k, c), set: (k, c, v) => taxSetVal(kind, k, c, v), year: () => TAX_COL_KINDS[kind].year(), col: id => taxCols(kind).find(x => x.id === id) }; });
 // [2026.11.11] 기간+처리날짜 창(요청) - 값이 있으면 먼저 내용 보기(수정·삭제), 없거나 '수정'이면 입력(기간: 분기·상·하반기·직접 입력·메모 / 처리날짜: 오늘·직접)
 function smcRdPop(btn){
@@ -5977,6 +6033,7 @@ function smcRdPop(btn){
   view();
   setTimeout(() => document.addEventListener('mousedown', closeDatePopOutside, true), 0);
 }
+function smcPer(s){ const S = SMC[s]; return S.per ? S.per() : S.year(); }   // [2026.11.11] 첨부파일 기간
 function smcCtx(el){ const { s, k, c } = el.dataset, S = SMC[s]; return { S, k, c, col: S.col(c) || { id: c, type: 'text' }, cur: S.get(k, c) }; }
 function smcSet(el, v){ const { S, k, c } = smcCtx(el); S.set(k, c, v); }
 function smcText(el){ const { S, k, c, col } = smcCtx(el); const t = el.value.trim(); S.set(k, c, col.type === 'num' ? vatProgToNum(t) : t); }
@@ -5989,7 +6046,7 @@ function smcCheckDate(cb, e){
 function smcPop(btn, as){
   closeDatePopClose();
   if(!as && (smcCtx(btn).col || {}).type === 'rangedate') return smcRdPop(btn);
-  const { S, k, c, col, cur } = smcCtx(btn), t = as || col.type, y = S.year();
+  const { S, k, c, col, cur } = smcCtx(btn), t = as || col.type, y = S.year(), s0 = btn.dataset.s;
   const pop = document.createElement('div');
   pop.id = 'closeDatePop'; pop.className = 'cl-pop';
   const okRow = `<div class="cl-pop-row" style="justify-content:space-between;"><button type="button" data-v="__clear" class="del">지우기</button><button type="button" data-v="__ok" style="font-weight:800; color:var(--primary-dark);">저장</button></div>`;
@@ -6007,7 +6064,7 @@ function smcPop(btn, as){
     <div class="cl-pop-row"><button type="button" data-v="__ystart">1/1부터</button><button type="button" data-v="__today">끝 = 오늘</button></div>${okRow}`;
   }
   else if(t === 'select') pop.innerHTML = `${closePopX()}<div class="cl-pop-row">${(col.opts || []).map(o => `<button type="button" data-o="${escapeAttr(o)}"${o === cs ? ' style="font-weight:800; color:var(--primary-dark);"' : ''}>${taxjEsc(o)}</button>`).join('') || '<span class="hint" style="margin:0;">선택지가 없어요</span>'}</div><div class="cl-pop-row"><button type="button" data-v="__clear" class="del">지우기</button></div>`;
-  else if(t === 'memo'){ pop.style.width = '300px'; pop.innerHTML = `${closePopX()}<textarea class="cl-pop-memo" placeholder="입력 (줄바꿈 가능)">${taxjEsc(cs)}</textarea>${okRow}`; }
+  else if(t === 'memo'){ pop.style.width = '300px'; pop.innerHTML = `${closePopX()}<textarea class="cl-pop-memo" placeholder="입력 (줄바꿈 가능)">${taxjEsc(cs)}</textarea>${okRow}${smAttHtml(s0, smcPer(s0), k, c, SMC[s0].perLabel)}`; }
   else pop.innerHTML = `${closePopX()}<input type="text" class="cl-pop-text" placeholder="입력 후 Enter" value="${escapeAttr(smcFmt(t, cur, y))}">${okRow}`;
   document.body.appendChild(pop);
   const r = btn.getBoundingClientRect(), pw = pop.offsetWidth, ph = pop.offsetHeight;
@@ -6015,6 +6072,7 @@ function smcPop(btn, as){
   pop.style.top = (r.bottom + ph + 8 > window.innerHeight ? Math.max(8, r.top - ph - 4) : r.bottom + 4) + 'px';
   const set = v => { closeDatePopClose(); S.set(k, c, v); };
   closePopWire(pop);
+  if(t === 'memo') smAttWire(pop, s0, smcPer(s0), k, c, () => { closeDatePopClose(); S.set(k, c, S.get(k, c)); }, () => S.set(k, c, S.get(k, c)));   // [2026.11.11] 첨부파일 - 다시 그리기는 같은 값 저장으로
   const di = pop.querySelector('.cl-pop-date'), ti = pop.querySelector('.cl-pop-text'), ia = pop.querySelector('.cl-r-a'), ib = pop.querySelector('.cl-r-b'), ta = pop.querySelector('.cl-pop-memo');
   const save = () => {
     if(t === 'range'){ if([ia, ib].some(i => i.value && !/^\d{4}-/.test(i.value))) return smAlert('날짜를 확인해 주세요', '연도는 4자리로 입력해요.'); return set(ia.value || ib.value ? `${ia.value}~${ib.value}` : ''); }
@@ -6113,8 +6171,8 @@ function closeTableHtml(docs){
 // [2026.10.27] 줄 앞에 직접 적어 둔 번호('2)' 등)는 목록 번호와 겹쳐서 뺌
 function closeMemoLines(v){ return String(v == null ? '' : v).split('\n').map(x => x.trim().replace(/^\d+\)\s*/, '')).filter(Boolean); }
 // [2026.11.11] "메모·비고에 이미지·PDF 등 첨부파일도, 미리보기와 같이"(요청) - 파일은 내 드라이브(첨부 폴더)에 올리고 칸에는 목록만. 숫자 = 메모 줄 + 파일 수
-function closeFilesKey(cid, col){ return `close|${closeYear}|${cid}|${col}`; }
-function closeFilesOf(cid, col){ cellFiles = cellFiles || {}; const k = closeFilesKey(cid, col); return Array.isArray(cellFiles[k]) ? cellFiles[k] : []; }
+function closeFilesKey(cid, col){ return smAttKey('close', closeYear, cid, col); }
+function closeFilesOf(cid, col){ return smAttOf(closeFilesKey(cid, col)); }
 function closeMemoBtn(cid, colId, v){
   const F = closeFilesOf(cid, colId);
   if(F.length) return closeMemoBtnHtml(cid, colId, closeMemoLines(v), F);
@@ -6126,21 +6184,6 @@ function closeMemoBtnHtml(cid, colId, L, F){
   return `<button type="button" class="cl-dt vp-dt vp-memo${n ? ' has' : ''}" data-cid="${cid}" data-col="${colId}" title="${escapeAttr(n ? tip : '메모 입력')}" aria-label="메모" onclick="closeMemoPop(this)">${F.length ? ICON_CL_CLIP : ICON_MEMO_DOC}${n ? `<span class="vt-ic-n">${n}</span>` : ''}</button>`;
 }
 const ICON_CL_CLIP = '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M21.4 11.1l-9.2 9.2a6 6 0 0 1-8.5-8.5l9.2-9.2a4 4 0 0 1 5.7 5.7l-9.2 9.2a2 2 0 0 1-2.8-2.8l8.5-8.5"/></svg>';
-async function closeMemoUpload(cid, col, files, after){
-  files = Array.from(files || []).filter(Boolean); if(!files.length || !smUploadReady()) return;
-  const big = files.find(f => f.size > 50 * 1024 * 1024); if(big) return smAlert('파일이 너무 커요', `${big.name}: 50MB 이하만 올릴 수 있어요.`);
-  const k = closeFilesKey(cid, col);
-  window.smUploadingN = (window.smUploadingN || 0) + 1;
-  smToast(`파일 ${files.length}개 올리는 중...`, 60000);
-  try{
-    for(const f of files){
-      const up = await smDriveUpload(f.name ? f : new File([f], `붙여넣은 이미지_${Date.now()}.png`, { type: f.type || 'image/png' }));
-      cellFiles = cellFiles || {}; (cellFiles[k] = Array.isArray(cellFiles[k]) ? cellFiles[k] : []).push(Object.assign(up, { at: todayStr() }));
-    }
-    smToast('파일을 올렸어요', 1800);
-  }catch(e){ console.error(e); smToast('', 1); smAlert('올리지 못했어요', String(e && e.message || e), { tone:'danger' }); }
-  finally{ window.smUploadingN = Math.max(0, (window.smUploadingN || 1) - 1); scheduleGoogleSave(); if(after) after(); }
-}
 function closeMemoPop(btn){
   closeDatePopClose();
   const { cid, col } = btn.dataset;
@@ -6153,24 +6196,10 @@ function closeMemoPop(btn){
         ? `<input type="text" class="cl-memo-edit" value="${escapeAttr(x)}" style="flex:1; min-width:0; font:inherit; font-size:12.5px; border:1px solid var(--primary); border-radius:6px; padding:2px 6px;">`
         : `<span style="flex:1; white-space:pre-wrap; word-break:break-all;">${taxjEsc(x)}</span><button type="button" class="cl-memo-act" data-edit="${i}" title="수정" aria-label="수정">✎</button>`}<button type="button" class="cl-memo-act" data-del="${i}" title="삭제" aria-label="삭제">✕</button></div>`).join('') : '<div class="hint" style="margin:0;">아직 메모가 없어요.</div>'}</div>
       <input type="text" class="cl-pop-text cl-memo-add" placeholder="새 메모 입력 후 Enter (추가)" style="font:inherit; font-size:12.5px; border:1px solid var(--border); border-radius:8px; padding:6px 8px;">
-      <div class="cl-att" title="파일을 여기로 끌어다 놓거나, 메모 칸에 이미지를 붙여넣어도 올라가요">${closeFilesOf(cid, col).map((f, i) => `<span class="att-chip"><a href="${escapeAttr(f.url)}" target="_blank" rel="noopener" data-fi="${i}" title="미리보기 (Ctrl+클릭: 드라이브에서 열기)">📎 ${taxjEsc(f.name)}</a><button type="button" data-fdel="${i}" title="첨부 빼기" aria-label="첨부 빼기">×</button></span>`).join('')}<button type="button" class="cl-att-add">+ 파일</button></div>`;
+      ${smAttHtml('close', closeYear, cid, col)}`;
     closePopWire(pop);
-    // [2026.11.11] 첨부파일 - 누르면 미리보기 창, × = 빼기(드라이브는 휴지통), + 파일 / 끌어다 놓기 / 이미지 붙여넣기
-    const F = closeFilesOf(cid, col);
-    pop.querySelectorAll('[data-fi]').forEach(a => a.onclick = e => { if(e.ctrlKey || e.metaKey || e.shiftKey) return; e.preventDefault(); const f = F[+a.dataset.fi]; smPreviewFile({ id: f.id, name: f.name, url: f.url }); });
-    pop.querySelectorAll('[data-fdel]').forEach(b => b.onclick = async e => {
-      e.stopPropagation(); const f = F[+b.dataset.fdel]; if(!f) return;
-      closeDatePopClose();
-      if(!(await smConfirm('첨부파일을 뺄까요?', `${f.name}\n드라이브에서는 휴지통으로 옮겨져요(30일 안에 되살릴 수 있어요).`, { tone:'danger', icon:'!', okText:'빼기' }))) return;
-      const k = closeFilesKey(cid, col); cellFiles[k] = (cellFiles[k] || []).filter(x => x.id !== f.id); if(!cellFiles[k].length) delete cellFiles[k];
-      scheduleGoogleSave(); renderClose(); smDriveTrash(f.id);
-    });
-    const upAfter = () => { if(document.body.contains(pop)){ save(); draw(); } else renderClose(); };
-    pop.querySelector('.cl-att-add').onclick = e => { e.stopPropagation(); if(!smUploadReady()) return; const fi = document.createElement('input'); fi.type = 'file'; fi.multiple = true; fi.onchange = () => closeMemoUpload(cid, col, fi.files, upAfter); fi.click(); };
-    pop.ondragover = e => { if(Array.from(e.dataTransfer.types || []).includes('Files')){ e.preventDefault(); pop.classList.add('drop'); } };
-    pop.ondragleave = () => pop.classList.remove('drop');
-    pop.ondrop = e => { if(!e.dataTransfer || !e.dataTransfer.files.length) return; e.preventDefault(); pop.classList.remove('drop'); closeMemoUpload(cid, col, e.dataTransfer.files, upAfter); };
-    pop.onpaste = e => { const fs = Array.from((e.clipboardData && e.clipboardData.files) || []); if(!fs.length) return; e.preventDefault(); closeMemoUpload(cid, col, fs, upAfter); };
+    // [2026.11.11] 첨부파일 - 누르면 미리보기 창, × = 빼기(드라이브는 휴지통), + 파일 / 끌어다 놓기 / 이미지 붙여넣기, 다른 연도 첨부는 보기만
+    smAttWire(pop, 'close', closeYear, cid, col, () => { if(document.body.contains(pop)){ save(); draw(); } else renderClose(); }, () => renderClose());
     pop.querySelectorAll('[data-del]').forEach(b => b.onclick = e => { e.stopPropagation(); items.splice(Number(b.dataset.del), 1); editIdx = -1; save(); draw(); });
     // [2026.10.27] "메모 수정이 안 된다 → 마우스를 올리면 수정·삭제 버튼"(요청) - ✎를 누르면 그 자리에서 고치기(Enter 저장 · Esc 취소 · 비우고 Enter = 지우기)
     pop.querySelectorAll('[data-edit]').forEach(sp => sp.onclick = e => { e.stopPropagation(); editIdx = Number(sp.dataset.edit); draw(); });
