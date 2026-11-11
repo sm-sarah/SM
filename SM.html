@@ -1336,9 +1336,9 @@ function smTogglePcView(){ try{ localStorage.setItem('sm_pc_view', window.SM_PC_
   .sm-tool-ic.vt-ic{ width:24px; height:24px; color:var(--primary-dark); }
   .vt-ic-n{ font-size:10px; font-weight:800; margin-left:1px; }
   /* [2026.11.11] "아이콘에 숫자가 들어가는 곳은 아이콘 스타일을 다르게"(요청 - 알림 배지형) - 숫자는 아이콘 오른쪽 위 분홍 동그라미(흰 글씨), 숫자 없는 아이콘은 그대로 */
-  /* [2026.11.11] "숫자가 아이콘 밖으로 겹치지 않게"(요청) - 숫자가 있으면 동그라미가 옆으로 살짝 길어지고, 숫자는 그 안 오른쪽에 분홍 동그라미 */
-  :is(button, span):has(> .vt-ic-n){ width:auto !important; min-width:24px; padding:0 3px 0 5px; gap:2px; border-radius:999px; }
-  .vt-ic-n{ display:inline-block; min-width:13px; height:13px; padding:0 3px; margin:0; box-sizing:border-box; border-radius:7px; background:var(--primary); color:#fff; font-size:9px; font-weight:800; line-height:13px; text-align:center; pointer-events:none; font-variant-numeric:tabular-nums; }
+  /* [2026.11.11] "숫자는 아이콘 오른쪽 위 첨자로 두되 아이콘과 겹치지 않게"(요청) - 아이콘 동그라미 바로 바깥 오른쪽 위에 붙임(동그라미 크기는 그대로) */
+  :is(button, span):has(> .vt-ic-n){ position:relative; overflow:visible; }
+  .vt-ic-n{ position:absolute; left:calc(100% + 1px); bottom:calc(100% - 9px); min-width:13px; height:13px; padding:0 3px; margin:0; box-sizing:border-box; border-radius:7px; background:var(--primary); color:#fff; font-size:9px; font-weight:800; line-height:13px; text-align:center; pointer-events:none; font-variant-numeric:tabular-nums; }
   .sm-tool-ic.pay-memo-ic, .sm-tool-ic.pay-memo-ic:hover{ border-color:transparent; background:transparent; }   /* [2026.11.10] 원천세 신고현황 메모 아이콘은 바깥 테두리(원) 없이(요청) */
   /* [2026.11.05] 원천세 메모 팝업 - 건마다 줄바꿈·번호 칸 고정(왼쪽 정렬)·점선 구분, 전체/월별 묶음(요청) */
   .smm-box{ background:var(--primary-soft); border-radius:10px; padding:4px 12px; text-align:left; }
@@ -1361,6 +1361,7 @@ function smTogglePcView(){ try{ localStorage.setItem('sm_pc_view', window.SM_PC_
   .ck-chip[data-k="특고"]{ background:#FFE7D6; color:#B35418; }
   .ck-chip[data-k="이자"]{ background:#DDF3F3; color:#13797A; }
   .ck-ln{ align-items:center; }
+  .smm-box.ck-box{ background:#fff; border:1px solid var(--border); }   /* [2026.11.11] 근로 칩(분홍)이 분홍 바탕과 겹쳐 보여 이 팝업 상자만 흰 바탕(요청) */
   .ck-ln .smm-no{ flex:0 0 34px; }
   .smm-mrow{ display:flex; gap:8px; align-items:flex-start; margin-bottom:6px; }
   .smm-m{ flex:0 0 34px; padding-top:8px; font-size:12.5px; font-weight:800; color:var(--muted); text-align:right; }
@@ -5187,8 +5188,8 @@ function closePayKindsTd(cid, name){
   const txt = `【${closeYear}년 귀속 발생 급여종류】\n${I.kinds.join('\n')}\n【달별 발생급여 (회사웹 원천세 검토표)】\n${I.byM.map(([m, L]) => `${m}월  ${L.join(', ')}`).join('\n')}`;
   // [2026.11.11] "달별 발생급여는 1월·2월로(번호 겹치지 않게), 칩으로 - 검토표처럼"(요청)
   const lab = k => CLOSE_PAY_LABEL[k] || k, chips = L => `<span class="ck-chips">${L.map(k => `<span class="ck-chip" data-k="${escapeAttr(k)}">${taxjEsc(lab(k))}</span>`).join('')}</span>`;
-  const html = `<div class="smm-sec"><span class="smm-chip mon">${closeYear}년 귀속 발생 급여종류</span></div><div class="smm-box"><div class="smm-ln ck-ln">${chips(I.raw)}</div></div>`
-    + `<div class="smm-sec"><span class="smm-chip mon">달별 발생급여 (회사웹 원천세 검토표)</span></div><div class="smm-box">${I.byMRaw.map(([m, L]) => `<div class="smm-ln ck-ln"><span class="smm-no">${m}월</span>${chips(L)}</div>`).join('')}</div>`;
+  const html = `<div class="smm-sec"><span class="smm-chip mon">${closeYear}년 귀속 발생 급여종류</span></div><div class="smm-box ck-box"><div class="smm-ln ck-ln">${chips(I.raw)}</div></div>`
+    + `<div class="smm-sec"><span class="smm-chip mon">달별 발생급여 (회사웹 원천세 검토표)</span></div><div class="smm-box ck-box">${I.byMRaw.map(([m, L]) => `<div class="smm-ln ck-ln"><span class="smm-no">${m}월</span>${chips(L)}</div>`).join('')}</div>`;
   const i = smMemoStore.push([`${name || ''} · ${closeYear}년 급여종류`, txt, html]) - 1;
   return `<td class="vp-div" style="text-align:center;"><button type="button" class="sm-tool-ic vt-ic" onclick="smMemoShow(${i})" title="${escapeAttr(I.kinds.join(', '))}" aria-label="급여종류">${ICON_MEMO_DOC}${I.kinds.length > 1 ? `<span class="vt-ic-n">${I.kinds.length}</span>` : ''}</button></td>`;
 }
