@@ -1724,6 +1724,7 @@ function smTogglePcView(){ try{ localStorage.setItem('sm_pc_view', window.SM_PC_
   .vp-mb-primary{ background:var(--primary); color:#fff; border:1px solid var(--primary); }
   /* [2026.10.19] "항목·값 버튼은 아이콘만"(요청) - 같은 높이(28px) 정사각 아이콘 버튼, 이름은 마우스를 올리면 */
   .vat-prog .vp-na{ display:inline-block; width:13px; line-height:13px; color:#c9b6c0; font-weight:800; cursor:pointer; user-select:none; }
+  .smc-q, .vat-prog .vp-na.smc-q{ display:inline-block; width:auto; line-height:13px; font-size:11px; color:#b9a3ae; font-weight:700; cursor:pointer; user-select:none; white-space:nowrap; }   /* [2026.11.11] 체크 칸의 - / 미확인 글자 */
   .vp-mg-ic .vp-mb{ width:28px; padding:0; justify-content:center; }
   /* [2026.10.19] "저장 표시는 비우기(휴지통) 아래 오른쪽에, 스크롤해도 고정"(요청) - 높이 0 줄이라 아래 칸 배치는 그대로 */
   .vp-save-row{ position:sticky; top:90px; z-index:5; height:0; display:flex; justify-content:flex-end; margin-top:-4px; pointer-events:none; }
@@ -3620,6 +3621,7 @@ function smFabSync(){
 // [2026.11.02] "입력하는 곳에서 오른쪽 마우스 클릭하면 - 이나 해당없음이 뜨게, 적용 가능한 모든 곳"(요청)
 //   날짜·기간 칸(+ 버튼: 신고현황·결산·부가세 진행·법인세·종소세·제출)과 표 안의 글자 입력칸에서 오른쪽 클릭 → 작은 창에서 '-' / '미해당'을 고르면 그 값으로 저장.
 //   이미 오른쪽 클릭을 쓰는 칸(부가세 진행 체크 칸 = 미해당)은 그대로. 체크박스·드롭다운·검색칸·비밀번호칸은 값 형식이 달라 빼고, 글자 입력칸은 표 안(td)만
+const SM_QUICK_VALS = ['-', '미해당', '미확인'];
 const SM_QUICK_SETTERS = {
   payDatePop: (b, v) => setPayCustomVal(b.dataset.key, b.dataset.col, v),
   closeDatePop: (b, v) => { closeSetVal(b.dataset.cid, b.dataset.col, v); renderClose(); },
@@ -3627,6 +3629,9 @@ const SM_QUICK_SETTERS = {
   vatProgDatePop: (b, v) => vatProgSet(b.dataset.cid, b.dataset.col, v, true),
   taxDatePop: (b, v) => taxSetVal(b.dataset.kind, b.dataset.cid, b.dataset.col, v),
   smcPop: (b, v) => smcSet(b, v),   // [2026.11.11] works 공통 칸
+  closeMonthPop: (b, v) => { closeSetVal(b.dataset.cid, b.dataset.col, v); renderClose(); },   // [2026.11.11] 모든 칸으로 넓힘(요청)
+  closeMemoPop: (b, v) => { closeSetVal(b.dataset.cid, b.dataset.col, v); renderClose(); },
+  vatProgMemoPop: (b, v) => vatProgSet(b.dataset.cid, b.dataset.col, v, true),
   submitDatePop: (b, v) => setSubmitClose(b.dataset.key, b.dataset.item, v, b.dataset.pk),
   submitSavedPop: (b, v) => updateSubmitMine(b.dataset.key, 'done', v, b.dataset.pk),
 };
@@ -3634,6 +3639,11 @@ function smQuickTarget(t){
   if(!t || !t.closest) return null;
   const b = t.closest('button.cl-dt');
   if(b){ const fn = (/^(\w+)\(/.exec(b.getAttribute('onclick') || '') || [])[1]; if(SM_QUICK_SETTERS[fn]) return { set: v => SM_QUICK_SETTERS[fn](b, v) }; }
+  // [2026.11.11] "모든 works 칸에서 -·미해당·미확인"(요청) - 공통 칸(항목 추가 칸)의 체크·체크+날짜·드롭다운도 그 글자로 저장
+  const vq = t.closest('td[data-vpq]');
+  if(vq){ const [cid, col] = vq.dataset.vpq.split('|'); return { set: v => vatProgSet(cid, col, v === '미해당' ? 'na' : v, true) }; }
+  const sc = t.closest('td [data-s][data-k][data-c]');
+  if(sc && SMC[sc.dataset.s] && (sc.type === 'checkbox' || sc.tagName === 'SELECT' || sc.classList.contains('smc-q'))) return { set: v => smcSet(sc, v) };
   const inp = t.closest('td input[type=text], td textarea');
   if(inp && !inp.readOnly && !inp.disabled && !inp.classList.contains('search-input') && !inp.classList.contains('sm-sx'))
     return { set: v => { inp.value = v; inp.dispatchEvent(new Event('input', { bubbles:true })); inp.dispatchEvent(new Event('change', { bubbles:true })); } };
@@ -3646,7 +3656,7 @@ document.addEventListener('contextmenu', e => {
   closeDatePopClose();
   const pop = document.createElement('div');
   pop.id = 'closeDatePop'; pop.className = 'cl-pop sm-quick';
-  pop.innerHTML = `<div class="cl-pop-row"><button type="button" data-q="-">-</button><button type="button" data-q="미해당">미해당</button></div>`;
+  pop.innerHTML = `<div class="cl-pop-row"><button type="button" data-q="-">-</button><button type="button" data-q="미해당">미해당</button><button type="button" data-q="미확인">미확인</button></div>`;
   document.body.appendChild(pop);
   const pw = pop.offsetWidth, ph = pop.offsetHeight;
   pop.style.left = Math.max(8, Math.min(window.innerWidth - pw - 8, e.clientX)) + 'px';
@@ -4600,7 +4610,7 @@ function vatTableHtml(docs){
   // [2026.10.14] "예정고지 상세 제목 삭제"(요청 - 회사웹과 같게)
   return `${pre && !list.some(x => x.hasTb) ? '<div class="hint" style="margin:0 0 8px;">회사웹에 불러온 택스봇 예정고지가 없어요(회사웹 부가세 화면에서 가져오면 여기도 채워져요).</div>' : ''}
     <div class="toolbar"><div class="cl-subtabs">${segs.map(([k, l, c]) => `<button class="cl-subtab ${vatSeg === k ? 'on' : ''}" onclick="vatSeg='${k}'; renderVat();">${l} ${c}</button>`).join('')}</div>
-      <div class="spacer"></div><button class="sm-tool-ic" onclick="addVatCustomCol()" title="항목 추가" aria-label="항목 추가">${ICON_PLUS}</button></div>
+      <div class="spacer"></div><button class="sm-tool-ic" onclick="addVatCustomCol()" title="항목 추가" aria-label="항목 추가">${ICON_PLUS}</button><button class="sm-tool-ic" onclick="vatCustomBulkCols()" title="항목 일괄 변경 - 여러 항목을 골라 입력 방식·칸 표시를 한 번에 바꿔요" aria-label="항목 일괄 변경">${ICON_COLS_BULK}</button></div>
     <div class="table-scroll" style="margin-top:12px;"><table class="vat-t-tbl"><thead><tr><th class="tx-seq">순번</th><th>상호명</th><th>사업자번호</th><th>업종코드</th><th>업태</th><th>구분</th><th>제외사유</th><th>직전 과세기간<br>공급가액</th><th>예정고지세액</th><th>관할서</th><th>납부기한</th><th>안내문</th><th>납부서</th><th>신고<br>도움</th><th>통합<br>자료</th><th>신고<br>서류</th><th>신고<br>현황</th><th>${pre ? '예정신고' : '확정신고'}<br>납부세액</th><th>${pre ? '예정신고' : '확정신고'}<br>납부기한</th><th>Tip</th><th>메모</th><th title="회사웹 부가세 검증과 같은 계산(매출·매입 항목별, 예정)">검증</th>
       ${vatCustomCols.map(col => `<th><button class="btn ghost xs" onclick="editVatCustomCol('${col.id}')" title="눌러서 이름·입력 방식 수정 또는 삭제" style="font-weight:800; position:relative;">${taxjEsc(col.label)}${ICON_COL_GEAR}</button></th>`).join('')}</tr></thead>
       <tbody>${rows || `<tr><td colspan="${cols}"><div class="empty" style="padding:18px;">${q ? '검색 결과가 없어요.' : '거래처가 없어요.'}</div></td></tr>`}</tbody></table></div>`;
@@ -5148,6 +5158,7 @@ function vatProgHtml(docs){
       <button class="vp-mb" onclick="vatProgHideCols()" title="안 쓰는 칸을 숨겨요">${vpIc('<path d="M3 3l18 18M10.6 10.6a2 2 0 0 0 2.8 2.8M9.9 5.1A10.4 10.4 0 0 1 12 5c6.5 0 10 7 10 7a17.6 17.6 0 0 1-3.2 4.2M6.6 6.6C3.9 8.4 2 12 2 12s3.5 7 10 7a9.7 9.7 0 0 0 5.4-1.6"/>')}칸 숨기기${vatProgViewObj().hidden.length ? ` <b>${vatProgViewObj().hidden.length}</b>` : ''}</button></div>
     <div class="vp-mg vp-mg-ic"><span class="vp-mg-l">항목</span>
       <button class="vp-mb" onclick="vatProgAddCol()" title="항목 추가" aria-label="항목 추가">${vpIc('<path d="M12 5v14M5 12h14"/>')}</button>
+      <button class="vp-mb" onclick="vatProgBulkCols()" title="항목 일괄 변경 - 여러 항목을 골라 입력 방식·이어받기·칸 표시를 한 번에 바꿔요" aria-label="항목 일괄 변경">${vpIc('<rect x="3" y="4" width="7" height="16" rx="1.5"/><rect x="14" y="4" width="7" height="16" rx="1.5"/><path d="M5 9l1.5 1.5L9 8M16 9l1.5 1.5L20 8"/>')}</button>
       <button class="vp-mb" onclick="vatProgOrderStart()" title="순서 편집 - 표 머리글을 끌어서 칸 순서를 바꿔요" aria-label="순서 편집">${vpIc('<path d="M5 9l-3 3 3 3M19 9l3 3-3 3M2 12h20"/>')}</button>
       <button class="vp-mb" onclick="vatProgArrange()" title="배치·묶음 - 항목 순서와 묶음(매출·매입 등 두 줄 머리글)을 정해요" aria-label="배치·묶음">${vpIc('<rect x="3" y="4" width="18" height="5" rx="1.5"/><rect x="3" y="12" width="8" height="8" rx="1.5"/><rect x="13" y="12" width="8" height="8" rx="1.5"/>')}</button>
       <button class="vp-mb" onclick="vatProgCarryNext()" title="다음 기수로 이월 - 항목마다 안 넘김·항목만·항목+내용을 골라 넘겨요" aria-label="다음 기수로 이월">${vpIc('<path d="M4 5v14"/><path d="M8 12h12"/><path d="M15 7l5 5-5 5"/>')}</button></div>
@@ -5237,12 +5248,14 @@ function vatProgHtml(docs){
       if(c.fa && x.fa !== 'y' && val == null) return `<td style="text-align:center;" title="회사웹 고정자산 유일 때 체크해요">${na}</td>`;
       if(!c.fa && smcNeed(c, ['check','checkdate','num','memo','date','range','select','text'], ['memo'])) return smcTd('vp', x.c.id, c, val);   // [2026.11.11] 월·칸 표시(아이콘/글자 전체)는 공통 칸
       // [2026.10.19] "체크 항목 미해당 표기 - 우클릭으로"(요청) - 우클릭(휴대폰은 길게 누르기) = 미해당(–) 켜기/끄기, 값은 'na'. – 를 누르면 빈칸으로
-      if(c.type === 'check') return `<td style="text-align:center;" oncontextmenu="event.preventDefault(); vatProgToggleNa('${cid}','${c.id}')" title="우클릭: 미해당(–) 표시/해제">${val === 'na'
-        ? `<span class="vp-na" onclick="vatProgToggleNa('${cid}','${c.id}')" title="미해당 · 누르거나 우클릭하면 해제">–</span>`
+      // [2026.11.11] 우클릭 = 다른 칸처럼 -·미해당·미확인 고르기(요청). 미해당은 예전처럼 'na'(–), -·미확인은 그 글자로 저장
+      if((c.type === 'check' || c.type === 'checkdate') && (val === '-' || val === '미확인')) return `<td style="text-align:center;" data-vpq="${cid}|${c.id}"><span class="vp-na smc-q" onclick="vatProgSet('${cid}','${c.id}',null,true)" title="${val} · 누르면 지움 · 우클릭으로 바꾸기">${val}</span></td>`;
+      if(c.type === 'check') return `<td style="text-align:center;" data-vpq="${cid}|${c.id}" title="우클릭: - / 미해당 / 미확인">${val === 'na'
+        ? `<span class="vp-na" onclick="vatProgToggleNa('${cid}','${c.id}')" title="미해당 · 누르면 해제">–</span>`
         : `<input type="checkbox" ${val ? 'checked' : ''} onchange="vatProgSet('${cid}','${c.id}',this.checked)">`}</td>`;
       // [2026.10.20] 체크+날짜(요청) - 체크하면 날짜 입력 창이 뜨고, 저장하면 체크됨. 마우스를 올리면 날짜. 체크를 풀면 날짜도 지움. 우클릭 미해당은 체크와 같음
-      if(c.type === 'checkdate') return `<td style="text-align:center;" oncontextmenu="event.preventDefault(); vatProgToggleNa('${cid}','${c.id}')">${val === 'na'
-        ? `<span class="vp-na" onclick="vatProgToggleNa('${cid}','${c.id}')" title="미해당 · 누르거나 우클릭하면 해제">–</span>`
+      if(c.type === 'checkdate') return `<td style="text-align:center;" data-vpq="${cid}|${c.id}">${val === 'na'
+        ? `<span class="vp-na" onclick="vatProgToggleNa('${cid}','${c.id}')" title="미해당 · 누르면 해제">–</span>`
         : `<input type="checkbox" ${val ? 'checked' : ''} data-cid="${cid}" data-col="${c.id}" title="${escapeAttr(vatProgCheckDateTitle(val))}" onclick="vatProgCheckDateClick(this, event)">`}</td>`;
       const s = vatProgFmtNum(val);
       if(c.type === 'num') return `<td><input class="vp-in" inputmode="numeric" style="width:${w[c.id]}px; text-align:right;" value="${escapeAttr(s)}" onchange="vatProgNumInput(this,'${cid}','${c.id}')"></td>`;
@@ -5902,28 +5915,39 @@ function closeColConvert(col, to){
   Object.values((closeData[closeKey()] || {}).rh || {}).forEach(L => L.forEach(x => { const v = x.v || {}; if(!(id in v)) return; const nv = closeConvertVal(v[id], col.type, to, closeYear); if(nv === '' || nv == null || nv === false) delete v[id]; else v[id] = nv; }));
   col.type = to;
 }
-async function closeBulkCols(){
-  if(!closeCols.length) return smAlert('항목이 없어요', '먼저 항목을 추가해 주세요.');
+// [2026.11.11] "works 모든 메뉴에 항목 일괄 변경"(요청) - 화면마다 cfg만 다르게 쓰는 공통 창
+//   cfg = { cols: 지금 항목들, types: 입력 방식 목록, carry: 이어받기 칸 이름(없으면 안 보임), convert(col, to): 값까지 바꾸기(없으면 입력 방식만), done(): 다시 그리기 }
+async function smBulkCols(cfg){
+  const cols = cfg.cols || [];
+  if(!cols.length) return smAlert('항목이 없어요', '먼저 항목을 추가해 주세요.');
   window._clBulkSel = new Set();
-  const KEEP = '(그대로)', lab = t => (CLOSE_TYPES.find(x => x[0] === t) || [, t])[1];
+  const T = cfg.types || SM_COL_TYPES, KEEP = '(그대로)', lab = t => (T.find(x => x[0] === t) || [, t])[1];
   const html = `<div class="cl-bulk"><label class="cl-bulk-all"><input type="checkbox" onchange="document.querySelectorAll('.cl-bulk-it input').forEach(c => { c.checked = this.checked; c.onchange(); })"> 모두 고르기</label>
-    <div class="cl-bulk-list">${closeCols.map(c => `<label class="cl-bulk-it"><input type="checkbox" onchange="window._clBulkSel[this.checked ? 'add' : 'delete']('${escapeAttr(c.id)}')"><span>${taxjEsc(String(c.label).replace(/\n/g, ' '))}</span><i>${taxjEsc(lab(c.type))}${smcIsIcon(c) && !SM_VIEW_NO_ICON.includes(lab(c.type)) ? ' · 아이콘' : ''}${c.carry ? ' · ↻' : ''}</i></label>`).join('')}</div></div>`;
-  const r = await smForm('항목 일괄 변경', [{ label:'입력 방식', options: [KEEP].concat(CLOSE_TYPES.map(x => x[1])), value: KEEP }, { label:'다음 해 결산으로 이어받기', options: [KEEP, '예', '아니오'], value: KEEP }, { label:'칸 표시 (체크는 그대로)', options: [KEEP].concat(SM_VIEW_OPTS), value: KEEP }], { okText:'적용', html, icon:'✎', wide:true });
+    <div class="cl-bulk-list">${cols.map(c => `<label class="cl-bulk-it"><input type="checkbox" onchange="window._clBulkSel[this.checked ? 'add' : 'delete']('${escapeAttr(c.id)}')"><span>${taxjEsc(String(c.label).replace(/\n/g, ' '))}</span><i>${taxjEsc(lab(c.type))}${smcIsIcon(c) && !SM_VIEW_NO_ICON.includes(lab(c.type)) ? ' · 아이콘' : ''}${cfg.carry && c.carry ? ' · ↻' : ''}</i></label>`).join('')}</div></div>`;
+  const fields = [{ label:'입력 방식', options: [KEEP].concat(T.map(x => x[1])), value: KEEP }].concat(cfg.carry ? [{ label: cfg.carry, options: [KEEP, '예', '아니오'], value: KEEP }] : []).concat([{ label:'칸 표시 (체크는 그대로)', options: [KEEP].concat(SM_VIEW_OPTS), value: KEEP }]);
+  const r = await smForm('항목 일괄 변경', fields, { okText:'적용', html, icon:'✎', wide:true });
   if(!r) return;
-  const sel = closeCols.filter(c => window._clBulkSel.has(c.id));
+  const rT = r[0], rC = cfg.carry ? r[1] : KEEP, rV = r[cfg.carry ? 2 : 1];
+  const sel = cols.filter(c => window._clBulkSel.has(c.id));
   if(!sel.length) return smAlert('고른 항목이 없어요', '바꿀 항목을 체크해 주세요.');
-  if(r[0] === KEEP && r[1] === KEEP && r[2] === KEEP) return;
-  const to = r[0] === KEEP ? null : (CLOSE_TYPES.find(x => x[1] === r[0]) || CLOSE_TYPES[0])[0];
-  if(to && sel.some(c => c.type !== to && Object.values(((closeData[closeKey()] || {}).v) || {}).some(v => v && c.id in v)) && !(await smConfirm(`${sel.length}개 항목을 '${r[0]}'(으)로 바꿀까요?`, '이 회차에 적힌 값도 새 입력 방식으로 바꿔요. 맞지 않는 값은 글자로 남거나 비워질 수 있어요.', { okText:'바꾸기', icon:'!' }))) return;
+  if(rT === KEEP && rC === KEEP && rV === KEEP) return;
+  const to = rT === KEEP ? null : (T.find(x => x[1] === rT) || T[0])[0];
+  if(to && cfg.convert && sel.some(c => c.type !== to) && !(await smConfirm(`${sel.length}개 항목을 '${rT}'(으)로 바꿀까요?`, '이 회차에 적힌 값도 새 입력 방식으로 바꿔요. 맞지 않는 값은 글자로 남거나 비워질 수 있어요.', { okText:'바꾸기', icon:'!' }))) return;
   let opts = null;
   for(const c of sel){
-    if(to){ closeColConvert(c, to); if(to === 'select'){ if(!opts){ await vatProgEditOpts(c); opts = c.opts || []; } else c.opts = opts.slice(); } }
-    if(r[1] !== KEEP) c.carry = r[1] === '예';   // 다음 해 결산으로 이어받기
-    if(r[2] !== KEEP) c.view = SM_VIEW_NO_ICON.includes(lab(c.type)) ? 'text' : smViewOf(r[2]);
+    if(to && c.type !== to){ if(cfg.convert) cfg.convert(c, to); else c.type = to; }
+    if(to === 'select'){ if(!opts){ await vatProgEditOpts(c); opts = c.opts || []; } else c.opts = opts.slice(); }
+    if(rC !== KEEP) c.carry = rC === '예';
+    if(rV !== KEEP) c.view = SM_VIEW_NO_ICON.includes(lab(c.type)) ? 'text' : smViewOf(rV);
   }
-  renderClose(); scheduleGoogleSave();
+  if(cfg.done) cfg.done(); scheduleGoogleSave();
   smToast(`${sel.length}개 항목을 바꿨어요`, 2000);
 }
+function closeBulkCols(){ return smBulkCols({ cols: closeCols, types: CLOSE_TYPES, carry:'다음 해 결산으로 이어받기', convert: closeColConvert, done: renderClose }); }
+function vatProgBulkCols(){ return smBulkCols({ cols: vatProgCols.filter(c => !c.fa), types: VAT_PROG_TYPES, carry:'다음 기수로 이어받기', done: renderVat }); }
+function vatCustomBulkCols(){ return smBulkCols({ cols: vatCustomCols, types: SM_COL_TYPES, done: renderVat }); }
+function payBulkCols(){ return smBulkCols({ cols: payCustomCols, types: PAY_COL_TYPES, done: renderPay }); }
+function taxBulkCols(kind){ return smBulkCols({ cols: taxCols(kind), types: SM_COL_TYPES, done: () => TAX_COL_KINDS[kind].render() }); }
 function closeNumInput(el, cid, colId){ const t = el.value.replace(/,/g, '').trim(); const v = /^-?\d+(\.\d+)?$/.test(t) ? Number(t) : el.value.trim(); el.value = typeof v === 'number' ? v.toLocaleString('ko-KR') : v; closeSetVal(cid, colId, v); }
 // [2026.11.11] "개인웹도 아이콘 위에 뜨는 팝업을 귀여운 모드로"(요청) - title이 달린 요소에 마우스를 올리면 브라우저 기본 글상자 대신 분홍 말풍선.
 //   보이는 동안만 title을 data-sm-title로 옮겨 두고(기본 글상자가 겹쳐 뜨지 않게) 마우스가 나가면 되돌림. 휴대폰(마우스 없음)은 그대로
@@ -6197,9 +6221,8 @@ function smcMdPop(btn){
     const save = () => {
       if([imo, id].some(i => i.value && !/^\d{4}-/.test(i.value))) return smAlert('날짜를 확인해 주세요', '연도는 4자리로 입력해요.');
       const v = {}; if(imo.value) v.mo = imo.value; if(im.value.trim()) v.m = im.value.trim(); if(id.value) v.d = id.value;
+      closeDatePopClose();   // [2026.11.11] "등록·수정하면 창이 닫히게"(요청) - 저장하면 닫아서 표에 반영된 걸 바로 봄
       S.set(k, c, Object.keys(v).length ? v : '');
-      if(!document.body.contains(pop)) document.body.appendChild(pop);
-      view();
     };
     pop.querySelector('[data-a=ok]').onclick = save;
     im.addEventListener('keydown', e => { if(e.key === 'Enter' && !e.isComposing){ e.preventDefault(); save(); } if(e.key === 'Escape') closeDatePopClose(); });
@@ -6212,6 +6235,7 @@ function smcRdName(r, y){ const q = smcRdQs(r, y); if(!q) return ''; const [a, b
 function smcAttr(s, k, c){ return `data-s="${escapeAttr(s)}" data-k="${escapeAttr(String(k))}" data-c="${escapeAttr(c)}"`; }
 function smcTd(s, k, col, val, tdCls){
   const S = SMC[s], t = col.type, at = smcAttr(s, k, col.id), y = S.year(), td = `<td style="text-align:center;"${tdCls ? ` class="${tdCls}"` : ''}>`;
+  if((t === 'check' || t === 'checkdate') && SM_QUICK_VALS.includes(val)) return `${td}<span class="vp-na smc-q" ${at} onclick="smcSet(this, '')" title="${escapeAttr(val)} · 누르면 지움 · 우클릭으로 바꾸기">${taxjEsc(val)}</span></td>`;   // [2026.11.11] 우클릭 -·미해당·미확인
   if(t === 'check') return `${td}<input type="checkbox" ${val ? 'checked' : ''} ${at} onchange="smcSet(this, this.checked)"></td>`;
   if(t === 'checkdate') return `${td}<input type="checkbox" ${val ? 'checked' : ''} ${at} title="${escapeAttr(val ? smcFmt(t, val, y) + ' · 누르면 해제' : '체크하면 날짜 입력')}" onclick="smcCheckDate(this, event)"></td>`;
   const has = val != null && val !== '';
@@ -6272,9 +6296,8 @@ function smcRdPop(btn){
     const save = () => {
       if([ia, ib, id].some(i => i.value && !/^\d{4}-/.test(i.value))) return smAlert('날짜를 확인해 주세요', '연도는 4자리로 입력해요.');
       const v = {}; if(ia.value || ib.value) v.r = `${ia.value}~${ib.value}`; if(im.value.trim()) v.m = im.value.trim(); if(id.value) v.d = id.value;
+      closeDatePopClose();   // [2026.11.11] "등록·수정하면 창이 닫히게"(요청) - 저장하면 닫음(다시 누르면 내용 보기·수정·삭제)
       S.set(k, c, Object.keys(v).length ? v : '');
-      if(!document.body.contains(pop)) document.body.appendChild(pop);
-      view();   // 저장하면 창에 내용이 뜸(수정·삭제)
     };
     pop.querySelector('[data-a=ok]').onclick = save;
     im.addEventListener('keydown', e => { if(e.key === 'Enter' && !e.isComposing){ e.preventDefault(); save(); } if(e.key === 'Escape') closeDatePopClose(); });
@@ -6699,7 +6722,7 @@ async function taxCarry(kind){
   if(await smConfirm(`${n}개 항목을 넘겼어요`, `${to}년 귀속으로 가서 볼까요?`, { okText:'가기', cancelText:'여기 있기', icon:'✓' })) K.setYear(to);
   K.render();
 }
-function taxToolbarIcsHtml(kind){ return `<div style="display:flex; align-items:center; justify-content:flex-end; gap:6px;"><button class="sm-tool-ic" onclick="taxAddCol('${kind}')" title="항목 추가" aria-label="항목 추가">${ICON_PLUS}</button><button class="sm-tool-ic" onclick="taxCarry('${kind}')" title="다음 해로 이월 - 항목마다 안 넘김·항목만·항목+내용을 골라 넘겨요" aria-label="다음 해로 이월">${ICON_CARRY}</button></div>`; }
+function taxToolbarIcsHtml(kind){ return `<div style="display:flex; align-items:center; justify-content:flex-end; gap:6px;"><button class="sm-tool-ic" onclick="taxAddCol('${kind}')" title="항목 추가" aria-label="항목 추가">${ICON_PLUS}</button><button class="sm-tool-ic" onclick="taxBulkCols('${kind}')" title="항목 일괄 변경 - 여러 항목을 골라 입력 방식·칸 표시를 한 번에 바꿔요" aria-label="항목 일괄 변경">${ICON_COLS_BULK}</button><button class="sm-tool-ic" onclick="taxCarry('${kind}')" title="다음 해로 이월 - 항목마다 안 넘김·항목만·항목+내용을 골라 넘겨요" aria-label="다음 해로 이월">${ICON_CARRY}</button></div>`; }
 
 // [2026.11.02] 회사웹 filingFocusYear(같은 날 수정)와 같게 - 처음 화면 귀속연도. 법인세 = 다음 해 3/31 마감 4주 전(3/3)부터, 종소세 = 다음 해 5/31 마감 4주 전(5/3)부터,
 //   결산 = 그해 5/31(종소세 마감)이 지난 6/1부터 그해. 연도를 직접 고르면 그 뒤로는 고른 연도 그대로
@@ -10509,7 +10532,7 @@ function payStatusHtml(docs){
       <div style="display:flex; align-items:center; gap:10px;"><button class="btn ghost xs" onclick="payShiftMonth(-1)" title="이전 달">‹</button><span style="font-weight:800;">${yy}년 ${mm}월 귀속</span><button class="btn ghost xs" onclick="payShiftMonth(1)" title="다음 달">›</button></div>
       <div style="display:flex; flex-direction:column; align-items:flex-end; gap:8px;">
         <div style="display:flex; align-items:center; gap:6px;"><!-- [2026.10.16] 일괄 입력·항목 추가는 아이콘으로, 'N줄 선택' 글자는 없앰(요청) -->
-        <button class="sm-tool-ic" onclick="payBulk()" title="날짜 일괄 입력 - 왼쪽 체크박스로 고른 거래처(없으면 보이는 전체)에 날짜·완납·미납을 한 번에 넣어요" aria-label="날짜 일괄 입력">${ICON_BULK}</button><button class="sm-tool-ic" onclick="addPayCustomCol()" title="항목 추가" aria-label="항목 추가">${ICON_PLUS}</button><button class="sm-tool-ic" onclick="payCarryCols()" title="다음 달로 이월 - 항목마다 안 넘김·항목만·항목+내용을 골라 넘겨요" aria-label="다음 달로 이월">${ICON_CARRY}</button></div>
+        <button class="sm-tool-ic" onclick="payBulk()" title="날짜 일괄 입력 - 왼쪽 체크박스로 고른 거래처(없으면 보이는 전체)에 날짜·완납·미납을 한 번에 넣어요" aria-label="날짜 일괄 입력">${ICON_BULK}</button><button class="sm-tool-ic" onclick="addPayCustomCol()" title="항목 추가" aria-label="항목 추가">${ICON_PLUS}</button><button class="sm-tool-ic" onclick="payBulkCols()" title="항목 일괄 변경 - 여러 항목을 골라 입력 방식·칸 표시를 한 번에 바꿔요" aria-label="항목 일괄 변경">${ICON_COLS_BULK}</button><button class="sm-tool-ic" onclick="payCarryCols()" title="다음 달로 이월 - 항목마다 안 넘김·항목만·항목+내용을 골라 넘겨요" aria-label="다음 달로 이월">${ICON_CARRY}</button></div>
       </div>
     </div>
     <!-- [2026.11.03] 진행현황 칩 줄(신고대상~진행률)은 뺌(요청) -->
