@@ -1395,6 +1395,9 @@ function smTogglePcView(){ try{ localStorage.setItem('sm_pc_view', window.SM_PC_
   .calc-r.k b{ font-size:16.5px; }
   .calc-r.rest{ margin-top:8px; flex-direction:row; justify-content:space-between; align-items:center; padding:9px 16px; text-align:left; }
   .calc-note{ margin-top:14px; font-size:11.5px; color:#9f8a95; }
+  .calc-seg{ display:flex; gap:4px; justify-content:center; margin:-6px 0 12px; }
+  .calc-seg button{ font:inherit; font-size:12px; font-weight:700; border:1px solid #5a4450; background:transparent; color:#c9b6c0; border-radius:999px; padding:4px 12px; cursor:pointer; }
+  .calc-seg button.on{ background:#f7a8c6; border-color:#f7a8c6; color:#3a2a33; }
   /* [2026.11.11] 계산기 임시저장·목록 */
   .calc-sv{ margin-top:14px; padding-top:14px; border-top:1px dashed #5a4450; }
   .calc-sv-bar{ display:flex; gap:6px; justify-content:center; }
@@ -2490,7 +2493,7 @@ const ICONS = {
 };
 
 // [2026.11.11] 계산기(요청) - 하위메뉴 = 계산법. 새 계산법은 CALC_VIEWS에 [id, 이름]을 넣고 CALC_RENDER[id]에 화면을 만들면 됨(입력값은 이 기기에만 잠깐 보관, 시트에는 안 올림)
-const CALC_VIEWS = [['taxback', '세액역산']];
+const CALC_VIEWS = [['taxback', '세액역산'], ['supply', '공급대가 나누기'], ['wh', '원천징수 역산']];   // [2026.11.11] 계산법 추가(요청)
 const CALC_RENDER = {};
 var calcSaves = {}, cellFiles = {}, myEvents = [];   // [2026.11.11] 계산기 임시저장 { 계산법id: [{ id, y, at, memo, v:{입력값} }] } - 시트에 저장(works 데이터)
 let calcView = (() => { try{ const v = localStorage.getItem('sm_calc_view'); return CALC_VIEWS.some(x => x[0] === v) ? v : CALC_VIEWS[0][0]; }catch(e){ return CALC_VIEWS[0][0]; } })();
@@ -4369,6 +4372,7 @@ async function editVatCustomCol(id){
   if(r === undefined) return;   // [2026.10.15] 닫기(X) - 아무것도 안 바꿈
   if(r === null){
     const a = await smColDelAsk(col.label);   // [2026.11.05] 항목만/내용도 물어봄(요청) - 이 항목은 모든 기수 공통이라 범위는 안 물음
+    if(a && a.what !== 'col') await smAttCleanupAsk('vatc', col.id, null);   // [2026.11.11] 첨부 정리
     if(!a) return;
     if(a.what !== 'vals') vatCustomCols = vatCustomCols.filter(c => c.id !== id);
     if(a.what !== 'col') Object.values(vatCustomVals).forEach(per => Object.values(per).forEach(v => { delete v[id]; }));
@@ -4834,6 +4838,7 @@ async function vatProgEditCol(id){
     // [2026.11.02] 항목이 기수마다 따로라 이 기수에서만 지움(다른 기수 항목·값은 그대로)
     const key = vatProgKey();
     const a = await smColDelAsk(vatProgNorm(col.label), vatProgKeyLabel(key), '모든 기수');   // [2026.11.05] 자세히 물어봄(요청)
+    if(a && a.what !== 'col') await smAttCleanupAsk('vp', col.id, a.every ? null : key);   // [2026.11.11] 첨부 정리
     if(!a) return;
     const hit = smColDelApply(vatProgColsBy, a.every ? Object.keys(vatProgColsBy) : [key], col, a.what);
     if(a.what !== 'col') Object.entries(hit).forEach(([k, ids]) => Object.values(vatProg[k] || {}).forEach(v => ids.forEach(i => { delete v[i]; })));
@@ -5829,6 +5834,7 @@ async function closeEditCol(id){
   if(r === undefined) return;   // [2026.10.15] 닫기(X) - 아무것도 안 바꿈
   if(r === null){
     const a = await smColDelAsk(col.label, `${closeYear}년 결산`, '모든 연도 결산', { hist:true });   // [2026.11.05] 자세히 물어봄(요청)
+    if(a && a.what !== 'col') await smAttCleanupAsk('close', col.id, a.every ? null : closeYear);   // [2026.11.11] 첨부 정리
     if(!a) return;
     const hit = smColDelApply(closeColsBy, a.every ? Object.keys(closeColsBy) : [closeKey()], col, a.what);
     if(a.what !== 'col') Object.entries(hit).forEach(([k, ids]) => {
@@ -5949,6 +5955,16 @@ document.addEventListener('paste', e => {
   const fs = Array.from((e.clipboardData && e.clipboardData.files) || []); if(!fs.length || !pop.onpaste) return;
   pop.onpaste(e);
 });
+// [2026.11.11] "항목을 지울 때 첨부도 정리할지 물어보기"(요청) - 항목의 적은 내용까지 지우면, 그 항목 칸에 붙인 첨부도 정리할지 물음(드라이브는 휴지통 - 30일 안 되살림)
+//   per = 그 기간만(null = 모든 기간). 안 정리하면 첨부 목록은 그대로 남아 검색·다른 기간 보기에서 계속 보임
+async function smAttCleanupAsk(sc, colId, per){
+  cellFiles = cellFiles || {};
+  const keys = Object.keys(cellFiles).filter(k => { const p = k.split('|'); return p[0] === sc && p[3] === colId && (per == null || p[1] === String(per)) && (cellFiles[k] || []).length; });
+  const n = keys.reduce((a, k) => a + cellFiles[k].length, 0); if(!n) return;
+  if(!(await smConfirm(`이 항목 칸의 첨부 ${n}개도 지울까요?`, '드라이브에서는 휴지통으로 옮겨져요(30일 안에 되살릴 수 있어요). \'남겨 두기\'를 누르면 첨부 목록은 그대로 남아요.', { tone:'danger', icon:'!', okText:'첨부도 지우기', cancelText:'남겨 두기' }))) return;
+  const ids = []; keys.forEach(k => { (cellFiles[k] || []).forEach(f => f && f.id && ids.push(f.id)); delete cellFiles[k]; });
+  scheduleGoogleSave(); ids.forEach(id => smDriveTrash(id));
+}
 function smAttTip(F){ return F.length ? '\n' + F.map(f => `📎 ${f.name}`).join('\n') : ''; }
 // ===== [2026.11.11] 메모·첨부 통합 검색(요청) - Ctrl+K 또는 works 탭 줄 오른쪽 돋보기
 //   찾는 곳: 결산·부가세 진행·부가세 내 항목·신고현황·법인세·종소세의 내 글자·메모 칸, 칸 첨부파일 이름, 회사웹 메모(부가세·결산·신고현황·원천세 특이사항)와 회사웹 메모 첨부 이름
@@ -6521,6 +6537,7 @@ async function taxEditCol(kind, id){
   if(r === undefined) return;
   if(r === null){
     const a = await smColDelAsk(col.label, `${y}년 귀속`, '모든 귀속연도');   // [2026.11.05] 자세히 물어봄(요청)
+    if(a && a.what !== 'col') await smAttCleanupAsk('tax-' + kind, col.id, a.every ? null : y);   // [2026.11.11] 첨부 정리
     if(!a) return;
     const hit = smColDelApply(taxColsBy[kind], a.every ? Object.keys(taxColsBy[kind]) : [String(y)], col, a.what);
     if(a.what !== 'col') Object.entries(hit).forEach(([k, ids]) => Object.values(((taxColVals[kind] || {})[k]) || {}).forEach(v => ids.forEach(i => { delete v[i]; })));
@@ -9487,8 +9504,25 @@ const ATTEND_VIEWS = [['cal','개인캘린더'], ['clock','출퇴근현황'], ['
 const ATTEND_EXP_KINDS = [['lunchEntries','점심식대'], ['dinnerEntries','저녁식대'], ['taxiEntries','택시비'], ['otherExpenses','경비'], ['prepaidEntries','차액정산']];
 const ATTEND_WEEK = ['일','월','화','수','목','금','토'];
 // [2026.11.11] 개인캘린더 개인 일정(works에만) - 추가·수정·삭제
-function attendMyEvFields(e){ e = e || {}; return [{ label:'일정', value: e.title || '', placeholder:'예: 병원, 은행 방문' }, { label:'날짜', type:'date', value: e.date || todayStr() }, { label:'시작 (선택)', type:'time', value: e.start || '' }, { label:'끝 (선택)', type:'time', value: e.end || '' }, { label:'메모 (선택)', type:'textarea', rows:2, value: e.memo || '' }]; }
-function attendMyEvFrom(r, e){ return Object.assign(e || {}, { title: String(r[0] || '').trim(), date: /^\d{4}-\d{2}-\d{2}$/.test(r[1]) ? r[1] : todayStr(), start: r[2] || '', end: r[3] || '', memo: String(r[4] || '').trim() }); }
+// [2026.11.11] 반복 일정(요청) - rep: ''|'week'|'month'|'year', until: 반복 끝(선택), skip: [이 날만 뺀 날짜]. 첫 날짜(date)부터 반복
+const MYEV_REP = [['', '반복 안 함'], ['week', '매주'], ['month', '매월 (같은 날)'], ['year', '매년']];
+function attendMyEvFields(e){ e = e || {}; return [{ label:'일정', value: e.title || '', placeholder:'예: 병원, 은행 방문' }, { label: e.rep ? '첫 날짜' : '날짜', type:'date', value: e.date || todayStr() }, { label:'시작 (선택)', type:'time', value: e.start || '' }, { label:'끝 (선택)', type:'time', value: e.end || '' }, { label:'메모 (선택)', type:'textarea', rows:2, value: e.memo || '' }, { label:'반복', options: MYEV_REP.map(x => x[1]), value: (MYEV_REP.find(x => x[0] === (e.rep || '')) || MYEV_REP[0])[1] }, { label:'반복 끝 (선택 · 비우면 계속)', type:'date', value: e.until || '' }]; }
+function attendMyEvFrom(r, e){ const o = Object.assign(e || {}, { title: String(r[0] || '').trim(), date: /^\d{4}-\d{2}-\d{2}$/.test(r[1]) ? r[1] : todayStr(), start: r[2] || '', end: r[3] || '', memo: String(r[4] || '').trim(), rep: (MYEV_REP.find(x => x[1] === r[5]) || MYEV_REP[0])[0], until: /^\d{4}-\d{2}-\d{2}$/.test(r[6] || '') ? r[6] : '' }); if(!o.rep){ delete o.rep; delete o.until; delete o.skip; } else if(!o.until) delete o.until; return o; }
+function myEvOccurs(e, ds){
+  if(!e || !e.date || !ds) return false;
+  if(e.date === ds) return !(e.skip || []).includes(ds);
+  if(!e.rep || ds < e.date || (e.until && ds > e.until) || (e.skip || []).includes(ds)) return false;
+  if(e.rep === 'week') return Math.round((new Date(ds + 'T00:00:00') - new Date(e.date + 'T00:00:00')) / 86400000) % 7 === 0;
+  if(e.rep === 'month') return ds.slice(8) === e.date.slice(8);
+  if(e.rep === 'year') return ds.slice(5) === e.date.slice(5);
+  return false;
+}
+function myEventsOn(ds){ return (Array.isArray(myEvents) ? myEvents : []).filter(e => myEvOccurs(e, ds)).sort((a, b) => String(a.start || '99').localeCompare(String(b.start || '99'))); }
+const MYEV_REP_MARK = { week:'매주', month:'매월', year:'매년' };
+function myEvChipHtml(e, ds){
+  const tm = (e.start || e.end) ? `${e.start || ''}~${e.end || ''}` : '';
+  return `<span class="tj-att mine" role="button" title="${escapeAttr(['개인 일정 (works에만 있음)', e.rep ? `${MYEV_REP_MARK[e.rep]} 반복${e.until ? ' ~' + e.until : ''}` : '', e.title, tm, e.memo].filter(Boolean).join(' · '))}" onclick="event.stopPropagation(); attendMyEvEdit('${escapeAttr(e.id)}','${ds}')">${e.rep ? '↻ ' : ''}${taxjEsc([e.title || '개인 일정', tm].filter(Boolean).join(' '))}<sup>*</sup></span>`;
+}
 async function attendMyEvAdd(ds){
   const r = await smForm('개인 일정 추가', attendMyEvFields({ date: ds }), { okText:'추가' });
   if(!r || !String(r[0] || '').trim()) return;
@@ -9496,11 +9530,19 @@ async function attendMyEvAdd(ds){
   myEvents.push(attendMyEvFrom(r, { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 5) }));
   renderAll();   // 홈 달력에도 보이게
 }
-async function attendMyEvEdit(id){
+async function attendMyEvEdit(id, ds){
   const e = (myEvents || []).find(x => x.id === id); if(!e) return;
-  const r = await smForm('개인 일정', attendMyEvFields(e), { okText:'저장', cancelText:'삭제', icon:'✎', closeX:true });
+  const r = await smForm(e.rep ? `개인 일정 (${MYEV_REP_MARK[e.rep]} 반복 - 고치면 반복 전체가 바뀌어요)` : '개인 일정', attendMyEvFields(e), { okText:'저장', cancelText:'삭제', icon:'✎', closeX:true });
   if(r === undefined) return;
-  if(r === null){ if(!(await smConfirm('이 개인 일정을 지울까요?', e.title || '', { tone:'danger', icon:'!', okText:'삭제' }))) return; myEvents = myEvents.filter(x => x !== e); }
+  if(r === null){
+    if(e.rep && ds){   // [2026.11.11] 반복 일정은 이 날만 / 전체 중 고름
+      const w = await smForm('반복 일정 지우기', [{ label:'지울 범위', options:[`이 날만 (${ds})`, '반복 전체'], value:`이 날만 (${ds})` }], { okText:'지우기', icon:'!' });
+      if(!w) return;
+      if(String(w[0]).startsWith('이 날만')){ e.skip = (e.skip || []).concat([ds]); renderAll(); return; }
+    }
+    if(!(await smConfirm(e.rep ? '반복 일정 전체를 지울까요?' : '이 개인 일정을 지울까요?', e.title || '', { tone:'danger', icon:'!', okText:'삭제' }))) return;
+    myEvents = myEvents.filter(x => x !== e);
+  }
   else attendMyEvFrom(r, e);
   renderAll();   // 홈 달력에도 보이게
 }
@@ -9847,8 +9889,9 @@ function renderAttend(){
       put(e.date, chip('ev', [e.type || '일정', e.title, tm].filter(Boolean).join(' '), [e.type || '일정', e.title, tm, e.memo].filter(Boolean).join(' · ')));
     });
     // [2026.11.11] "개인캘린더에 내 개인 일정도 - 회사웹과 따로 넣은 건 * 표시"(요청) - works에만 저장(myEvents), 날짜 칸을 누르면 추가, 칩을 누르면 수정·삭제
-    const mine = (Array.isArray(myEvents) ? myEvents : []).filter(e => e && String(e.date || '').startsWith(mo)).sort((a, b) => String(a.start || '99').localeCompare(String(b.start || '99')));
-    mine.forEach(e => { const tm = tmOf(e.start, e.end); put(e.date, `<span class="tj-att mine" role="button" data-myev="${escapeAttr(e.id)}" title="${escapeAttr(['개인 일정 (works에만 있음)', e.title, tm, e.memo].filter(Boolean).join(' · '))}" onclick="event.stopPropagation(); attendMyEvEdit('${escapeAttr(e.id)}')">${taxjEsc([e.title || '개인 일정', tm].filter(Boolean).join(' '))}<sup>*</sup></span>`); });
+    const mine = [];   // [2026.11.11] 반복 일정은 그 달의 날마다
+    for(let d = 1, dn = new Date(yy, mm, 0).getDate(); d <= dn; d++){ const ds = `${mo}-${pad2(d)}`; myEventsOn(ds).forEach(e => mine.push([ds, e])); }
+    mine.forEach(([ds, e]) => put(ds, myEvChipHtml(e, ds)));
     stats = `<div class="stat tone-rose"><div class="n">${(att.leaveUsage || []).filter(inMonth).length}</div><div class="label">이번 달 휴가</div></div>
       <div class="stat tone-violet"><div class="n">${(att.remoteEntries || []).filter(r => inMonth(r) && !r.hourly).length}</div><div class="label">이번 달 재택</div></div>
       <div class="stat"><div class="n">${evs.length + mine.length}</div><div class="label">이번 달 일정${mine.length ? ` <span style="color:var(--primary-dark);">(개인 ${mine.length}*)</span>` : ''}</div></div>`;
@@ -10058,6 +10101,7 @@ async function editPayCustomCol(id){
   if(r === undefined) return;   // [2026.10.15] 닫기(X) - 아무것도 안 바꿈
   if(r === null){
     const a = await smColDelAsk(col.label, `${payMonth.replace('-', '년 ')}월 귀속`, '모든 달');   // [2026.11.05] 자세히 물어봄(요청)
+    if(a && a.what !== 'col') await smAttCleanupAsk('pay', col.id, a.every ? null : payMonth);   // [2026.11.11] 첨부 정리
     if(!a) return;
     const hit = smColDelApply(payColsBy, a.every ? Object.keys(payColsBy) : [payMonth], col, a.what);
     if(a.what !== 'col') Object.entries(hit).forEach(([k, ids]) => Object.values(payCustomVals[k] || {}).forEach(v => ids.forEach(i => { delete v[i]; })));   // [2026.11.02] 이 달만
@@ -11036,9 +11080,7 @@ function smDueOn(ds){
 }
 function taxjCalItemsHtml(mk, ds){
   // [2026.11.11] "개인캘린더에 등록한 개인 일정이 홈 달력에 안 나옴"(요청) - 홈 달력(먼스)에도 같은 분홍 칩 + *(누르면 수정·삭제)
-  const mine = ds ? (Array.isArray(myEvents) ? myEvents : []).filter(e => e && e.date === ds).sort((a, b) => String(a.start || '99').localeCompare(String(b.start || '99'))) : [];
-  const tm = e => (e.start || e.end) ? `${e.start || ''}~${e.end || ''}` : '';
-  const mh = mine.map(e => `<span class="tj-att mine" role="button" title="${escapeAttr(['개인 일정 (works에만 있음)', e.title, tm(e), e.memo].filter(Boolean).join(' · '))}" onclick="event.stopPropagation(); attendMyEvEdit('${escapeAttr(e.id)}')">${taxjEsc([e.title || '개인 일정', tm(e)].filter(Boolean).join(' '))}<sup>*</sup></span>`).join('');
+  const mh = ds ? myEventsOn(ds).map(e => myEvChipHtml(e, ds)).join('') : '';
   const ch = (mk && mk.items.length ? mk.items.map(i => `<span class="tj-att ${i.cls}" title="${escapeAttr(i.title || i.label)}">${taxjEsc(i.label)}</span>`).join('') : '') + mh;
   return ch ? `<div class="tj-atts">${ch}</div>` : '';
 }
@@ -11062,6 +11104,8 @@ let calcTb = (() => { try{ const v = JSON.parse(localStorage.getItem('sm_calc_ta
 // [2026.11.11] 계산기 임시저장(요청: "임시저장 버튼 - 계산 아래 목록(평소엔 숨김), 메모 같이 저장, 목록 수정·삭제, 연도별 관리") - 모든 계산법 공통
 //   계산법마다 CALC_SUMMARY[id](입력값) = 목록에 보일 한 줄, 입력값은 그 계산법이 정함. 목록 펼침·보는 연도는 이 기기에 기억
 const CALC_SUMMARY = {
+  supply: v => { const t = calcNum(v.t); if(t == null) return '-'; const x = Math.floor(t / 11); return `공급대가 ${calcWon(t)} → 공급가액 ${calcWon(t - x)} · 세액 ${calcWon(x)}`; },
+  wh: v => { const r = calcWhRun(v); return r ? `${r.kindLab} · 지급액 ${calcWon(r.g)} → 실수령 ${calcWon(r.net)} (세금 ${calcWon(r.it + r.lt)})` : '-'; },
   taxback: v => { const x = calcNum(v.x), t = calcNum(v.t); if(x == null) return '-'; return [`세액 ${calcWon(x)}`, `공급대가 ${calcWon(x * 11)}`, t != null ? `면세 ${calcWon(t - x * 11)}` : ''].filter(Boolean).join(' · '); },
 };
 let calcListOpen = (() => { try{ return localStorage.getItem('sm_calc_list_open') === '1'; }catch(e){ return false; } })(), calcListYear = String(new Date().getFullYear());
@@ -11100,14 +11144,95 @@ function calcSaveWire(el, k, getV, loadV){
     const a = b.dataset.ci;
     if(a === 'load') return loadV(it.v || {});
     if(a === 'del'){ if(!(await smConfirm('이 저장을 지울까요?', it.memo || '', { tone:'danger', icon:'!', okText:'삭제' }))) return; L.splice(L.indexOf(it), 1); scheduleGoogleSave(); return re(); }
-    const keys = Object.keys(it.v || {});
-    const lab = { x:'세액', t:'총금액' };
+    const keys = Object.keys(it.v || {}).filter(f => !['k', 'd'].includes(f));   // 원천징수의 종류·방향은 그대로(불러와서 바꿔요)
+    const lab = { x:'세액', t: k === 'supply' ? '공급대가' : '총금액', n:'금액' };
     const r = await smForm('저장한 계산 수정', [{ label:'메모', value: it.memo || '' }, { label:'연도', options: [...new Set(yOpts().concat([String(it.y)]))], value: String(it.y) }].concat(keys.map(f => ({ label: lab[f] || f, value: it.v[f] || '' }))), { okText:'저장', icon:'✎' });
     if(!r) return;
     it.memo = String(r[0] || '').trim(); it.y = r[1];
     keys.forEach((f, i) => { const n = calcNum(r[2 + i]); it.v[f] = n == null ? String(r[2 + i] || '').trim() : calcWon(n); });
     calcListYear = String(it.y); scheduleGoogleSave(); re();
   });
+}
+// [2026.11.11] 공급대가 나누기 - 공급대가(부가세 포함 금액) → 공급가액·세액(세액 = 공급대가 × 10/110, 원 미만 버림)
+let calcSp = (() => { try{ return JSON.parse(localStorage.getItem('sm_calc_supply') || 'null') || { t:'' }; }catch(e){ return { t:'' }; } })();
+CALC_RENDER.supply = el => {
+  el.innerHTML = `<div class="calc-card">
+      <div class="calc-h">공급대가 나누기</div>
+      <div class="calc-sub">부가세가 포함된 금액을 공급가액과 세액으로 나눠요</div>
+      <label class="calc-f"><span>공급대가</span><input class="calc-big" data-f="t" inputmode="numeric" placeholder="0" value="${escapeAttr(calcSp.t || '')}"><em>원</em></label>
+      <div class="calc-res">
+        <div class="calc-r"><span>공급가액</span><b data-o="sup" title="누르면 복사"></b></div>
+        <div class="calc-op">+</div>
+        <div class="calc-r k"><span>세액</span><b data-o="tax" title="누르면 복사"></b></div>
+      </div>
+      <div class="calc-note">세액 = 공급대가 × 10/110 (원 미만 버림) · 공급가액 = 공급대가 − 세액</div>
+      ${calcSaveBarHtml('supply')}
+    </div>`;
+  const out = () => { const t = calcNum(calcSp.t), x = t == null ? null : Math.floor(t / 11), set = (k, v) => { el.querySelector(`[data-o="${k}"]`).textContent = v == null ? '-' : calcWon(v); }; set('sup', t == null ? null : t - x); set('tax', x); };
+  calcWireInputs(el, calcSp, 'sm_calc_supply', out);
+  calcSaveWire(el, 'supply', () => ({ t: calcSp.t }), v => { calcSp = { t: v.t || '' }; try{ localStorage.setItem('sm_calc_supply', JSON.stringify(calcSp)); }catch(e){} renderCalc(true); });
+  out(); setTimeout(() => { const i = el.querySelector('.calc-big'); if(i && activeTab === 'calc') i.focus(); }, 0);
+};
+// [2026.11.11] 원천징수 역산 - 사업소득 3.3%(소득세 3% + 지방 0.3%) / 기타소득 8.8%(필요경비 60% 뒤 20% + 지방 10%). 소득세·지방소득세는 10원 미만 버림
+//   방향: 지급액 → 실수령액, 또는 실수령액 → 지급액(실수령액이 그 금액 이상이 되는 가장 작은 지급액). 기타소득금액 건별 5만원 이하면 과세최저한(세금 0)
+function calcWhTax(g, kind){
+  const f10 = n => Math.floor(n / 10) * 10;
+  if(kind === 'etc'){ const inc = Math.floor(g * 0.4); if(inc <= 50000) return { it: 0, lt: 0, inc, min: true }; const it = f10(inc * 0.2); return { it, lt: f10(it * 0.1), inc }; }
+  const it = f10(g * 0.03); return { it, lt: f10(it * 0.1) };
+}
+function calcWhRun(v){
+  const n = calcNum(v.n), kind = v.k === 'etc' ? 'etc' : 'biz', dir = v.d === 'net' ? 'net' : 'gross'; if(n == null || n <= 0) return null;
+  let g = n;
+  if(dir === 'net'){
+    g = Math.floor(n / (kind === 'etc' ? 0.912 : 0.967)) - 20; for(let i = 0; i < 400; i++){ const t = calcWhTax(g, kind); if(g - t.it - t.lt >= n) break; g++; }
+    // 10원 버림 때문에 같은 실수령액이 나오는 지급액이 여럿이면 끝자리가 둥근 금액(1000·100·10원 단위)을 고름(예: 967,000 → 1,000,000)
+    const ex = []; for(let x = g; x < g + 120; x++){ const t = calcWhTax(x, kind); if(x - t.it - t.lt === n) ex.push(x); }
+    if(ex.length) g = [1000, 100, 10].map(u => ex.find(x => x % u === 0)).find(x => x != null) || ex[0];
+  }
+  const t = calcWhTax(g, kind);
+  return Object.assign({ g, net: g - t.it - t.lt, kind, kindLab: kind === 'etc' ? '기타소득 8.8%' : '사업소득 3.3%' }, t);
+}
+let calcWh = (() => { try{ return JSON.parse(localStorage.getItem('sm_calc_wh') || 'null') || { n:'', k:'biz', d:'gross' }; }catch(e){ return { n:'', k:'biz', d:'gross' }; } })();
+CALC_RENDER.wh = el => {
+  const seg = (f, opts) => `<div class="calc-seg">${opts.map(([v, l]) => `<button type="button" data-seg="${f}" data-v="${v}" class="${(calcWh[f] || opts[0][0]) === v ? 'on' : ''}">${l}</button>`).join('')}</div>`;
+  el.innerHTML = `<div class="calc-card">
+      <div class="calc-h">원천징수 역산</div>
+      <div class="calc-sub">지급액 ↔ 실수령액을 세금까지 같이 계산해요</div>
+      ${seg('k', [['biz', '사업소득 3.3%'], ['etc', '기타소득 8.8%']])}
+      ${seg('d', [['gross', '지급액 → 실수령'], ['net', '실수령 → 지급액']])}
+      <label class="calc-f"><span>${calcWh.d === 'net' ? '실수령액' : '지급액'}</span><input class="calc-big" data-f="n" inputmode="numeric" placeholder="0" value="${escapeAttr(calcWh.n || '')}"><em>원</em></label>
+      <div class="calc-res">
+        <div class="calc-r${calcWh.d === 'net' ? ' k' : ''}"><span>지급액</span><b data-o="g" title="누르면 복사"></b></div>
+        <div class="calc-op">−</div>
+        <div class="calc-r"><span>소득세</span><b data-o="it" title="누르면 복사"></b></div>
+        <div class="calc-op">−</div>
+        <div class="calc-r"><span>지방소득세</span><b data-o="lt" title="누르면 복사"></b></div>
+      </div>
+      <div class="calc-r rest k" style="margin-top:8px;"><span>실수령액</span><b data-o="net" title="누르면 복사"></b></div>
+      <div class="calc-note" data-wnote></div>
+      ${calcSaveBarHtml('wh')}
+    </div>`;
+  const out = () => {
+    const r = calcWhRun(calcWh), set = (k, v) => { el.querySelector(`[data-o="${k}"]`).textContent = v == null ? '-' : calcWon(v); };
+    set('g', r && r.g); set('it', r && r.it); set('lt', r && r.lt); set('net', r && r.net);
+    el.querySelector('[data-wnote]').textContent = !r ? (calcWh.k === 'etc' ? '기타소득 = 필요경비 60% 뺀 금액(40%)에 20% + 지방소득세 10% · 10원 미만 버림' : '사업소득 = 지급액의 3% + 지방소득세 0.3% · 10원 미만 버림')
+      : r.min ? `기타소득금액 ${calcWon(r.inc)}원(건별 5만원 이하) - 과세최저한이라 세금이 없어요` : calcWh.d === 'net' && r.net !== calcNum(calcWh.n) ? `10원 단위 버림 때문에 실수령 ${calcWon(calcNum(calcWh.n))}원에 꼭 맞는 지급액이 없어 가장 가까운 금액이에요` : (calcWh.k === 'etc' ? `기타소득금액 ${calcWon(r.inc)}원 × 20%` : '지급액 × 3%') + ' · 10원 미만 버림';
+  };
+  el.querySelectorAll('[data-seg]').forEach(b => b.onclick = () => { calcWh[b.dataset.seg] = b.dataset.v; try{ localStorage.setItem('sm_calc_wh', JSON.stringify(calcWh)); }catch(e){} renderCalc(true); });
+  calcWireInputs(el, calcWh, 'sm_calc_wh', out);
+  calcSaveWire(el, 'wh', () => ({ n: calcWh.n, k: calcWh.k, d: calcWh.d }), v => { calcWh = { n: v.n || '', k: v.k || 'biz', d: v.d || 'gross' }; try{ localStorage.setItem('sm_calc_wh', JSON.stringify(calcWh)); }catch(e){} renderCalc(true); });
+  out(); setTimeout(() => { const i = el.querySelector('.calc-big'); if(i && activeTab === 'calc') i.focus(); }, 0);
+};
+// 숫자 칸 공통: 치는 대로 쉼표, 값은 이 기기에 기억, 결과 숫자 누르면 복사
+function calcWireInputs(el, st, lsKey, out){
+  el.querySelectorAll('input[data-f]').forEach(inp => inp.addEventListener('input', () => {
+    const n = calcNum(inp.value), pos = inp.value.length - inp.selectionStart;
+    inp.value = n == null ? inp.value.replace(/[^\d\-]/g, '') : calcWon(n);
+    try{ const p = Math.max(0, inp.value.length - pos); inp.setSelectionRange(p, p); }catch(e){}
+    st[inp.dataset.f] = inp.value; try{ localStorage.setItem(lsKey, JSON.stringify(st)); }catch(e){}
+    out();
+  }));
+  el.querySelectorAll('[data-o]').forEach(b => b.onclick = async () => { const t = b.textContent.replace(/,/g, ''); if(!t || t === '-') return; try{ await navigator.clipboard.writeText(t); b.classList.add('copied'); setTimeout(() => b.classList.remove('copied'), 700); }catch(e){} });
 }
 CALC_RENDER.taxback = el => {
   el.innerHTML = `<div class="calc-card">
