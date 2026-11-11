@@ -12208,8 +12208,8 @@ function smTokenHasDrive(){
 }
 function smToast(msg, ms){
   let t = document.getElementById('smToast');
-  if(!t){ t = document.createElement('div'); t.id = 'smToast'; t.style.cssText = 'position:fixed; left:50%; bottom:28px; transform:translateX(-50%); background:#2a1d26; color:#fff; font-size:13px; font-weight:600; padding:10px 16px; border-radius:12px; z-index:9999; box-shadow:0 6px 18px rgba(0,0,0,.18); max-width:90vw; text-align:center; transition:opacity .2s;'; document.body.appendChild(t); }
-  t.textContent = msg; t.style.opacity = '1'; clearTimeout(t._h); t._h = setTimeout(() => { t.style.opacity = '0'; }, ms || 3500);
+  if(!t){ t = document.createElement('div'); t.id = 'smToast'; t.style.cssText = 'position:fixed; left:50%; bottom:28px; transform:translateX(-50%); background:#2a1d26; color:#fff; font-size:13px; font-weight:600; padding:10px 16px; border-radius:12px; z-index:9999; box-shadow:0 6px 18px rgba(0,0,0,.18); max-width:90vw; text-align:center; transition:opacity .2s; pointer-events:none;'; document.body.appendChild(t); }
+  t.textContent = msg; t.style.opacity = '1'; t.style.visibility = ''; clearTimeout(t._h); t._h = setTimeout(() => { t.style.opacity = '0'; setTimeout(() => { if(t.style.opacity === '0') t.style.visibility = 'hidden'; }, 250); }, ms || 3500);   // [2026.11.11] "플로팅 메뉴가 안 눌림"(요청) - 사라진 안내가 투명한 채로 아래 가운데 메뉴를 덮고 있었음 → 다 사라지면 숨김·클릭 통과
 }
 function smRequestDriveScope(){
   const needConsent = !smTokenHasDrive();
