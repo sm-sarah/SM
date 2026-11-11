@@ -428,7 +428,15 @@ function smTogglePcView(){ try{ localStorage.setItem('sm_pc_view', window.SM_PC_
   .tj-att.etc{ background:#f1f5f9; color:#64748b; }
   .tj-att.due{ background:#ffe4e6; color:#be123c; }
   .tj-att.due, .tj-att.plan{ max-width:100%; white-space:normal; word-break:keep-all; overflow-wrap:anywhere; }   /* 이름이 길면 줄바꿈 */
-  .tj-att.plan{ background:#dbeafe; color:#1d4ed8; }   /* [2026.11.03] 세무일정 안내 시작 */
+  .tj-att.plan{ background:#dbeafe; color:#1d4ed8; }
+  /* [2026.11.11] 개인캘린더 - 회사 일정(외근 등)도 같은 칩, 내 개인 일정은 분홍 칩 + * */
+  .tj-att.ev{ background:#fef3c7; color:#92400e; }
+  .tj-att.mine{ background:#fde4ee; color:#be185d; cursor:pointer; }
+  .tj-att.mine sup{ font-size:9px; font-weight:900; margin-left:1px; line-height:0; }
+  .tj-att.ev, .tj-att.mine{ max-width:100%; white-space:normal; word-break:keep-all; overflow-wrap:anywhere; }
+  .att-cal-day{ cursor:pointer; }
+  .att-cal-add{ float:right; opacity:0; font-weight:800; color:var(--primary-dark); transition:opacity .15s; }
+  .att-cal-day:hover .att-cal-add{ opacity:1; }   /* [2026.11.03] 세무일정 안내 시작 */
   .tp-table td, .tp-table th{ padding:6px 8px !important; font-size:12.5px; }
   .tp-table tr.tp-off td{ opacity:.45; }
   .wl-plan{ border:1px solid #bfdbfe; background:#eff6ff; border-radius:14px; padding:10px 14px; margin-bottom:12px; font-size:13px; }   /* [2026.11.03] 못한 일(노랑)과 구분되게 하늘색(요청) */
@@ -2466,7 +2474,7 @@ const ICONS = {
 // [2026.11.11] 계산기(요청) - 하위메뉴 = 계산법. 새 계산법은 CALC_VIEWS에 [id, 이름]을 넣고 CALC_RENDER[id]에 화면을 만들면 됨(입력값은 이 기기에만 잠깐 보관, 시트에는 안 올림)
 const CALC_VIEWS = [['taxback', '세액역산']];
 const CALC_RENDER = {};
-var calcSaves = {}, cellFiles = {};   // [2026.11.11] 계산기 임시저장 { 계산법id: [{ id, y, at, memo, v:{입력값} }] } - 시트에 저장(works 데이터)
+var calcSaves = {}, cellFiles = {}, myEvents = [];   // [2026.11.11] 계산기 임시저장 { 계산법id: [{ id, y, at, memo, v:{입력값} }] } - 시트에 저장(works 데이터)
 let calcView = (() => { try{ const v = localStorage.getItem('sm_calc_view'); return CALC_VIEWS.some(x => x[0] === v) ? v : CALC_VIEWS[0][0]; }catch(e){ return CALC_VIEWS[0][0]; } })();
 const TABS = [
   {id:'home',     label:'홈'},
@@ -2544,10 +2552,10 @@ const NAV_SUBMENUS = {
   ],
   // [2026.10.12] 회사웹 개인 메뉴와 같은 하위메뉴(요청 - 근태경비)
   attend: [
+    {js:"setAttendView('cal')",     label:'개인캘린더'},   // [2026.10.13] 회사웹 개인캘린더 연동(요청) · [2026.11.11] 맨 위로(요청)
     {js:"setAttendView('clock')",   label:'출퇴근현황'},
     {js:"setAttendView('leave')",   label:'근태현황'},
     {js:"setAttendView('expense')", label:'경비정산'},
-    {js:"setAttendView('cal')",     label:'개인캘린더'},   // [2026.10.13] 회사웹 개인캘린더 연동(요청)
   ],
   // [2026.10.12] 회사웹 제출 메뉴와 같은 하위메뉴(요청)
   // [2026.10.13] 원천세를 회사웹처럼 총괄·신고현황·일용직·제출(매월·반기·연간)로 나눔(요청). 따로 있던 제출 메뉴는 여기로 옮김
@@ -7232,6 +7240,7 @@ const GOOGLE_DATA_KEYS = [
   'closeColsBy','closeData',   // [2026.10.14] 결산 ([2026.11.02] 항목은 회차마다 따로 - 예전 'closeCols')
   'taxColsBy','taxColVals',   // [2026.11.02] 법인세·종소세 내 항목
   'smColOrders',   // [2026.11.02] works 표 칸 순서(끌어서 옮긴 대로)
+  'myEvents',   // [2026.11.11] 개인캘린더에 내가 따로 넣은 개인 일정 [{ id, date, title, start, end, memo }] (회사웹에는 안 올라감)
   'cellFiles',   // [2026.11.11] 칸 첨부파일(결산 메모·비고) { 'close|연도|거래처|항목': [{id,name,url,size,at}] } - 파일은 내 드라이브
   'calcSaves',   // [2026.11.11] 계산기 임시저장 목록(계산법별·연도별)
   'taxPlan',   // [2026.11.03] 세무일정 안내(안내 일수·숨김·내 일정)
@@ -7253,7 +7262,7 @@ function collectGoogleSnapshot(){
     links, nextLinkId, linkCats, forms, nextFormId, formCats, laws, nextLawId, lawCats,
     manuals, nextManualId, manualCats,
     accountVault, submitMine, attendMine, payColsBy: smColsPrune(payColsBy), payCustomVals, vatCustomCols, vatCustomVals, vatProgColsBy: smColsPrune(vatProgColsBy), vatProg, vatProgView, closeColsBy: smColsPrune(closeColsBy), closeData,
-    taxColsBy: { corp: smColsPrune(taxColsBy.corp), indiv: smColsPrune(taxColsBy.indiv) }, taxColVals, smColOrders, taxPlan, calcSaves: calcSaves || {}, cellFiles: cellFiles || {}, quickMemos, nextMemoId, menuNotes,
+    taxColsBy: { corp: smColsPrune(taxColsBy.corp), indiv: smColsPrune(taxColsBy.indiv) }, taxColVals, smColOrders, taxPlan, calcSaves: calcSaves || {}, cellFiles: cellFiles || {}, myEvents: myEvents || [], quickMemos, nextMemoId, menuNotes,
   };
 }
 
@@ -7341,6 +7350,7 @@ async function loadFromGoogleSheet(guard){
     if(map.taxPlan) taxPlan = JSON.parse(map.taxPlan) || {};
     if(map.calcSaves) calcSaves = JSON.parse(map.calcSaves) || {};
     if(map.cellFiles) cellFiles = JSON.parse(map.cellFiles) || {};
+    if(map.myEvents) myEvents = JSON.parse(map.myEvents) || [];
     if(smMigrateCols()) needsResaveAfterLoad = true;
     if(smNaUnify()) needsResaveAfterLoad = true;   // [2026.11.02] 예전 공통 항목 → 모든 회차에 복사하고 새 형식으로 다시 저장
     if(map.links)         links        = JSON.parse(map.links);
@@ -7756,6 +7766,7 @@ function applySnapshot(o){
   if(o.taxPlan) taxPlan = o.taxPlan;
   if(o.calcSaves) calcSaves = o.calcSaves;
   if(o.cellFiles) cellFiles = o.cellFiles;
+  if(o.myEvents) myEvents = o.myEvents;
   smMigrateCols(); smNaUnify();
   if(o.links) links = o.links;
   if(o.nextLinkId) nextLinkId = o.nextLinkId;
@@ -9342,10 +9353,28 @@ function submitDatePop(btn){
    자료: Tax.J data__<직원id>.attendance {clockLog, leaveUsage, leaveGrants, remoteEntries} / .expense {lunchEntries, dinnerEntries, taxiEntries, otherExpenses, prepaidEntries}
    (필드명은 Tax.J 엑셀 시트 정의 XLS_SHEET_CLOCK·LEAVE·REMOTE·EXPENSE와 같음). 회사 원본은 읽기만, 내 확인·메모는 attendMine(works)에만 저장.
    식대 한도·휴가 잔여처럼 회사 규칙으로 계산하는 값은 여기서 다시 계산하지 않음(틀릴 수 있어서) - 회사웹 기록 그대로 보여줌 */
-let attendView = 'clock', attendMonth = '', attendPerson = '';
-const ATTEND_VIEWS = [['clock','출퇴근현황'], ['leave','근태현황'], ['expense','경비정산'], ['cal','개인캘린더']];   // [2026.10.13] 개인캘린더 추가(요청)
+let attendView = 'cal', attendMonth = '', attendPerson = '';   // [2026.11.11] 개인캘린더를 맨 위 메뉴로 옮기면서 처음 화면도 개인캘린더
+const ATTEND_VIEWS = [['cal','개인캘린더'], ['clock','출퇴근현황'], ['leave','근태현황'], ['expense','경비정산']];   // [2026.10.13] 개인캘린더 추가(요청)
 const ATTEND_EXP_KINDS = [['lunchEntries','점심식대'], ['dinnerEntries','저녁식대'], ['taxiEntries','택시비'], ['otherExpenses','경비'], ['prepaidEntries','차액정산']];
 const ATTEND_WEEK = ['일','월','화','수','목','금','토'];
+// [2026.11.11] 개인캘린더 개인 일정(works에만) - 추가·수정·삭제
+function attendMyEvFields(e){ e = e || {}; return [{ label:'일정', value: e.title || '', placeholder:'예: 병원, 은행 방문' }, { label:'날짜', type:'date', value: e.date || todayStr() }, { label:'시작 (선택)', type:'time', value: e.start || '' }, { label:'끝 (선택)', type:'time', value: e.end || '' }, { label:'메모 (선택)', type:'textarea', rows:2, value: e.memo || '' }]; }
+function attendMyEvFrom(r, e){ return Object.assign(e || {}, { title: String(r[0] || '').trim(), date: /^\d{4}-\d{2}-\d{2}$/.test(r[1]) ? r[1] : todayStr(), start: r[2] || '', end: r[3] || '', memo: String(r[4] || '').trim() }); }
+async function attendMyEvAdd(ds){
+  const r = await smForm('개인 일정 추가', attendMyEvFields({ date: ds }), { okText:'추가' });
+  if(!r || !String(r[0] || '').trim()) return;
+  myEvents = Array.isArray(myEvents) ? myEvents : [];
+  myEvents.push(attendMyEvFrom(r, { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 5) }));
+  renderAttend(); scheduleGoogleSave();
+}
+async function attendMyEvEdit(id){
+  const e = (myEvents || []).find(x => x.id === id); if(!e) return;
+  const r = await smForm('개인 일정', attendMyEvFields(e), { okText:'저장', cancelText:'삭제', icon:'✎', closeX:true });
+  if(r === undefined) return;
+  if(r === null){ if(!(await smConfirm('이 개인 일정을 지울까요?', e.title || '', { tone:'danger', icon:'!', okText:'삭제' }))) return; myEvents = myEvents.filter(x => x !== e); }
+  else attendMyEvFrom(r, e);
+  renderAttend(); scheduleGoogleSave();
+}
 function setAttendView(v){ attendView = v; if(activeTab !== 'attend') switchTab('attend'); else renderAttend(); }
 function attendShiftMonth(n){ const [y, m] = attendMonth.split('-').map(Number); const d = new Date(y, m - 1 + n, 1); attendMonth = `${d.getFullYear()}-${pad2(d.getMonth() + 1)}`; renderAttend(); }
 function attendPeople(){ return ((taxjFull && taxjFull.docs && taxjFull.docs.profiles) || []).filter(p => p && p.id); }
@@ -9669,23 +9698,27 @@ function renderAttend(){
       }
     });
     (att.leaveUsage || []).filter(u => u && !u.deleted && inMonth(u)).forEach(u => put(u.date, chip('leave', [u.type || '휴가', u.subtype].filter(Boolean).join('·'), [u.type, u.subtype, u.days ? u.days + '일' : '', u.memo].filter(Boolean).join(' · '))));
-    (att.remoteEntries || []).filter(r => r && !r.deleted && inMonth(r)).forEach(r => put(r.date, chip('remote', r.hourly ? '시간재택' : r.bonus ? '특별재택' : r.half === 'am' ? '오전재택' : r.half === 'pm' ? '오후재택' : '정기재택', [r.hourly ? '시간재택' : r.bonus ? '특별재택' : '정기재택', (r.startTime || r.endTime) ? `${r.startTime || ''}~${r.endTime || ''}` : '', r.memo].filter(Boolean).join(' · '))));
+    const tmOf = (a, b) => (a || b) ? `${a || ''}~${b || ''}` : '';   // [2026.11.11] "시간재택·외근 칩이 다르고 시간이 안 나옴"(요청) - 시간 있는 칩은 시간까지, 일정도 같은 칩 모양
+    (att.remoteEntries || []).filter(r => r && !r.deleted && inMonth(r)).forEach(r => put(r.date, chip('remote', r.hourly ? ['시간재택', tmOf(r.startTime, r.endTime)].filter(Boolean).join(' ') : r.hourly ? '시간재택' : r.bonus ? '특별재택' : r.half === 'am' ? '오전재택' : r.half === 'pm' ? '오후재택' : '정기재택', [r.hourly ? '시간재택' : r.bonus ? '특별재택' : '정기재택', (r.startTime || r.endTime) ? `${r.startTime || ''}~${r.endTime || ''}` : '', r.memo].filter(Boolean).join(' · '))));
     const evs = ((pd.schedule || {}).events || []).filter(e => e && !e.deleted && inMonth(e));
     evs.forEach(e => {
       const tm = e.startTime ? e.startTime + (e.endTime ? '~' + e.endTime : '') : (e.allDay ? '종일' : '');
-      put(e.date, `<div class="cal-task cal-deadline cd-etc" title="${escapeAttr([tm, e.memo || e.title || ''].filter(Boolean).join(' · ') || (e.type || '일정'))}">${taxjEsc(e.type || '일정')}${e.title ? ' ' + taxjEsc(e.title) : ''}</div>`);
+      put(e.date, chip('ev', [e.type || '일정', e.title, tm].filter(Boolean).join(' '), [e.type || '일정', e.title, tm, e.memo].filter(Boolean).join(' · ')));
     });
+    // [2026.11.11] "개인캘린더에 내 개인 일정도 - 회사웹과 따로 넣은 건 * 표시"(요청) - works에만 저장(myEvents), 날짜 칸을 누르면 추가, 칩을 누르면 수정·삭제
+    const mine = (Array.isArray(myEvents) ? myEvents : []).filter(e => e && String(e.date || '').startsWith(mo)).sort((a, b) => String(a.start || '99').localeCompare(String(b.start || '99')));
+    mine.forEach(e => { const tm = tmOf(e.start, e.end); put(e.date, `<span class="tj-att mine" role="button" data-myev="${escapeAttr(e.id)}" title="${escapeAttr(['개인 일정 (works에만 있음)', e.title, tm, e.memo].filter(Boolean).join(' · '))}" onclick="event.stopPropagation(); attendMyEvEdit('${escapeAttr(e.id)}')">${taxjEsc([e.title || '개인 일정', tm].filter(Boolean).join(' '))}<sup>*</sup></span>`); });
     stats = `<div class="stat tone-rose"><div class="n">${(att.leaveUsage || []).filter(inMonth).length}</div><div class="label">이번 달 휴가</div></div>
       <div class="stat tone-violet"><div class="n">${(att.remoteEntries || []).filter(r => inMonth(r) && !r.hourly).length}</div><div class="label">이번 달 재택</div></div>
-      <div class="stat"><div class="n">${evs.length}</div><div class="label">이번 달 일정</div></div>`;
+      <div class="stat"><div class="n">${evs.length + mine.length}</div><div class="label">이번 달 일정${mine.length ? ` <span style="color:var(--primary-dark);">(개인 ${mine.length}*)</span>` : ''}</div></div>`;
     const startDow = new Date(yy, mm - 1, 1).getDay(), days = new Date(yy, mm, 0).getDate(), todayS = todayStr();
     let cells = '';
     for(let i = 0; i < startDow; i++) cells += '<div class="cal-day other"></div>';
     for(let d = 1; d <= days; d++){
       const ds = `${mo}-${pad2(d)}`, it = map[ds] || [];
       const chips = it.filter(h => h.startsWith('<span')), tasks = it.filter(h => !h.startsWith('<span'));
-      cells += `<div class="cal-day ${ds === todayS ? 'today' : ''}">
-        <div class="cal-daynum ${hol[ds] ? 'tj-hol' : ''}">${d}${hol[ds] ? `<span class="tj-holname">${taxjEsc(hol[ds])}</span>` : ''}</div>
+      cells += `<div class="cal-day att-cal-day ${ds === todayS ? 'today' : ''}" onclick="attendMyEvAdd('${ds}')" title="눌러서 개인 일정 추가">
+        <div class="cal-daynum ${hol[ds] ? 'tj-hol' : ''}">${d}${hol[ds] ? `<span class="tj-holname">${taxjEsc(hol[ds])}</span>` : ''}<span class="att-cal-add">+</span></div>
         ${chips.length ? `<div class="tj-atts">${chips.join('')}</div>` : ''}${tasks.length ? `<div class="cal-tasks">${tasks.join('')}</div>` : ''}</div>`;
     }
     for(let i = (startDow + days) % 7; i && i < 7; i++) cells += '<div class="cal-day other"></div>';
