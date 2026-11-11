@@ -5144,6 +5144,7 @@ const CLOSE_CARRY_RE = /^(차량|급여종류|비고)/;
 //   결산 연도 1~12월 모두 모아 보여 줌('없음' 제외). 칸에 직접 적은 값이 있으면 그 값이 먼저. 종류 순서·이름은 회사웹 ITO_PAY_KINDS·ITO_PAY_LABEL과 같게
 const CLOSE_PAY_KINDS = ['근로','근로연말','사업','일용','특고','기타간이','기타미대상','기타','퇴직','이자','예술'];
 const CLOSE_PAY_LABEL = { 근로연말:'근로(연말)', 기타간이:'기타(간이)', 기타미대상:'기타(간이미대상)' };
+const CLOSE_PAY_INC_KIND = { 근로과세:'근로', 근로제출비과세:'근로', 근로미제출비과세:'근로', 중도과세:'근로', 중도제출비과세:'근로', 중도미제출비과세:'근로', 연말:'근로연말', 일용:'일용', 사업:'사업', 기타간이대상:'기타간이', 기타간이미대상:'기타미대상', 퇴직:'퇴직', 이자:'이자' };   // [2026.11.11] 급여 금액 칸 → 급여종류
 function closeIsPayKindsCol(c){ return c && c.type === 'text' && /^급여종류/.test(String(c.label || '').replace(/\s+/g, '')); }
 function closePayKindsAuto(cid, y){ return closePayKindsInfo(cid, y).kinds.join(', '); }
 // [2026.11.05] "급여종류를 결산 고정 항목으로, 아이콘으로 표기해 누르면 팝업"(요청) - 회사 메모 오른쪽 회사웹 값(조회만) 칸. 팝업에 종류 + 달별 발생급여
@@ -5152,7 +5153,14 @@ function closePayKindsInfo(cid, y){
   const ord = a => (CLOSE_PAY_KINDS.indexOf(a) + 99) % 99, lab = k => CLOSE_PAY_LABEL[k] || k;
   for(let m = 1; m <= 12; m++){
     const ms = new Set();
-    [cid, cid + '@nextMonth'].forEach(k => ((((((rf[k] || {})[String(y)]) || {})[String(m)]) || {}).payKinds || []).forEach(x => { if(x && x !== '없음'){ ms.add(x); got.add(x); } }));
+    [cid, cid + '@nextMonth'].forEach(k => {
+      const d = (((rf[k] || {})[String(y)]) || {})[String(m)] || {};
+      (d.payKinds || []).forEach(x => { if(x && x !== '없음'){ ms.add(x); got.add(x); } });
+      // [2026.11.11] "반기 사업장은 급여가 있는데 없음으로 나옴"(제보) - 반기는 금액을 반기 끝 달에 몰아 적고 발생급여 종류를 안 고르는 경우가 있어,
+      //   그 달 급여 금액(검토표 income)이 있으면 그 칸의 종류도 넣음(회사웹 RV_KIND_COLS를 거꾸로)
+      if(!(d.payKinds || []).length) Object.entries(d.income || {}).forEach(([f, v]) => {   // 종류를 고른 달은 고른 그대로(특고·예술이 '사업'으로 겹치지 않게)
+        if(v == null || v === '' || Number(v) === 0) return; const kd = CLOSE_PAY_INC_KIND[f]; if(kd){ ms.add(kd); got.add(kd); } });
+    });
     if(ms.size) byM.push([m, [...ms].sort((a, b) => ord(a) - ord(b)).map(lab)]);
   }
   return { kinds: [...got].sort((a, b) => ord(a) - ord(b)).map(lab), byM };
