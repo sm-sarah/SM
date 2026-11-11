@@ -1362,11 +1362,29 @@ function smTogglePcView(){ try{ localStorage.setItem('sm_pc_view', window.SM_PC_
   .cl-pop-range button:hover{ border-color:var(--primary); color:var(--primary-dark); }
   .rd-view.top{ margin-top:18px; }   /* 닫기(×)와 안 겹치게 */
   .cl-pop-row button.on{ border-color:var(--primary); color:var(--primary-dark); font-weight:800; }
-  /* [2026.11.11] 계산기 */
-  .calc-tb td, .calc-tb th{ text-align:center; white-space:nowrap; }
-  .calc-tb .calc-o{ text-align:right; font-variant-numeric:tabular-nums; padding-right:12px; }
-  .calc-tb .calc-k{ font-weight:800; color:var(--primary-dark); }
-  .calc-tb tfoot td{ border-top:2px solid var(--border); font-weight:700; }
+  /* [2026.11.11] 계산기 - 가운데 카드(요청) */
+  .calc-card{ max-width:440px; margin:12px auto; background:#fff; border:1px solid var(--border); border-radius:20px; box-shadow:var(--shadow-md); padding:26px 26px 20px; text-align:center; }
+  .calc-h{ font-size:18px; font-weight:800; color:var(--text); }
+  .calc-sub{ font-size:12.5px; color:var(--muted); margin:4px 0 18px; }
+  .calc-f{ display:flex; align-items:center; gap:8px; background:var(--primary-soft); border:1.5px solid transparent; border-radius:14px; padding:10px 16px; transition:border-color .15s; }
+  .calc-f:focus-within{ border-color:var(--primary); background:#fff; }
+  .calc-f > span{ font-size:13px; font-weight:800; color:var(--primary-dark); white-space:nowrap; }
+  .calc-f > span i{ font-style:normal; font-weight:600; color:var(--muted); font-size:11.5px; }
+  .calc-f input{ flex:1; min-width:0; border:none; outline:none; background:transparent; text-align:right; font:inherit; font-weight:800; color:var(--text); font-variant-numeric:tabular-nums; }
+  .calc-big{ font-size:24px !important; }
+  .calc-mid{ font-size:15px !important; }
+  .calc-f em{ font-style:normal; font-size:13px; color:var(--muted); }
+  .calc-f.sm{ margin-top:16px; padding:7px 16px; background:var(--bg); }
+  .calc-res{ display:flex; align-items:stretch; justify-content:center; gap:6px; margin-top:16px; }
+  .calc-op{ align-self:center; font-size:16px; font-weight:800; color:var(--muted-soft); }
+  .calc-r{ flex:1; min-width:0; display:flex; flex-direction:column; gap:3px; padding:10px 6px; border-radius:12px; background:var(--bg); }
+  .calc-r span{ font-size:11.5px; font-weight:700; color:var(--muted); }
+  .calc-r b{ font-size:15px; font-weight:800; color:var(--text); font-variant-numeric:tabular-nums; cursor:copy; border-radius:6px; transition:background .15s; word-break:break-all; }
+  .calc-r b.copied{ background:var(--mint-soft, #e6f9f1); color:#059669; }
+  .calc-r.k{ background:var(--primary-soft); }
+  .calc-r.k b{ color:var(--primary-dark); font-size:16.5px; }
+  .calc-r.rest{ margin-top:8px; flex-direction:row; justify-content:space-between; align-items:center; padding:9px 16px; }
+  .calc-note{ margin-top:14px; font-size:11.5px; color:var(--muted-soft); }
   .ck-chips{ display:flex; flex-wrap:wrap; gap:4px; align-items:center; }
   .ck-chip{ display:inline-flex; align-items:center; height:20px; padding:0 8px; border-radius:999px; font-size:11.5px; font-weight:800; background:#EEF0F5; color:#4A4E63; white-space:nowrap; }
   .ck-chip[data-k="근로"], .ck-chip[data-k="근로연말"]{ background:#FCE1EA; color:#B4234A; }
@@ -10735,49 +10753,41 @@ const calcWon = n => n == null || isNaN(n) ? '' : Number(n).toLocaleString('ko-K
 // ── 세액역산: 세액만 나온 자료(현금영수증 매출내역누계 등)에서 과세분 공급가액·공급대가를 거꾸로 계산
 //   세액 = 공급대가 × 10/110(원 미만 절사) → 공급대가 = 세액 × 11, 공급가액 = 세액 × 10 (절사 때문에 실제는 각각 0~10원 더 클 수 있음)
 //   총금액을 넣으면 '나머지 = 총금액 − 공급대가'(면세·영세 등 세액 없는 금액)도 계산
-let calcTbRows = (() => { try{ const v = JSON.parse(localStorage.getItem('sm_calc_taxback') || 'null'); if(Array.isArray(v) && v.length) return v; }catch(e){} return [{ l:'', t:'', x:'' }]; })();
-function calcTbSave(){ try{ localStorage.setItem('sm_calc_taxback', JSON.stringify(calcTbRows)); }catch(e){} }
-function calcTbRowHtml(r, i){
-  const x = calcNum(r.x), t = calcNum(r.t), sup = x == null ? null : x * 10, tot = x == null ? null : x * 11, rest = t == null || tot == null ? null : t - tot;
-  return `<tr data-i="${i}">
-    <td><input class="vp-in calc-in" data-f="l" value="${escapeAttr(r.l || '')}" placeholder="예: 2026-08" style="width:96px;"></td>
-    <td><input class="vp-in calc-in" data-f="t" value="${escapeAttr(r.t || '')}" placeholder="선택" inputmode="numeric" style="width:120px; text-align:right;"></td>
-    <td><input class="vp-in calc-in" data-f="x" value="${escapeAttr(r.x || '')}" placeholder="세액" inputmode="numeric" style="width:110px; text-align:right;"></td>
-    <td class="calc-o" data-o="sup">${calcWon(sup)}</td><td class="calc-o calc-k" data-o="tot">${calcWon(tot)}</td><td class="calc-o" data-o="rest">${calcWon(rest)}</td>
-    <td><button type="button" class="cl-memo-act calc-del" data-del="${i}" title="이 줄 지우기" aria-label="지우기" style="opacity:1;">✕</button></td></tr>`;
-}
-function calcTbSum(el){
-  let x = 0, t = 0, rest = 0, hasT = false, any = false, hasR = false;
-  calcTbRows.forEach(r => { const a = calcNum(r.x), b = calcNum(r.t); if(a != null){ x += a; any = true; } if(b != null){ t += b; hasT = true; } if(a != null && b != null){ rest += b - a * 11; hasR = true; } });   // 나머지 합계 = 두 칸 다 넣은 줄만
-  const f = el.querySelector('.calc-sum'); if(!f) return;
-  f.innerHTML = any || hasT ? `<td><b>합계</b></td><td class="calc-o">${hasT ? calcWon(t) : ''}</td><td class="calc-o"><b>${calcWon(x)}</b></td><td class="calc-o">${calcWon(x * 10)}</td><td class="calc-o calc-k">${calcWon(x * 11)}</td><td class="calc-o">${hasR ? calcWon(rest) : ''}</td><td></td>` : '';
-}
+// [2026.11.11] "투박하지 않게, 가운데 정렬, 구분 없이 세액만 넣으면 역산 - 말 그대로 계산용"(요청) - 가운데 카드 하나: 세액(+ 총금액은 선택) → 공급가액 + 세액 = 공급대가.
+//   값을 누르면 복사. 입력값은 이 기기에만 잠깐 보관(시트에 안 올림)
+let calcTb = (() => { try{ const v = JSON.parse(localStorage.getItem('sm_calc_taxback2') || 'null'); if(v && typeof v === 'object') return v; }catch(e){} return { x:'', t:'' }; })();
 CALC_RENDER.taxback = el => {
-  el.innerHTML = `<div class="card">
-      <h3 style="margin:0 0 4px;">세액역산</h3>
-      <div class="hint">세액만 있을 때 과세분 <b>공급가액 = 세액 × 10</b>, <b>공급대가(공급가액 + 세액) = 세액 × 11</b>로 거꾸로 계산해요. 총금액을 넣으면 세액 없는 금액(면세 등)도 나와요.<br>세액은 원 미만을 버린 값이라 실제 공급가액·공급대가는 0~10원 더 클 수 있어요. 세액 칸에 여러 줄을 붙여넣으면 줄마다 나눠 들어가요.</div>
-      <div class="table-scroll vat-prog" style="margin-top:10px; min-height:0; height:auto;"><table class="calc-tb"><thead><tr><th>구분</th><th>총금액</th><th>세액</th><th>공급가액</th><th>공급대가</th><th>나머지(총금액−공급대가)</th><th></th></tr></thead>
-        <tbody>${calcTbRows.map(calcTbRowHtml).join('')}</tbody><tfoot><tr class="calc-sum"></tr></tfoot></table></div>
-      <div style="display:flex; gap:6px; margin-top:8px;"><button type="button" class="btn xs" data-a="add">+ 줄 추가</button><button type="button" class="btn xs ghost" data-a="clear">모두 비우기</button></div>
+  el.innerHTML = `<div class="calc-card">
+      <div class="calc-h">세액역산</div>
+      <div class="calc-sub">세액을 넣으면 공급가액·공급대가를 거꾸로 계산해요</div>
+      <label class="calc-f"><span>세액</span><input class="calc-big" data-f="x" inputmode="numeric" placeholder="0" value="${escapeAttr(calcTb.x || '')}"><em>원</em></label>
+      <div class="calc-res">
+        <div class="calc-r"><span>공급가액</span><b data-o="sup" title="누르면 복사"></b></div>
+        <div class="calc-op">+</div>
+        <div class="calc-r"><span>세액</span><b data-o="tax" title="누르면 복사"></b></div>
+        <div class="calc-op">=</div>
+        <div class="calc-r k"><span>공급대가</span><b data-o="tot" title="누르면 복사"></b></div>
+      </div>
+      <label class="calc-f sm"><span>총금액 <i>(선택)</i></span><input class="calc-mid" data-f="t" inputmode="numeric" placeholder="넣으면 세액 없는 금액도 계산" value="${escapeAttr(calcTb.t || '')}"><em>원</em></label>
+      <div class="calc-r rest" data-rest><span>세액 없는 금액 (총금액 − 공급대가)</span><b data-o="rest" title="누르면 복사"></b></div>
+      <div class="calc-note">세액은 원 미만을 버린 값이라 실제 공급가액·공급대가는 0~10원 더 클 수 있어요</div>
     </div>`;
-  const tb = el.querySelector('tbody');
-  const redrawRow = i => { const tr = tb.querySelector(`tr[data-i="${i}"]`); if(!tr) return; const tmp = document.createElement('tbody'); tmp.innerHTML = calcTbRowHtml(calcTbRows[i], i); const nr = tmp.firstElementChild; ['sup','tot','rest'].forEach(o => { tr.querySelector(`[data-o="${o}"]`).innerHTML = nr.querySelector(`[data-o="${o}"]`).innerHTML; }); };
-  tb.addEventListener('input', e => {
-    const inp = e.target.closest('.calc-in'); if(!inp) return; const i = +inp.closest('tr').dataset.i, f = inp.dataset.f;
-    calcTbRows[i][f] = inp.value; redrawRow(i); calcTbSum(el); calcTbSave();
-  });
-  tb.addEventListener('change', e => { const inp = e.target.closest('.calc-in'); if(!inp || inp.dataset.f === 'l') return; const n = calcNum(inp.value); inp.value = n == null ? inp.value.trim() : calcWon(n); calcTbRows[+inp.closest('tr').dataset.i][inp.dataset.f] = inp.value; calcTbSave(); });
-  tb.addEventListener('paste', e => {
-    const inp = e.target.closest('.calc-in'); if(!inp || inp.dataset.f === 'l') return;
-    const L = (e.clipboardData.getData('text') || '').split(/\r?\n/).map(x => x.trim()).filter(Boolean); if(L.length < 2) return;
-    e.preventDefault(); const i0 = +inp.closest('tr').dataset.i, f = inp.dataset.f;
-    L.forEach((v, j) => { const r = calcTbRows[i0 + j] = calcTbRows[i0 + j] || { l:'', t:'', x:'' }; const n = calcNum(v); r[f] = n == null ? v : calcWon(n); });
-    calcTbSave(); renderCalc(true);
-  });
-  tb.addEventListener('click', e => { const b = e.target.closest('[data-del]'); if(!b) return; calcTbRows.splice(+b.dataset.del, 1); if(!calcTbRows.length) calcTbRows.push({ l:'', t:'', x:'' }); calcTbSave(); renderCalc(true); });
-  el.querySelector('[data-a=add]').onclick = () => { calcTbRows.push({ l:'', t:'', x:'' }); calcTbSave(); renderCalc(true); const ins = el.querySelectorAll('tbody tr:last-child .calc-in'); if(ins[0]) ins[0].focus(); };
-  el.querySelector('[data-a=clear]').onclick = async () => { if(!(await smConfirm('입력한 줄을 모두 비울까요?', '', { okText:'비우기' }))) return; calcTbRows = [{ l:'', t:'', x:'' }]; calcTbSave(); renderCalc(true); };
-  calcTbSum(el);
+  const out = () => {
+    const x = calcNum(calcTb.x), t = calcNum(calcTb.t), set = (k, v) => { el.querySelector(`[data-o="${k}"]`).textContent = v == null ? '-' : calcWon(v); };
+    set('sup', x == null ? null : x * 10); set('tax', x); set('tot', x == null ? null : x * 11);
+    set('rest', x == null || t == null ? null : t - x * 11);
+    el.querySelector('[data-rest]').style.display = t == null ? 'none' : '';
+  };
+  el.querySelectorAll('input[data-f]').forEach(inp => inp.addEventListener('input', () => {
+    const n = calcNum(inp.value), pos = inp.value.length - inp.selectionStart;
+    inp.value = n == null ? inp.value.replace(/[^\d\-]/g, '') : calcWon(n);   // 치는 대로 쉼표
+    try{ const p = Math.max(0, inp.value.length - pos); inp.setSelectionRange(p, p); }catch(e){}
+    calcTb[inp.dataset.f] = inp.value; try{ localStorage.setItem('sm_calc_taxback2', JSON.stringify(calcTb)); }catch(e){}
+    out();
+  }));
+  el.querySelectorAll('[data-o]').forEach(b => b.onclick = async () => { const t = b.textContent.replace(/,/g, ''); if(!t || t === '-') return; try{ await navigator.clipboard.writeText(t); b.classList.add('copied'); setTimeout(() => b.classList.remove('copied'), 700); }catch(e){} });
+  out();
+  setTimeout(() => { const i = el.querySelector('.calc-big'); if(i && activeTab === 'calc') i.focus(); }, 0);
 };
 function renderReview(){
   const el = document.getElementById('tab-review');
