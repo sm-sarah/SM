@@ -2182,7 +2182,7 @@ async function smColDelAsk(label, cur, every, opts){
   opts = opts || {};
   const f = [{ label:'무엇을 지울까요', options: SM_DEL_WHAT.map(x => x[1]), value: SM_DEL_WHAT[0][1] }];
   if(every) f.push({ label:'어디서 지울까요', options:[`${cur}만 (다른 것은 그대로)`, `${every} (같은 이름 항목)`], value:`${cur}만 (다른 것은 그대로)` });
-  if(opts.hist) f.push({ label:'회차 기록 (N회 눌러 보는 기록)', options:['기록에서도 지우기', '기록은 남기기'], value:'기록에서도 지우기' });
+  if(opts.hist) f.push({ label:'회차 기록 (칸별 수정 기록)', options:['기록에서도 지우기', '기록은 남기기'], value:'기록에서도 지우기' });
   const r = await smForm(`'${String(label || '').replace(/\s+/g, ' ')}' 항목 지우기`, f, { tone:'danger', icon:'!', okText:'지우기' });
   if(!r) return null;
   let i = 1;
