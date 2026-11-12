@@ -13231,6 +13231,8 @@ function renderAllNoSave(){
     review: renderReview, calc: renderCalc, taxj: renderTaxjFull, attend: renderAttend, inner: renderInner };
   if(SM_RENDER_ALL || !R[activeTab]){ renderHome(); renderWorklist(); renderAccounts(); renderLinks(); renderManuals(); renderLib('forms'); renderLib('laws'); renderVat(); renderClose(); renderPay(); renderCorp(); renderIndiv(); renderClients(); renderSettings(); if(R[activeTab] && !['home','worklist','accounts','links','manuals','forms','laws','vat','close','pay','corp','indiv','clients','settings'].includes(activeTab)) R[activeTab](); return; }
   try{ R[activeTab](); }catch(e){ console.error('화면 그리기 실패', activeTab, e); }
+  // [2026.11.12] "플로팅 Today에서 고쳤는데 바로 반영이 안 됨"(요청) - 플로팅 창(체크리스트·Today·Memo)은 홈 카드를 빌려 와 보여 주는데, 보이는 화면만 그리면서 홈 카드는 안 그려 옛 내용이 남았음 → 창이 열려 있으면 홈 카드도 같이
+  if(!SM_RENDER_ALL && smFabOpenK && activeTab !== 'home' && activeTab !== 'worklist'){ try{ renderWorklist(); }catch(e){ console.error('플로팅 창 그리기 실패', e); } }
 }
 var SM_RENDER_ALL = false;
 function renderAll(){
@@ -13255,13 +13257,13 @@ async function pollGoogleSheetForUpdates(){
   if(saveTimer || savingNow) return;
   if(smVerifyUntil > Date.now()) return;   // [2026.11.11] 방금 저장한 걸 확인하는 동안은 다시 읽지 않음(동시 저장이면 합쳐야 해서)
   if(isEditingNow()) return;
-  if(smModalOpen()) return;   // [2026.11.03] 팝업에 입력하는 중에는 다시 읽지 않음(열린 팝업이 고치는 항목이 바뀌어 저장이 사라지던 문제)
+  if(smModalOpen() || document.getElementById('closeDatePop')) return;   // [2026.11.12] 표 칸의 작은 창(메모·날짜·★)이 열려 있어도 기다림 - 그 사이 표를 새로 그리면 창이 옛 칸을 고쳐서 화면에 안 보이던 위험   // [2026.11.03] 팝업에 입력하는 중에는 다시 읽지 않음(열린 팝업이 고치는 항목이 바뀌어 저장이 사라지던 문제)
   if(window.smUploadingN > 0) return;   // [2026.10.21] 파일을 올리는 동안은 시트를 다시 읽지 않음(아래 libUpload 주석 참고)
   if(hasUnsavedChanges()){ scheduleGoogleSave(); return; }   // 저장 안 된 변경이 있으면 덮어쓰지 않고 먼저 저장 시도
   try {
     // [2026.10.16] "개인웹 깜빡임이 심하다"(요청) - 20초마다 시트를 읽고 바뀐 게 없어도 모든 화면을 다시 그려 깜빡였음 → 내용이 바뀐 때만 다시 그림
     const before = JSON.stringify(collectGoogleSnapshot()), seq0 = smEditSeq;
-    const ok = await loadFromGoogleSheet(() => smEditSeq === seq0 && !saveTimer && !savingNow && !smModalOpen() && !isEditingNow());
+    const ok = await loadFromGoogleSheet(() => smEditSeq === seq0 && !saveTimer && !savingNow && !smModalOpen() && !document.getElementById('closeDatePop') && !isEditingNow());
     if(ok === false) return;   // 읽는 사이 입력이 있었음 → 이번 새로고침은 건너뜀(그 입력은 곧 저장됨)
     if(JSON.stringify(collectGoogleSnapshot()) === before) return;
     renderAllNoSave();
