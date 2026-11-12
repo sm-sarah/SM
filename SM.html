@@ -1225,6 +1225,14 @@ function smTogglePcView(){ try{ localStorage.setItem('sm_pc_view', window.SM_PC_
   .page-head .works-subtabs .cl-subtab{ font-size:13px; padding:5px 13px; border-radius:999px; }
   .page-head .works-subtabs .cl-subtab:hover{ color:var(--primary-dark); }
   .page-head .works-subtabs .cl-subtab.on{ background:var(--primary); color:#fff; }
+  /* [2026.11.12] "폰화면에서 설정 들어가면 첫 번째 하위메뉴만 나옴"(요청) - 좁은 화면(900px 이하)에서는 왼쪽 메뉴의 하위메뉴(nav-flyout)가 숨겨져 있어서
+     다른 하위메뉴로 갈 방법이 없었음 → 좁은 화면에서만 제목 위에 works와 같은 둥근 칩으로 하위메뉴를 보여 줌(많으면 옆으로 밀어서). 컴퓨터 화면은 그대로 */
+  .page-head .sm-msub{ display:none; }
+  @media (max-width:900px){
+    .page-head .sm-msub{ display:flex; flex-wrap:nowrap; justify-content:flex-start; overflow-x:auto; scrollbar-width:none; }
+    .page-head .sm-msub::-webkit-scrollbar{ display:none; }
+    .page-head .sm-msub .cl-subtab{ flex:none; white-space:nowrap; }
+  }
   /* [2026.10.14] 체크리스트 중요 표시(별) */
   .notice-star{ flex:none; border:none; background:transparent; padding:0 1px; margin-top:-1px; font-size:15px; line-height:1.2; color:var(--muted-soft); cursor:pointer; opacity:.55; }
   .notice-star:hover{ opacity:1; color:#f5b544; }
@@ -2718,7 +2726,9 @@ function updatePageHead(){
   const np = NAV_PARENT[activeTab];
   const title = wt ? wt[1] : np ? (TABS.find(t => t.id === np[0]) || {}).label : (TABS.find(t => t.id === activeTab) || {}).label || (TAB_TITLES[activeTab] || [''])[0];
   const sub = np ? np[1] : pageSubtitle();
-  const html = (wt ? worksHeadHtml() : '') + `<div class="underline-bar"></div><h1>${title}</h1>${sub ? `<div class="page-sub">${taxjEsc(sub)}</div>` : ''}`;   // [2026.11.02] works 화면은 위에 탭·하위메뉴
+  const pid = np ? np[0] : activeTab, msubs = wt ? [] : (NAV_SUBMENUS[pid] || []);   // [2026.11.12] 좁은 화면용 하위메뉴 칩(위 .sm-msub 참고)
+  const msub = msubs.length ? `<div class="cl-subtabs works-subtabs sm-msub">${msubs.map(s => `<button class="cl-subtab ${subCur(pid) === s.label ? 'on' : ''}" onclick="${s.js || `goToSettingsSection('${s.anchor}')`}">${s.label}</button>`).join('')}</div>` : '';
+  const html = (wt ? worksHeadHtml() : msub) + `<div class="underline-bar"></div><h1>${title}</h1>${sub ? `<div class="page-sub">${taxjEsc(sub)}</div>` : ''}`;   // [2026.11.02] works 화면은 위에 탭·하위메뉴
   if(el._html === html) return;   // [2026.10.16] 깜빡임(요청) - 같은 제목이면 다시 그리지 않음
   el._html = html; el.innerHTML = html;
 }
