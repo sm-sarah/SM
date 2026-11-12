@@ -1306,6 +1306,8 @@ function smTogglePcView(){ try{ localStorage.setItem('sm_pc_view', window.SM_PC_
   .cl-pop-row button{ font:inherit; font-size:12px; border:1px solid var(--border); background:var(--bg); color:var(--text); border-radius:7px; padding:4px 8px; cursor:pointer; }
   .cl-pop-row button:hover{ border-color:var(--primary); color:var(--primary-dark); }
   .cl-pop-row button.del{ color:var(--rose); }
+  .cl-memo-ok{ font:inherit; font-size:12px; border:1px solid var(--border); background:var(--bg); border-radius:7px; padding:2px 8px; cursor:pointer; flex:none; }   /* [2026.11.12] 결산 메모 고치기 저장 - 창 버튼과 같은 모양 */
+  .cl-memo-ok:hover{ border-color:var(--primary); }
   .cl-gone td{ color:var(--muted); }
   .cl-gone-tag{ font-size:10.5px; font-weight:700; color:var(--muted); border:1px solid var(--border); border-radius:5px; padding:0 4px; margin-left:3px; }
   /* [2026.10.15] "결산 왼쪽 거래처 칸(순번~개업일)은 회사웹 스타일 그대로"(요청) - Tax.J 거래처 표와 같게:
@@ -6527,15 +6529,15 @@ const ICON_CL_CLIP = '<svg viewBox="0 0 24 24" width="13" height="13" fill="none
 function closeMemoPop(btn){
   closeDatePopClose();
   const { cid, col } = btn.dataset;
-  let items = closeMemoLines(closeGet(cid, col)), editIdx = -1;
+  let items = closeMemoLines(closeGet(cid, col)), editIdx = -1, savedAt = 0;   // [2026.11.12] "저장·등록 버튼이 있어야, 자동저장인지 알 수 없음"(요청) - 등록·저장 버튼 + 저장하면 '저장됨 ✓'
   const pop = document.createElement('div');
   pop.id = 'closeDatePop'; pop.className = 'cl-pop'; pop.style.width = '320px';
   const draw = () => {
-    pop.innerHTML = `${closePopX()}<div style="font-weight:800; font-size:12.5px;">메모 ${items.length ? `<span class="hint" style="margin:0; display:inline;">${items.length}개</span>` : ''}</div>
+    pop.innerHTML = `${closePopX()}<div style="font-weight:800; font-size:12.5px;">메모 ${items.length ? `<span class="hint" style="margin:0; display:inline;">${items.length}개</span>` : ''}${Date.now() - savedAt < 2500 ? ' <span style="color:#1f9d6b; font-size:11.5px; font-weight:800;">저장됨 ✓</span>' : ''}</div>
       <div style="max-height:260px; overflow:auto; display:flex; flex-direction:column; gap:4px;">${items.length ? items.map((x, i) => `<div class="cl-memo-row" style="display:flex; gap:6px; align-items:flex-start; font-size:12.5px; line-height:1.45;"><span style="color:var(--muted); font-weight:700; min-width:18px;">${i + 1})</span>${editIdx === i
-        ? `<input type="text" class="cl-memo-edit" value="${escapeAttr(x)}" style="flex:1; min-width:0; font:inherit; font-size:12.5px; border:1px solid var(--primary); border-radius:6px; padding:2px 6px;">`
+        ? `<input type="text" class="cl-memo-edit" value="${escapeAttr(x)}" style="flex:1; min-width:0; font:inherit; font-size:12.5px; border:1px solid var(--primary); border-radius:6px; padding:2px 6px;"><button type="button" class="cl-memo-ok" style="font-weight:800; color:var(--primary-dark);">저장</button>`
         : `<span style="flex:1; white-space:pre-wrap; word-break:break-all;">${taxjEsc(x)}</span><button type="button" class="cl-memo-act" data-edit="${i}" title="수정" aria-label="수정">✎</button>`}<button type="button" class="cl-memo-act" data-del="${i}" title="삭제" aria-label="삭제">✕</button></div>`).join('') : '<div class="hint" style="margin:0;">아직 메모가 없어요.</div>'}</div>
-      <input type="text" class="cl-pop-text cl-memo-add" placeholder="새 메모 입력 후 Enter (추가)" style="font:inherit; font-size:12.5px; border:1px solid var(--border); border-radius:8px; padding:6px 8px;">
+      <div class="cl-pop-row" style="flex-wrap:nowrap;"><input type="text" class="cl-pop-text cl-memo-add" placeholder="새 메모 입력 (Enter = 등록)" style="flex:1; min-width:0; font:inherit; font-size:12.5px; border:1px solid var(--border); border-radius:8px; padding:6px 8px;"><button type="button" class="cl-memo-addok" style="font-weight:800; color:var(--primary-dark);">등록</button></div>
       ${smAttHtml('close', closeYear, cid, col)}`;
     closePopWire(pop);
     // [2026.11.11] 첨부파일 - 누르면 미리보기 창, × = 빼기(드라이브는 휴지통), + 파일 / 끌어다 놓기 / 이미지 붙여넣기, 다른 연도 첨부는 보기만
@@ -6547,15 +6549,19 @@ function closeMemoPop(btn){
     if(ed){
       const commit = () => { const t = ed.value.trim(); if(t) items[editIdx] = t; else items.splice(editIdx, 1); editIdx = -1; save(); draw(); };
       ed.addEventListener('keydown', e => { if(e.key === 'Enter' && !e.isComposing){ e.preventDefault(); commit(); } if(e.key === 'Escape'){ e.preventDefault(); e.stopPropagation(); editIdx = -1; draw(); } });
-      ed.addEventListener('blur', () => { if(editIdx >= 0) commit(); });   // 바깥을 눌러 창이 닫혀도 고친 내용은 저장
+      ed.addEventListener('blur', e => { if(e.relatedTarget && e.relatedTarget.classList.contains('cl-memo-ok')) return; if(editIdx >= 0) commit(); });   // 바깥을 눌러 창이 닫혀도 고친 내용은 저장
+      pop.querySelector('.cl-memo-ok').onclick = e => { e.stopPropagation(); commit(); };
       ed.focus(); ed.setSelectionRange(ed.value.length, ed.value.length);
       return;
     }
     const inp = pop.querySelector('.cl-memo-add');
-    inp.addEventListener('keydown', e => { if(e.key === 'Enter' && !e.isComposing){ e.preventDefault(); const t = inp.value.trim(); if(t){ items.push(t); save(); draw(); pop.querySelector('.cl-memo-add').focus(); } } if(e.key === 'Escape') closeDatePopClose(); });
+    const add = () => { const t = inp.value.trim(); if(t){ items.push(t); save(); draw(); pop.querySelector('.cl-memo-add').focus(); } };
+    inp.addEventListener('keydown', e => { if(e.key === 'Enter' && !e.isComposing){ e.preventDefault(); add(); } if(e.key === 'Escape') closeDatePopClose(); });
+    pop.querySelector('.cl-memo-addok').onclick = e => { e.stopPropagation(); add(); };
     inp.focus();
   };
   const save = () => {
+    savedAt = Date.now(); setTimeout(() => { if(document.body.contains(pop) && editIdx < 0 && !(pop.querySelector('.cl-memo-add') || {}).value) draw(); }, 2600);   // 2.5초 뒤 '저장됨' 지움
     closeSetVal(cid, col, items.join('\n'));
     const t = document.createElement('div'); t.innerHTML = closeMemoBtnHtml(cid, col, items, closeFilesOf(cid, col)); const nb = t.firstElementChild;
     btn.className = nb.className; btn.title = nb.title; btn.innerHTML = nb.innerHTML;   // [2026.11.11] 첨부파일 수도 같이
