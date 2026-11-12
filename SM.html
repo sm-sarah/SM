@@ -6115,6 +6115,7 @@ async function smAttUpload(key, files, after){
 // pop 안의 첨부 칸 연결. after = 올리기·빼기 뒤(창이 열려 있으면 다시 그리기 등), gone = 빼기 확인창을 띄우려고 창을 닫은 뒤 화면 다시 그리기
 function smAttWire(pop, sc, per, row, col, after, gone){
   const key = smAttKey(sc, per, row, col), F = smAttOf(key);
+  pop._attRedraw = after;   // [2026.11.12] 미리보기 창에서 파일 메모를 고치면 다시 그림
   pop.querySelectorAll('[data-fi]').forEach(a => a.onclick = e => { if(e.ctrlKey || e.metaKey || e.shiftKey) return; e.preventDefault(); const f = F[+a.dataset.fi]; smPreviewFile({ id: f.id, name: f.name, url: f.url }); });
   pop.querySelectorAll('[data-fo]').forEach(a => a.onclick = e => { if(e.ctrlKey || e.metaKey || e.shiftKey) return; e.preventDefault(); const [p, i] = a.dataset.fo.split('|'); const f = smAttOf(smAttKey(sc, p, row, col))[+i]; if(f) smPreviewFile({ id: f.id, name: f.name, url: f.url }); });
   // [2026.11.12] "파일 업로드에 메모 남길 수 있나"(요청) - ✎를 누르면 그 자리에서 파일 메모 입력(Enter·저장 = 저장, 비우고 저장 = 메모 지움, Esc = 취소). 메모는 파일 이름 옆에 작게
@@ -12417,6 +12418,11 @@ const SM_PV_CSS = `
 .sm-pv-panes{flex:1;min-height:0;display:flex;gap:10px}
 .sm-pv-pane{flex:1 1 0;min-width:0;display:flex;flex-direction:column;border:1px solid var(--pv-border);border-radius:12px;overflow:hidden;background:#f6f1f4}
 .sm-pv-ph{display:flex;align-items:center;gap:4px;padding:6px 8px;border-bottom:1px solid var(--pv-border);background:#fff}
+.sm-pv-memo{display:flex;align-items:center;gap:6px;padding:5px 10px;border-bottom:1px solid var(--pv-border);background:#fffbea;font-size:12.5px;color:#5c4a2a;min-height:30px;box-sizing:border-box}
+.sm-pv-memo .t{flex:1;min-width:0;white-space:pre-wrap;word-break:break-all;font-weight:600}
+.sm-pv-memo .t.empty{color:#b9a98a;font-weight:500}
+.sm-pv-memo button{border:1px solid #eadfbf;background:#fff;border-radius:7px;font:inherit;font-size:11.5px;padding:2px 8px;cursor:pointer;color:#8a6d1f;flex:none}
+.sm-pv-memo input{flex:1;min-width:0;font:inherit;font-size:12.5px;border:1px solid #e0c56e;border-radius:6px;padding:3px 8px;background:#fff}
 .sm-pv-ph .sm-pv-tb{height:28px;font-size:12px;padding:0 10px}
 .sm-pv-ph .sm-pv-ib{width:28px;padding:0}
 .sm-pv-pn{flex:1;min-width:30px;font-size:12.5px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding-left:4px}
@@ -12480,8 +12486,20 @@ function smPvPane(doc, f, removable, onRemove){
       ${direct ? `<button class="sm-pv-tb sm-pv-ib" data-a="out" title="축소 (Ctrl+휠)">−</button><span class="sm-pv-z">-</span><button class="sm-pv-tb sm-pv-ib" data-a="in" title="확대 (Ctrl+휠)">+</button><button class="sm-pv-tb" data-a="fit" title="폭에 맞추기">맞춤</button><button class="sm-pv-tb sm-pv-ib on" data-a="hand" title="손 도구: 끌어서 이동 (끄면 글자 선택)" aria-label="손 도구">${SM_PV_HAND}</button>` : ''}
       <button class="sm-pv-tb sm-pv-ib" data-a="drive" title="드라이브에서 열기" aria-label="드라이브에서 열기"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h6v6"/><path d="M20 4l-9 9"/><path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg></button>
       ${removable ? '<button class="sm-pv-tb sm-pv-ib" data-a="close" title="비교에서 빼기">×</button>' : ''}</div>
+    ${smAttFindById(f.id) ? '<div class="sm-pv-memo"></div>' : ''}
     <div class="sm-pv-sc hand"><div class="sm-pv-msg">불러오는 중…</div></div>`;
   const sc = el.querySelector('.sm-pv-sc'), zl = el.querySelector('.sm-pv-z');
+  // [2026.11.12] "첨부파일 미리보기에서 이미지 위에도 메모 가능?"(요청) - 칸 첨부(cellFiles) 파일이면 그림 위에 파일 메모 줄(보기·✎ 수정, 칸 창의 파일 메모와 같은 값)
+  { const mb = el.querySelector('.sm-pv-memo');
+    if(mb){ const fo = smAttFindById(f.id);
+      const view = () => { mb.innerHTML = `<span class="t${fo.memo ? '' : ' empty'}">${fo.memo ? taxjEsc(fo.memo) : '파일 메모 없음'}</span><button type="button">✎ ${fo.memo ? '수정' : '메모'}</button>`; mb.querySelector('button').onclick = edit; };
+      const edit = () => {
+        mb.innerHTML = `<input type="text" value="${escapeAttr(fo.memo || '')}" placeholder="이 파일 메모 (비우고 저장 = 지우기)"><button type="button">저장</button>`;
+        const inp = mb.querySelector('input'), done = () => { const t = inp.value.trim(); if(t) fo.memo = t; else delete fo.memo; scheduleGoogleSave(); view(); smAttRefreshOpen(); };
+        inp.addEventListener('keydown', ev => { if(ev.key === 'Enter' && !ev.isComposing){ ev.preventDefault(); done(); } if(ev.key === 'Escape'){ ev.preventDefault(); ev.stopPropagation(); view(); } });
+        mb.querySelector('button').onclick = done; inp.focus();
+      };
+      view(); } }
   const cannot = why => { sc.classList.remove('hand'); sc.innerHTML = `<div class="sm-pv-msg"><b>이 파일은 여기서 읽을 수 없어요</b><div>${taxjEsc(why)}</div><div style="margin-top:4px;">위쪽 ↗(드라이브에서 열기)로 열거나 내려받아 확인해 주세요.</div></div>`; el.querySelectorAll('[data-a="out"],[data-a="in"],[data-a="fit"],[data-a="hand"],.sm-pv-z').forEach(b => b.remove()); };
   let scale = 1, fit = true, draw = null, fitScale = () => 1, blobUrl = '';
   const setScale = (s, keepFit) => { scale = Math.max(0.2, Math.min(5, s)); fit = !!keepFit; if(zl) zl.textContent = Math.round(scale * 100) + '%'; if(draw) draw(); };
@@ -12615,6 +12633,10 @@ function smPvNewWindow(files){
   smPvMount(w.document, w.document.querySelector('.sm-pv-root'), files, {});
 }
 function smPreviewFile(f){ if(f && f.id) smPvOpen([f]); }
+// [2026.11.12] 파일 id로 칸 첨부(cellFiles)의 그 파일 찾기 - 미리보기 창 파일 메모용
+function smAttFindById(id){ if(!id) return null; for(const L of Object.values(cellFiles || {})) for(const x of (L || [])) if(x && x.id === id) return x; return null; }
+// 미리보기에서 메모를 고치면 열려 있는 칸 창의 파일 줄도 바로 바뀌게(파일 이름 옆 메모)
+function smAttRefreshOpen(){ const pop = document.getElementById('closeDatePop'); if(pop && pop._attRedraw) try{ pop._attRedraw(); }catch(e){} }
 // [2026.10.22] "팝업 여러 개 띄워서 새 창처럼 골라 보고 닫고"(요청) - 미리보기를 화면을 막지 않는 떠 있는 창으로. 여러 개를 띄울 수 있고,
 //   누른 창이 맨 앞으로, 위쪽 제목 줄을 끌어 옮기기, − 로 접으면 왼쪽 아래 목록에 들어감. 2개 이상이면 목록에서 골라 앞으로 꺼냄
 const smPvWins = [];   // { el, title, min }
