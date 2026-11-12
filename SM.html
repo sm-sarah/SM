@@ -5496,6 +5496,7 @@ function closeHistFmt(colId, v){ const c = closeCols.find(x => x.id === colId) |
 function closeRoundLabel(x){ return x.r ? x.r : x.at ? `${Number(x.at.slice(5, 7))}/${Number(x.at.slice(8))}` : ''; }
 function closeHistBadge(){ return ''; }   // 칸마다 숫자 대신 상호명 옆에 줄 회차
 function closeRowBadge(cid){
+  return '';   // [2026.11.12] "상호명 옆 횟수는 필요 없음 - 칸마다 수정 기록이면 됨"(요청) - 표시만 끔(칸 기록은 그대로)
   const L = closeRowHist(cid);
   if(!L.length || (L.length === 1 && !L[0].at)) return '';
   const x = L[L.length - 1];
