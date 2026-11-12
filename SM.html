@@ -5258,7 +5258,7 @@ function vatProgHtml(docs){
   const prevOn = !!pk && Object.keys(vatProg[pk] || {}).some(id => vatProgPrevVals(pk, id).length);
   const prevHead = prevOn ? `<th style="text-align:center;" title="${escapeAttr(vatProgKeyLabel(pk))} 입력 보기">전기</th>` : '';
   const myCols = vatProgCols.filter(c => shown(c.id) && !c.fa), grouped = myCols.some(c => c.group);
-  const thOf = (c, rs) => `<th${rs ? ' rowspan="2"' : ''}${vpDragAttr([c.id])} style="${c.type === 'check' || c.type === 'checkdate' ? 'text-align:center;' : ''}"><button class="vp-th" onclick="vatProgEditCol('${c.id}')" title="눌러서 이름·입력 방식·이어받기·묶음 수정 또는 삭제${c.carry ? '\n(다음 기수로 이어받는 항목)' : ''}">${taxjEsc(c.label).replace(/\n/g, '<br>')}${c.carry ? '<span class="vp-carry">↻</span>' : ''}</button></th>`;
+  const thOf = (c, rs) => `<th${rs ? ' rowspan="2"' : ''}${vpDragAttr([c.id])} style="${c.type === 'check' || c.type === 'checkdate' ? 'text-align:center;' : ''}"><button class="vp-th" onclick="vatProgEditCol('${c.id}')" title="눌러서 이름·입력 방식·이어받기·묶음 수정 또는 삭제${c.carry ? '\n↻ 다음 기수로 이어받는 항목' : ''}">${taxjEsc(c.label).replace(/\n/g, '<br>')}</button></th>`;
   // [2026.10.16] 묶음이 있으면 두 줄 머리글: 위 = 묶음 이름(붙어 있는 같은 묶음 합침) / 묶음 없는 칸은 두 줄 합침
   let head1 = '', head2 = '';
   if(grouped){
@@ -5271,7 +5271,7 @@ function vatProgHtml(docs){
       i = j;
     }
   }
-  const head = prevHead + vatProgCols.filter(c => shown(c.id) && !c.fa).map(c => `<th${vpDragAttr([c.id])} style="${c.type === 'check' || c.type === 'checkdate' ? 'text-align:center;' : ''}"><button class="vp-th" onclick="vatProgEditCol('${c.id}')" title="눌러서 이름·입력 방식·이어받기 수정 또는 삭제${c.carry ? '\n(다음 기수로 이어받는 항목)' : ''}">${taxjEsc(c.label).replace(/\n/g, '<br>')}${c.carry ? '<span class="vp-carry">↻</span>' : ''}</button></th>`).join('');
+  const head = prevHead + vatProgCols.filter(c => shown(c.id) && !c.fa).map(c => `<th${vpDragAttr([c.id])} style="${c.type === 'check' || c.type === 'checkdate' ? 'text-align:center;' : ''}"><button class="vp-th" onclick="vatProgEditCol('${c.id}')" title="눌러서 이름·입력 방식·이어받기 수정 또는 삭제${c.carry ? '\n↻ 다음 기수로 이어받는 항목' : ''}">${taxjEsc(c.label).replace(/\n/g, '<br>')}</button></th>`).join('');
   const rows = list.map((x, n) => {
     const cid = escapeAttr(x.c.id), v = per[x.c.id] || {}, t = s => s || s === 0 ? taxjEsc(String(s)) : na;
     const lk = v.__link || {}, tb = x.hasTb ? x.tb : lk;   // 회사웹 값이 있으면 회사웹, 없으면 엑셀에서 넣은 값
@@ -6474,7 +6474,7 @@ function closeTableHtml(docs){
   });
   const head = `<th class="tx-seq"><input type="checkbox" title="날짜 일괄 입력할 거래처 모두 고르기" onchange="closePickAll(this.checked)"></th><th class="tx-seq cl-lk">순번</th>`
     + ['상호명','법인등록번호','사업자번호','개업일','회사 메모','TIP','급여종류'].map((l, i) => `<th class="vp-link cl-lk${i === 0 ? ' vp-sticky' : ''}${i === 6 ? ' vp-div' : ''}" title="${i === 6 ? '회사웹 원천세 검토표 이 해 1~12월 발생급여(조회만) - 아이콘을 누르면 달별로 보여요' : i === 5 ? '회사웹 부가세 Tip(차량·신고유형·수령자료·특이사항 + 여러 해 기수별 직원) - 조회만' : '회사웹 값(조회만)'}">${l}</th>`).join('')   // [2026.11.11] 회사 메모 옆 부가세 TIP(요청)   // [2026.11.05] 급여종류 고정 칸(요청)   // [2026.11.03] 회사웹 결산 메모(1차·2차)
-    + closeCols.map(c => `<th data-smdrag="close" data-smcol="${c.id}" draggable="true"><button class="vp-th" onclick="closeEditCol('${c.id}')" title="눌러서 이름·입력 방식·이어받기 수정 또는 삭제 · 끌어서 위치 옮기기${c.carry ? '\n(다음 해 결산으로 이어받는 항목)' : ''}">${taxjEsc(c.label).replace(/\n/g, '<br>')}${c.carry ? '<span class="vp-carry">↻</span>' : ''}</button></th>`).join('');
+    + closeCols.map(c => `<th data-smdrag="close" data-smcol="${c.id}" draggable="true"><button class="vp-th" onclick="closeEditCol('${c.id}')" title="눌러서 이름·입력 방식·이어받기 수정 또는 삭제 · 끌어서 위치 옮기기${c.carry ? '\n↻ 다음 해 결산으로 이어받는 항목' : ''}">${taxjEsc(c.label).replace(/\n/g, '<br>')}</button></th>`).join('');
   const body = rows.map((x, n) => {
     const cid = escapeAttr(x.id), v = d.v[x.id] || {}, t = s => s ? taxjEsc(String(s)) : '-';
     const lk = (val, extra) => `<td class="cl-lk cl-num${extra || ''}${val ? '' : ' cl-na'}">${t(val)}</td>`;   // 회사웹 거래처 표와 같은 칸
