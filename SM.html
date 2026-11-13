@@ -1975,6 +1975,7 @@ function unlockApp(){
 
 function lockApp(){
   clearGoogleToken();
+  smClearRefreshToken();   // [2026.11.13] 자동 연결 열쇠도 지움
   try{ localStorage.removeItem(LOCAL_CACHE_KEY); }catch(e){}
   try{ localStorage.removeItem(AUTH_STORAGE_KEY); }catch(e){}
   document.getElementById('appRoot').style.display = 'none';
@@ -2032,7 +2033,7 @@ function gateSignIn(){
   let hintEmail = '';
   try{ hintEmail = localStorage.getItem(AUTH_STORAGE_KEY) || ''; }catch(e){}
   // 처음 한 번만 동의 화면이 나오고, 이후엔 계정만 확인하고 바로 넘어가도록 prompt를 비움
-  googleTokenClient.requestAccessToken(hintEmail ? { prompt: '', hint: hintEmail } : { prompt: '' });
+  smRequestGoogleToken(hintEmail ? { prompt: '', hint: hintEmail } : { prompt: '' });   // [2026.11.13] 자동 연결 서버용 열쇠도 같이 받음
 }
 
 function initAuthGate(){
@@ -2064,6 +2065,65 @@ function loadGoogleToken(){
     if(v && v.t && v.exp > Date.now()) return v.t;
   }catch(e){}
   return null;
+}
+// ── [2026.11.13] 자동 연결 서버(요청: "계속 자동연결하면 안돼?") ──
+// 브라우저는 클릭 없이 Google 창을 못 열어서, 1시간 토큰이 끝나면 한 번 눌러야 했음 →
+// 처음 로그인할 때 이 기기용 갱신 열쇠(refresh token)를 받아 두고, 그 뒤로는 서버(sm-auth, 개인 Google Cloud)를 거쳐 창 없이 새 토큰을 받음.
+// Google 비밀키는 서버에만 있음(열쇠만으로는 토큰을 못 받음). 서버가 꺼져 있거나 주소가 비어 있으면 예전 방식 그대로 동작.
+const SM_AUTH_SERVER = 'https://sm-auth-273460053868.asia-northeast3.run.app';
+const SM_REFRESH_KEY = 'sm_google_refresh';
+let smAuthServerOk = false;
+let smSilentBusy = null;
+function smRefreshToken(){ try{ return localStorage.getItem(SM_REFRESH_KEY) || ''; }catch(e){ return ''; } }
+function smClearRefreshToken(){ try{ localStorage.removeItem(SM_REFRESH_KEY); }catch(e){} }
+function smCheckAuthServer(){
+  if(!SM_AUTH_SERVER) return Promise.resolve(false);
+  return fetch(SM_AUTH_SERVER, { method:'GET' }).then(r => r.ok ? r.json() : null).then(j => (smAuthServerOk = !!(j && j.ok))).catch(() => (smAuthServerOk = false));
+}
+async function smAuthPost(body){
+  const res = await fetch(SM_AUTH_SERVER, { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify(body) });
+  const j = await res.json().catch(() => ({}));
+  if(!res.ok || !j.access_token){ const err = new Error(j.error || ('HTTP ' + res.status)); err.code = j.error || ''; throw err; }
+  return j;
+}
+// 창 없이 새 토큰 받기. 성공하면 true
+function smSilentRefresh(){
+  const rt = smRefreshToken();
+  if(!SM_AUTH_SERVER || !rt) return Promise.resolve(false);
+  if(smSilentBusy) return smSilentBusy;
+  smSilentBusy = smAuthPost({ refresh_token: rt }).then(j => {
+    googleAccessToken = j.access_token;
+    if(typeof gapi !== 'undefined' && gapi.client) gapi.client.setToken({ access_token: googleAccessToken });
+    saveGoogleToken(j);
+    return true;
+  }).catch(e => {
+    if(e.code === 'invalid_grant' || e.code === 'not_allowed') smClearRefreshToken();   // 열쇠가 취소·만료됨 → 다음 로그인 때 새로 받음
+    return false;
+  }).finally(() => { smSilentBusy = null; });
+  return smSilentBusy;
+}
+// 로그인 창 열기: 서버가 살아 있고 이 기기에 열쇠가 없으면 열쇠까지 받는 방식(처음 한 번 동의 화면), 아니면 예전 방식.
+// 결과는 예전과 똑같이 googleTokenClient.callback(resp)으로 넘김
+function smRequestGoogleToken(opts){
+  const cb = googleTokenClient.callback;
+  if(SM_AUTH_SERVER && smAuthServerOk && !smRefreshToken() && google.accounts.oauth2.initCodeClient){
+    try{
+      google.accounts.oauth2.initCodeClient(Object.assign({
+        client_id: GOOGLE_CLIENT_ID, scope: GOOGLE_SCOPES, ux_mode: 'popup', prompt: 'consent',
+        callback: async r => {
+          if(r.error || !r.code){ cb({ error: r.error || 'no_code' }); return; }
+          try{
+            const j = await smAuthPost({ code: r.code });
+            if(j.refresh_token){ try{ localStorage.setItem(SM_REFRESH_KEY, j.refresh_token); }catch(e){} }
+            cb(j);
+          }catch(e){ smAuthServerOk = false; cb({ error: '자동 연결 서버 오류(' + (e.code || e.message) + ') · 한 번 더 누르면 예전 방식으로 연결돼요' }); }
+        },
+        error_callback: err => cb({ error: (err && err.type) || 'popup_error' }),
+      }, opts && opts.hint ? { login_hint: opts.hint } : {})).requestCode();
+      return;
+    }catch(e){ console.warn('자동 연결 로그인 창 실패 - 예전 방식으로', e); }
+  }
+  googleTokenClient.requestAccessToken(opts);
 }
 // ── 자동 로그인 ──
 // 1) 로그인한 지 1시간 안이면: 저장된 토큰으로 바로 연결
@@ -2108,8 +2168,18 @@ let tokenRefreshing = false;
 function googleTokenExp(){
   try{ const v = JSON.parse(localStorage.getItem(GOOGLE_TOKEN_KEY) || 'null'); return v && v.exp ? v.exp : 0; }catch(e){ return 0; }
 }
+// [2026.11.13] 자동 연결 서버: 만료 10분 전이면 클릭 없이 미리 갱신(1분마다 확인 + 화면으로 돌아왔을 때·절전에서 깼을 때)
+function smSilentTick(){
+  if(!smRefreshToken() || !googleAccessToken || smSilentBusy) return;
+  const exp = googleTokenExp();
+  if(exp && Date.now() < exp - TOKEN_REFRESH_BEFORE_MS) return;
+  smSilentRefresh();
+}
+setInterval(smSilentTick, 60 * 1000);
+document.addEventListener('visibilitychange', () => { if(document.visibilityState === 'visible') smSilentTick(); });
 document.addEventListener('pointerdown', (ev) => {
   if(!googleAccessToken || !googleTokenClient || tokenRefreshing) return;
+  if(smRefreshToken()) return;   // [2026.11.13] 열쇠가 있으면 아래 smSilentTick이 창 없이 갱신
   // [2026.10.16] 첨부 '+ 파일'을 누를 때 여기서 Google 창이 먼저 뜨면 파일 선택 창이 막혀 업로드가 안 되던 문제(요청) → 그 버튼은 건너뜀
   if(ev && ev.target && ev.target.closest && ev.target.closest('.att-add')) return;
   // [2026.10.16] "메뉴를 누를 때마다 로그인 창이 떴다 사라짐"(요청) - 만료 시각을 모르면(저장된 토큰 정보 없음) 클릭마다 갱신하던 문제,
@@ -2137,7 +2207,8 @@ async function tryResumeSavedLogin(){
   let email = null;
   try{ email = localStorage.getItem(AUTH_STORAGE_KEY); }catch(e){}
   if(!email || !ALLOWED_EMAILS.includes(email)) return;   // 이 기기에서 처음이면 로그인 화면
-  const tok = loadGoogleToken();
+  let tok = loadGoogleToken();
+  if(!tok && await smSilentRefresh()) tok = googleAccessToken;   // [2026.11.13] 1시간이 지났어도 열쇠가 있으면 클릭 없이 바로 연결
   if(tok){
     googleAccessToken = tok;
     gapi.client.setToken({ access_token: tok });
@@ -7500,6 +7571,7 @@ function gisInit(){
       error_callback: err => { const f = window.smGisErrorHandler; window.smGisErrorHandler = null; if(f) f(err); else console.warn('Google 로그인 창 오류', err); },
     });
     gisReady = true;
+    smCheckAuthServer();   // [2026.11.13] 자동 연결 서버가 살아 있는지 미리 확인(로그인 창 방식 결정용)
     maybeEnableGoogleSignIn();
   } catch(e){
     console.error('Google Identity Services 초기화 실패', e);
@@ -7531,11 +7603,12 @@ function handleGoogleSignIn(){
   };
   let hintEmail2 = '';
   try{ hintEmail2 = localStorage.getItem(AUTH_STORAGE_KEY) || ''; }catch(e){}
-  googleTokenClient.requestAccessToken(hintEmail2 ? { prompt: '', hint: hintEmail2 } : { prompt: '' });
+  smRequestGoogleToken(hintEmail2 ? { prompt: '', hint: hintEmail2 } : { prompt: '' });   // [2026.11.13] 자동 연결 서버용 열쇠도 같이 받음
 }
 
 function handleGoogleSignOut(){
   clearGoogleToken();
+  smClearRefreshToken();   // [2026.11.13] 자동 연결 열쇠도 지움
   if(googleAccessToken && typeof google !== 'undefined'){
     google.accounts.oauth2.revoke(googleAccessToken, () => {});
   }
@@ -7768,6 +7841,13 @@ function isAuthError(e){
 }
 
 function handleGoogleTokenExpired(){
+  // [2026.11.13] 자동 연결 서버: 열쇠가 있으면 클릭 없이 새 토큰을 받아 다시 연결(5분에 한 번까지 - 권한 오류가 반복될 때 계속 도는 것 방지)
+  if(smSilentBusy) return;
+  if(smRefreshToken() && Date.now() > (window.smExpiredRetryAt || 0)){
+    window.smExpiredRetryAt = Date.now() + 5 * 60 * 1000;
+    smSilentRefresh().then(ok => { if(ok) afterGoogleSignIn(); else handleGoogleTokenExpired(); });
+    return;
+  }
   clearGoogleToken();
   googleAccessToken = null;
   settings.sheetsConnected = false;
@@ -12223,7 +12303,7 @@ const ICON_LINK = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" s
 // [2026.10.22] "Claude 작업할 때 주는 관리 사이트 링크를 링크 메뉴 '클로드' 분야에 계속 업데이트"(요청)
 //   [구분, 이름, 주소, 용도]. 이 목록은 앱 코드에 들어 있어 화면에서 고치지 않고, Claude가 작업하다 관리 사이트 링크가 새로 생기거나 바뀌면
 //   요청이 없어도 여기에 넣고 배포함(규칙: 이 저장소와 Tax.J-src의 CLAUDE.md). 맨 아래 줄일수록 최근에 넣은 것
-const SM_CLAUDE_LINKS_AT = '2026-11-05';
+const SM_CLAUDE_LINKS_AT = '2026-11-13';
 const SM_CLAUDE_LINKS = [
   ["앱", "Tax.J", "https://sm-sarah.github.io/Tax.J/", "직원 접속 주소"],
   ["GitHub", "저장소", "https://github.com/sm-sarah/Tax.J-src", "앱 원본 보관(비공개) · 앱의 배포 버튼이 같이 저장"],
@@ -12247,7 +12327,9 @@ const SM_CLAUDE_LINKS = [
   ["Google Cloud", "OAuth 대상(테스트 사용자)", "https://console.cloud.google.com/auth/audience?project=273460053868", "테스트 사용자 추가·앱 게시 상태"],
   ["Firebase", "Realtime Database 규칙", "https://console.firebase.google.com/project/taxj-a3e01/database/taxj-a3e01-default-rtdb/rules", "접속 신호·비숑 멘트 기록(bichonLog) 읽기·쓰기 규칙"],
   ["GitHub", "공개 저장소(로더)", "https://github.com/sm-sarah/Tax.J", "사이트 주소용 · 로그인 화면·알림 파일·그림만"],
-  ["Google Cloud", "타팀 로그인(taxj-guest) 대상", "https://console.cloud.google.com/auth/audience?project=891162030748", "청인 버튼(회사 밖 계정) 로그인 앱 게시 상태"]
+  ["Google Cloud", "타팀 로그인(taxj-guest) 대상", "https://console.cloud.google.com/auth/audience?project=891162030748", "청인 버튼(회사 밖 계정) 로그인 앱 게시 상태"],
+  ["Google Cloud", "works 자동 연결 서버(sm-auth)", "https://console.cloud.google.com/run/detail/asia-northeast3/sm-auth/source?project=273460053868", "works 클릭 없이 Google 자동 연결 · 소스 수정·재배포(원본은 SM 저장소 server/sm-auth)"],
+  ["Google Cloud", "works OAuth 클라이언트", "https://console.cloud.google.com/apis/credentials?project=273460053868", "works 구글 로그인 설정 · 자동 연결 서버용 비밀키(client secret)"]
 ];
 const SM_CLAUDE_GROUP = '클로드';
 // [2026.11.05] "회사웹 작업에 필요한 링크는 설정 › 웹으로 옮겨줘"(요청) - 위 목록(클로드)과, 내가 넣은 링크 중 회사웹 관리 사이트 주소인 것은

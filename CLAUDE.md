@@ -52,3 +52,4 @@
 | 파일 | `SM.html` 한 파일 (앱 설치용으로 `manifest.webmanifest`·`icon-*.png`·`sw.js`도 둠 - 2026.10.20, 휴대폰 설치는 실제 파일 주소가 필요해서) |
 | 데이터 저장 | 브라우저 localStorage + Google Sheets/Drive(Google 로그인) |
 | 연동 대상 | Tax.J (https://github.com/sm-sarah/Tax.J, Firestore `taxj-a3e01`) |
+| 자동 연결 서버 | Cloud Run 함수 `sm-auth` (개인 Google Cloud 프로젝트 273460053868, 서울 asia-northeast3). 원본은 이 저장소 `server/sm-auth`. Google 비밀키는 서버 환경 변수에만 두고, 기기에는 갱신 열쇠(`sm_google_refresh`)만 둔다. 서버를 고치면 콘솔 › Cloud Run › sm-auth › 소스 수정 → 재배포 (2026.11.13) |
