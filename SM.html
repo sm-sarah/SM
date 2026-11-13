@@ -11703,7 +11703,7 @@ const SM_WEB_PARTS = [
   ['Cloud Run sendpush', '푸시 알림 서버. 테스트 알림, 출퇴근 5분 전 알림(우리 팀·타팀), 타팀 1시간 백업'],
   ['Cloud Scheduler', '1분마다 sendpush를 깨워 출퇴근 알림·백업을 돌림(평일 낮)'],
   ['공유 드라이브 01.기장대리', '결재 첨부파일, 3시간 자동백업, 비상용 예전 저장소'],
-  ['Google 로그인 (taxj-a3e01)', 'Tax.J 버튼 - 회사 계정. 드라이브 권한이 있어서 심사 전엔 테스트 사용자 등록 필요'],
+  ['Google 로그인 (taxj-504707)', 'Tax.J 버튼 - 회사 계정. works와 같은 로그인 클라이언트. 2026.11.13 게시(프로덕션)라 테스트 사용자 등록 필요 없음(심사 전 100명 한도·"확인되지 않은 앱" 경고). 출입은 회사 계정·명단·미등록 차단이 막음'],
   ['Google 로그인 (taxj-guest)', '청인 버튼 - 타팀(회사 밖 계정 포함). 이메일만 확인, 명단(총괄 › 팀·권한)에 있어야 들어옴'],
   ['각 PC·휴대폰 브라우저', '빨리 열리게 하는 사본(캐시). 원본은 Firestore'],
 ];
@@ -12319,17 +12319,22 @@ const SM_CLAUDE_LINKS = [
   ["Google Cloud", "sendpush 로그", "https://console.cloud.google.com/run/detail/us-central1/sendpush/logs?project=taxj-a3e01", "알림 오류 확인"],
   ["Google Cloud", "스케줄러", "https://console.cloud.google.com/cloudscheduler?project=taxj-a3e01", "출퇴근 알림 자동 실행"],
   ["Google Cloud", "Firestore 백업", "https://console.cloud.google.com/firestore/databases?project=taxj-a3e01", "(default) › 재해 복구에서 백업·시점복구"],
-  ["Google Cloud", "OAuth 클라이언트", "https://console.cloud.google.com/apis/credentials?project=taxj-a3e01", "구글 로그인 설정"],
-  ["Google Cloud", "결제·예산", "https://console.cloud.google.com/billing?project=taxj-a3e01", "요금·예산 알림"],
+  ["Google Cloud", "OAuth 클라이언트(taxj-a3e01)", "https://console.cloud.google.com/apis/credentials?project=taxj-a3e01", "Firebase가 자동으로 만든 API 키·웹 클라이언트 · Tax.J 버튼 로그인 클라이언트는 taxj-504707 쪽"],
+  ["Google Cloud", "결제·예산", "https://console.cloud.google.com/billing?project=taxj-a3e01", "요금·예산 알림 · Firebase 결제 계정(taxj-a3e01, taxj-504707 함께)"],
   ["Google Cloud", "Cloud Shell", "https://shell.cloud.google.com/?show=terminal", "명령어 실행"],
   ["Drive", "01.기장대리", "https://drive.google.com/drive/folders/0ALthlaDsIhh1Uk9PVA", "결재 첨부·자동백업 폴더"],
-  ["Google Cloud", "OAuth 브랜딩", "https://console.cloud.google.com/auth/branding?project=273460053868", "앱 게시 전 앱 이름·지원 이메일 등 입력"],
-  ["Google Cloud", "OAuth 대상(테스트 사용자)", "https://console.cloud.google.com/auth/audience?project=273460053868", "테스트 사용자 추가·앱 게시 상태"],
+  ["Google Cloud", "OAuth 브랜딩", "https://console.cloud.google.com/auth/branding?project=273460053868", "Tax.J 버튼·works 로그인 창의 앱 이름(Tax.J)·홈페이지·개인정보처리방침 · 브랜딩 인증은 안 받음"],
+  ["Google Cloud", "OAuth 대상(게시 상태)", "https://console.cloud.google.com/auth/audience?project=273460053868", "2026.11.13 게시(프로덕션) - 테스트 사용자 등록 필요 없음(심사 전 100명 한도) · 테스트로 되돌리면 자동 연결 열쇠가 7일마다 끊김"],
   ["Firebase", "Realtime Database 규칙", "https://console.firebase.google.com/project/taxj-a3e01/database/taxj-a3e01-default-rtdb/rules", "접속 신호·비숑 멘트 기록(bichonLog) 읽기·쓰기 규칙"],
   ["GitHub", "공개 저장소(로더)", "https://github.com/sm-sarah/Tax.J", "사이트 주소용 · 로그인 화면·알림 파일·그림만"],
   ["Google Cloud", "타팀 로그인(taxj-guest) 대상", "https://console.cloud.google.com/auth/audience?project=891162030748", "청인 버튼(회사 밖 계정) 로그인 앱 게시 상태"],
   ["Google Cloud", "works 자동 연결 서버(sm-auth)", "https://console.cloud.google.com/run/detail/asia-northeast3/sm-auth/source?project=273460053868", "works 클릭 없이 Google 자동 연결 · 소스 수정·재배포(원본은 SM 저장소 server/sm-auth)"],
-  ["Google Cloud", "works OAuth 클라이언트", "https://console.cloud.google.com/apis/credentials?project=273460053868", "works 구글 로그인 설정 · 자동 연결 서버용 비밀키(client secret)"]
+  ["Google Cloud", "Tax.J·works 로그인 클라이언트(taxj-504707)", "https://console.cloud.google.com/apis/credentials?project=273460053868", "Tax.J 버튼 로그인·드라이브와 works가 같이 씀(273460053868-nbc6…) · 자동 연결 서버용 비밀키(client secret)"],
+  ["Google Cloud", "works 자동 연결 서버 로그", "https://console.cloud.google.com/run/detail/asia-northeast3/sm-auth/logs?project=273460053868", "works 자동 연결이 안 될 때 오류 확인"],
+  ["Google Cloud", "taxj-504707 결제 연결", "https://console.cloud.google.com/billing/linkedaccount?project=taxj-504707", "works 자동 연결 서버 프로젝트의 결제 계정(Firebase 결제)"],
+  ["앱", "works", "https://sm-sarah.github.io/SM/SM.html", "개인웹 접속 주소"],
+  ["GitHub", "works 저장소", "https://github.com/sm-sarah/SM", "개인웹 원본(SM.html) · 자동 연결 서버 원본(server/sm-auth)"],
+  ["앱", "개인정보처리방침", "https://sm-sarah.github.io/SM/privacy.html", "Google 로그인 앱 게시에 필요한 방침 페이지(브랜딩에 등록)"]
 ];
 const SM_CLAUDE_GROUP = '클로드';
 // [2026.11.05] "회사웹 작업에 필요한 링크는 설정 › 웹으로 옮겨줘"(요청) - 위 목록(클로드)과, 내가 넣은 링크 중 회사웹 관리 사이트 주소인 것은
