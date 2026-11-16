@@ -1280,6 +1280,8 @@ function smTogglePcView(){ try{ localStorage.setItem('sm_pc_view', window.SM_PC_
   .smc-dcm{ display:inline-flex; align-items:center; gap:2px; white-space:nowrap; } .smc-dcm > input{ margin:0; } .smc-dcm .cl-dt{ min-width:38px; } .smc-dcm-m{ font-size:11px; margin-left:2px; }   /* [2026.11.16] 날짜+체크+메모 칸 */
   .cl-hist[data-chc]{ margin-top:16px; }   /* 창 닫기 ×와 겹치지 않게 */
   .cl-ch-act{ display:inline-flex; gap:2px; } .cl-ch-act button{ border:none; background:none; color:var(--muted-soft); cursor:pointer; font-size:11.5px; padding:0 2px; } .cl-ch-act button:hover{ color:var(--primary-dark); } .cl-ch-act button[data-chdel]:hover{ color:var(--rose); }   /* [2026.11.16] 회차 수정·삭제 */
+  .rd-pane[hidden]{ display:none !important; }
+  .rd-modes button.on{ background:var(--primary-soft); border-color:var(--primary); color:var(--primary-dark); font-weight:800; }   /* [2026.11.16] 기간 고르는 방법 */
   .cl-round-sel{ display:flex; align-items:center; gap:6px; margin:6px 0 2px; font-size:11.5px; color:var(--muted); font-weight:700; } .cl-round-sel select{ flex:1; font:inherit; font-size:12px; padding:2px 6px; border:1px solid var(--border); border-radius:7px; background:#fff; }   /* [2026.11.16] 결산 칸 창 - 저장할 차수 */
   .cl-memo-at{ flex:none; font-size:11px; color:var(--muted-soft); font-weight:600; padding-top:1px; }   /* [2026.11.12] 결산 메모 줄 등록일 */
   .cl-memo-act:hover{ color:var(--primary-dark); }
@@ -6578,7 +6580,9 @@ function smcRdPop(btn){
   const edit = () => {
     const o = smcRd(S.get(k, c)), [a0, b0] = o.r ? o.r.split('~') : ['', ''], has = !!(o.r || o.m || o.d);
     pop.innerHTML = `${closePopX()}${hist()}<div class="rd-lab">기간</div>
-      <div class="cl-pop-row">${['1분기','2분기','3분기','4분기'].map((n, i) => `<button type="button" data-qn="${i + 1}">${n}</button>`).join('')}<button type="button" data-qh="1,2">상반기</button><button type="button" data-qh="3,4">하반기</button></div>
+      <div class="cl-pop-row rd-modes"><button type="button" data-md="q">분기</button><button type="button" data-md="h">반기</button><button type="button" data-md="cur">1.1~당월</button><button type="button" data-md="prev">1.1~전월</button><button type="button" data-md="dir">직접</button></div>
+      <div class="cl-pop-row rd-pane" data-pane="q" hidden>${['1분기','2분기','3분기','4분기'].map((n, i) => `<button type="button" data-qn="${i + 1}">${n}</button>`).join('')}</div>
+      <div class="cl-pop-row rd-pane" data-pane="h" hidden><button type="button" data-qh="1,2">상반기</button><button type="button" data-qh="3,4">하반기</button></div>
       <div class="cl-pop-range"><input type="date" class="cl-r-a" value="${smcIso(a0) ? a0 : ''}" title="시작일"><span>~</span><input type="date" class="cl-r-b" value="${smcIso(b0) ? b0 : ''}" title="끝 날짜"></div>
       <input type="text" class="cl-pop-text rd-m" placeholder="메모 (예: 예정, 불공정리만)" value="${escapeAttr(o.m)}">
       <div class="rd-lab">처리날짜</div>
@@ -6594,6 +6598,17 @@ function smcRdPop(btn){
     pop.querySelectorAll('[data-qh]').forEach(b => b.onclick = () => { const h = b.dataset.qh.split(',').map(Number); qs = b.classList.contains('on') ? new Set() : new Set(h); qApply(); });
     [ia, ib].forEach(i => i.addEventListener('change', () => { const q = smcRdQs(`${ia.value}~${ib.value}`, y); qs = new Set(q ? Array.from({ length: q[1] - q[0] + 1 }, (_, j) => q[0] + j) : []); qPaint(); }));   // 날짜를 직접 고치면 맞는 분기만 켜짐
     qPaint();
+    // [2026.11.16] "분기/반기/직접/1.1~당월·전월로 설정, 분기는 분기 버튼을 눌러야 다시 분기를 고를 수 있게"(요청) - 분기·반기 버튼을 누르면 그 줄이 열림(다시 누르면 닫힘)
+    const md = m => { pop.querySelectorAll('[data-md]').forEach(b => b.classList.toggle('on', b.dataset.md === m)); pop.querySelectorAll('[data-pane]').forEach(p => p.hidden = p.dataset.pane !== m); place(); };
+    const ymd = t => `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`;
+    pop.querySelectorAll('[data-md]').forEach(b => b.onclick = () => {
+      const m = b.dataset.md, open = b.classList.contains('on');
+      if(m === 'q' || m === 'h') return md(open ? '' : m);
+      if(m === 'dir'){ md('dir'); ia.focus(); return; }
+      const now = new Date(), end = m === 'cur' ? new Date(now.getFullYear(), now.getMonth() + 1, 0) : new Date(now.getFullYear(), now.getMonth(), 0);
+      ia.value = `${end.getFullYear()}-01-01`; ib.value = ymd(end); md(m);
+      const q = smcRdQs(`${ia.value}~${ib.value}`, y); qs = new Set(q ? Array.from({ length: q[1] - q[0] + 1 }, (_, j) => q[0] + j) : []); qPaint();
+    });
     pop.querySelector('[data-a=today]').onclick = () => { id.value = todayStr(); };
     pop.querySelector('[data-a=back], [data-a=close]').onclick = e => { e.stopPropagation(); if(has) view(); else closeDatePopClose(); };
     const save = () => {
