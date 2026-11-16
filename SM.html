@@ -1280,6 +1280,9 @@ function smTogglePcView(){ try{ localStorage.setItem('sm_pc_view', window.SM_PC_
   .smc-dcm{ display:inline-flex; align-items:center; gap:2px; white-space:nowrap; } .smc-dcm > input{ margin:0; } .smc-dcm .cl-dt{ min-width:38px; } .smc-dcm-m{ font-size:11px; margin-left:2px; }   /* [2026.11.16] 날짜+체크+메모 칸 */
   .cl-hist[data-chc]{ margin-top:16px; }   /* 창 닫기 ×와 겹치지 않게 */
   .cl-ch-act{ display:inline-flex; gap:2px; } .cl-ch-act button{ border:none; background:none; color:var(--muted-soft); cursor:pointer; font-size:11.5px; padding:0 2px; } .cl-ch-act button:hover{ color:var(--primary-dark); } .cl-ch-act button[data-chdel]:hover{ color:var(--rose); }   /* [2026.11.16] 회차 수정·삭제 */
+  .cl-dt.vp-memo.has-sub{ height:auto; min-height:26px; display:inline-flex; flex-direction:column; align-items:center; justify-content:center; line-height:1; padding:3px 4px; }
+  .cl-ic-sub{ display:block; font-size:9.5px; font-weight:700; color:var(--muted); margin-top:2px; white-space:nowrap; }   /* [2026.11.16] 결산 아이콘 아래 날짜 */
+  .sm-tool-ic.on{ border-color:var(--primary); color:var(--primary-dark); background:var(--primary-soft); }
   .sm-mpeek{ margin-left:3px; font-size:11px; cursor:pointer; }   /* [2026.11.16] 긴 메모 아이콘 */
   .cl-pop-row.cl-pop-btns{ justify-content:center !important; gap:8px; }   /* [2026.11.16] 저장·닫기 아래 가운데 */
   .rd-pane[hidden]{ display:none !important; }
@@ -1629,6 +1632,7 @@ function smTogglePcView(){ try{ localStorage.setItem('sm_pc_view', window.SM_PC_
   .att-chip button{ border:none; background:transparent; color:var(--muted); cursor:pointer; font-size:14px; line-height:1; padding:0 3px; }
   .att-chip button:hover{ color:#e2445c; }
   .att-chip .att-memo{ font-size:11px; color:var(--muted); margin-left:4px; max-width:150px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }   /* [2026.11.12] 파일 메모 */
+  .att-chip .att-memo-at{ font-style:normal; color:var(--muted-soft); font-size:10.5px; }
   .att-chip button.att-me{ font-size:11px; opacity:.55; } .att-chip:hover button.att-me{ opacity:1; } .att-chip button.att-me:hover{ color:var(--primary-dark); }
   .att-chip .att-memo-in{ width:140px; font:inherit; font-size:11.5px; border:1px solid var(--primary); border-radius:6px; padding:1px 6px; margin-left:4px; }
   .att-chip button.att-memo-ok{ font-size:11px; font-weight:800; color:var(--primary-dark); }
@@ -6268,8 +6272,8 @@ function smAttOthers(sc, per, row, col){
 }
 function smAttHtml(sc, per, row, col, perLabel){
   const F = smAttOf(smAttKey(sc, per, row, col)), O = smAttOthers(sc, per, row, col), lab = perLabel || (x => `${x}년`);
-  return `<div class="cl-att" title="파일을 여기로 끌어다 놓거나, 입력칸에 이미지를 붙여넣어도 올라가요">${F.map((f, i) => `<span class="att-chip"><a href="${escapeAttr(f.url)}" target="_blank" rel="noopener" data-fi="${i}" title="미리보기 (Ctrl+클릭: 드라이브에서 열기)">📎 ${taxjEsc(f.name)}</a>${f.memo ? `<span class="att-memo" title="${escapeAttr(f.memo)}">${taxjEsc(f.memo)}</span>` : ''}<button type="button" class="att-me" data-fmemo="${i}" title="${f.memo ? '파일 메모 수정' : '파일 메모 남기기'}" aria-label="파일 메모">✎</button><button type="button" data-fdel="${i}" title="첨부 빼기" aria-label="첨부 빼기">×</button></span>`).join('')}<button type="button" class="cl-att-add">+ 파일</button><span class="cl-att-hint">끌어다 놓기 · Ctrl+V 붙여넣기</span></div>`
-    + (O.length ? `<div class="cl-att-o"><div class="cl-att-ol">다른 ${/^(vp|vatc)$/.test(sc) ? '기수' : sc === 'pay' ? '달' : '연도'} 첨부 (보기만)</div>${O.map(([p, L]) => L.map((f, i) => `<span class="att-chip o"><a href="${escapeAttr(f.url)}" target="_blank" rel="noopener" data-fo="${escapeAttr(p)}|${i}" title="미리보기 (Ctrl+클릭: 드라이브에서 열기)"><i>${taxjEsc(lab(p))}</i>📎 ${taxjEsc(f.name)}</a>${f.memo ? `<span class="att-memo" title="${escapeAttr(f.memo)}">${taxjEsc(f.memo)}</span>` : ''}</span>`).join('')).join('')}</div>` : '');
+  return `<div class="cl-att" title="파일을 여기로 끌어다 놓거나, 입력칸에 이미지를 붙여넣어도 올라가요">${F.map((f, i) => `<span class="att-chip"><a href="${escapeAttr(f.url)}" target="_blank" rel="noopener" data-fi="${i}" title="미리보기 (Ctrl+클릭: 드라이브에서 열기)">📎 ${taxjEsc(f.name)}</a>${f.at ? `<i class="att-memo-at" title="${escapeAttr(f.at.replace(/-/g, '.'))} 올림">${Number(f.at.slice(5, 7))}/${Number(f.at.slice(8))}</i>` : ''}<button type="button" class="att-me" data-fmemo="${i}" title="파일 이름 바꾸기" aria-label="파일 이름 바꾸기">✎</button><button type="button" data-fdel="${i}" title="첨부 빼기" aria-label="첨부 빼기">×</button></span>`).join('')}<button type="button" class="cl-att-add">+ 파일</button><span class="cl-att-hint">끌어다 놓기 · Ctrl+V 붙여넣기</span></div>`
+    + (O.length ? `<div class="cl-att-o"><div class="cl-att-ol">다른 ${/^(vp|vatc)$/.test(sc) ? '기수' : sc === 'pay' ? '달' : '연도'} 첨부 (보기만)</div>${O.map(([p, L]) => L.map((f, i) => `<span class="att-chip o"><a href="${escapeAttr(f.url)}" target="_blank" rel="noopener" data-fo="${escapeAttr(p)}|${i}" title="미리보기 (Ctrl+클릭: 드라이브에서 열기)"><i>${taxjEsc(lab(p))}</i>📎 ${taxjEsc(f.name)}</a>${f.at ? `<i class="att-memo-at" title="${escapeAttr(f.at.replace(/-/g, '.'))} 올림">${Number(f.at.slice(5, 7))}/${Number(f.at.slice(8))}</i>` : ''}</span>`).join('')).join('')}</div>` : '');
 }
 async function smAttUpload(key, files, after){
   files = Array.from(files || []).filter(Boolean); if(!files.length || !smUploadReady()) return;
@@ -6292,11 +6296,12 @@ function smAttWire(pop, sc, per, row, col, after, gone){
   pop.querySelectorAll('[data-fi]').forEach(a => a.onclick = e => { if(e.ctrlKey || e.metaKey || e.shiftKey) return; e.preventDefault(); const f = F[+a.dataset.fi]; smPreviewFile({ id: f.id, name: f.name, url: f.url }); });
   pop.querySelectorAll('[data-fo]').forEach(a => a.onclick = e => { if(e.ctrlKey || e.metaKey || e.shiftKey) return; e.preventDefault(); const [p, i] = a.dataset.fo.split('|'); const f = smAttOf(smAttKey(sc, p, row, col))[+i]; if(f) smPreviewFile({ id: f.id, name: f.name, url: f.url }); });
   // [2026.11.12] "파일 업로드에 메모 남길 수 있나"(요청) - ✎를 누르면 그 자리에서 파일 메모 입력(Enter·저장 = 저장, 비우고 저장 = 메모 지움, Esc = 취소). 메모는 파일 이름 옆에 작게
+  // [2026.11.16] "여기엔 메모 대신 파일명과 올린 날짜, 파일명은 올린 뒤 고칠 수 있게"(요청) - ✎ = 파일 이름 바꾸기(works 목록에 보이는 이름, 드라이브 파일 이름은 그대로). 메모는 미리보기 창에서
   pop.querySelectorAll('[data-fmemo]').forEach(b => b.onclick = e => {
     e.stopPropagation(); const f = F[+b.dataset.fmemo]; if(!f) return; const chip = b.closest('.att-chip');
-    chip.querySelectorAll('.att-memo, .att-me, [data-fdel]').forEach(x => x.style.display = 'none');
-    chip.insertAdjacentHTML('beforeend', `<input type="text" class="att-memo-in" value="${escapeAttr(f.memo || '')}" placeholder="파일 메모"><button type="button" class="att-memo-ok">저장</button>`);
-    const inp = chip.querySelector('.att-memo-in'), done = () => { const t = inp.value.trim(); if(t) f.memo = t; else delete f.memo; scheduleGoogleSave(); if(after) after(); };
+    chip.querySelectorAll('a, .att-memo-at, .att-me, [data-fdel]').forEach(x => x.style.display = 'none');
+    chip.insertAdjacentHTML('beforeend', `<input type="text" class="att-memo-in" value="${escapeAttr(f.name || '')}" placeholder="파일 이름"><button type="button" class="att-memo-ok">저장</button>`);
+    const inp = chip.querySelector('.att-memo-in'), done = () => { const t = inp.value.trim(); if(t && t !== f.name){ f.name = t; scheduleGoogleSave(); } if(after) after(); };
     inp.addEventListener('keydown', ev => { if(ev.key === 'Enter' && !ev.isComposing){ ev.preventDefault(); done(); } if(ev.key === 'Escape'){ ev.preventDefault(); ev.stopPropagation(); if(after) after(); } });
     chip.querySelector('.att-memo-ok').onclick = ev => { ev.stopPropagation(); done(); };
     inp.focus();
@@ -6571,7 +6576,8 @@ function smcTd(s, k, col, val, tdCls){
   if(t === 'checkdate') return `${td}<input type="checkbox" ${val ? 'checked' : ''} ${at} title="${escapeAttr(val ? smcFmt(t, val, y) + ' · 누르면 해제' : '체크하면 날짜 입력')}" onclick="smcCheckDate(this, event)"></td>`;
   const has = val != null && val !== '';
   const AF = t === 'memo' ? smAttOf(smAttKey(s === 'close' ? 'close' : s, smcPer(s), k, col.id)) : [];   // [2026.11.11] 글자(팝업) 첨부파일
-  if(smcIsIcon(col)) return `${td}<button type="button" class="cl-dt vp-memo${has || AF.length ? ' has' : ''}" ${at} title="${escapeAttr((has ? (t === 'memo' ? String(val) : smcFmt(t, val, y)) : AF.length ? '' : '입력') + smAttTip(AF))}" onclick="smcPop(this)">${AF.length ? ICON_CL_CLIP + (AF.length > 1 ? `<span class="vt-ic-n">${AF.length}</span>` : '') : has ? (/^(date|month|range|rangedate|monthdate)$/.test(t) ? ICON_CL_CAL : ICON_MEMO_DOC) : ''}</button></td>`;
+  const icSub = s === 'close' && has ? smIcShort(t, val, y) : '';   // [2026.11.16] 결산 아이콘 아래 작은 날짜
+  if(smcIsIcon(col)) return `${td}<button type="button" class="cl-dt vp-memo${has || AF.length ? ' has' : ''}${icSub ? ' has-sub' : ''}" ${at} title="${escapeAttr((has ? (t === 'memo' ? String(val) : smcFmt(t, val, y)) : AF.length ? '' : '입력') + smAttTip(AF))}" onclick="smcPop(this)">${AF.length ? ICON_CL_CLIP + (AF.length > 1 ? `<span class="vt-ic-n">${AF.length}</span>` : '') : has ? (/^(date|month|range|rangedate|monthdate)$/.test(t) ? ICON_CL_CAL : ICON_MEMO_DOC) : ''}${icSub ? `<span class="cl-ic-sub">${taxjEsc(icSub)}</span>` : ''}</button></td>`;
   if(t === 'select'){ const opts = col.opts || [], sv = has ? String(val) : ''; return `<td><select class="vp-in" style="min-width:84px;" ${at} onchange="smcSet(this, this.value)"><option value=""></option>${(sv && !opts.includes(sv) ? [sv] : []).concat(opts).map(o => `<option ${o === sv ? 'selected' : ''}>${taxjEsc(o)}</option>`).join('')}</select></td>`; }
   if(t === 'monthdate' && !smcIsIcon(col)){ const o = smcMd(val), y2 = S.year(); return `${td}<button type="button" class="cl-dt" ${at} title="${escapeAttr(has ? smcFmt(t, val, y2) : '입력')}" onclick="smcPop(this)">${has ? `${smMemoShort([o.mo ? smcFmt('month', o.mo, y2) : ''], o.m)}${o.d ? `<span class="rd-dd">✓${taxjEsc(smcFmt('date', o.d, y2))}</span>` : ''}` : ''}</button></td>`; }   // [2026.11.11] 월+처리날짜
   if(t === 'dcm' && !smcIsIcon(col)){ const o = smcDcm(val); return `${td}<span class="smc-dcm"><input type="checkbox" ${o.ck ? 'checked' : ''} ${at} title="체크" onchange="smcDcmCheck(this)"><button type="button" class="cl-dt" ${at} title="${escapeAttr(has ? smcFmt(t, val, y) : '날짜·메모 입력')}" onclick="smcPop(this)">${o.d ? taxjEsc(smcFmt('date', o.d, y)) : ''}${o.m ? `<span class="smc-dcm-m" title="${escapeAttr(o.m)}">📝</span>` : ''}</button></span></td>`; }   // [2026.11.16] 날짜+체크+메모
@@ -6715,10 +6721,26 @@ function smcPop(btn, as){
 // [2026.11.11] "기간 칸이 너무 자리 차지 - 아이콘+팝업으로, 글자 전체/아이콘은 항목마다 고르게(모든 입력 방식)"(요청)
 //   아이콘 = 값이 있으면 아이콘(마우스를 올리면 내용, 누르면 입력 창), 비었으면 ＋. 고른 적 없으면 기간만 아이콘, 나머지는 글자 전체
 const ICON_CL_CAL = '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>';
-function closeColIcon(c){ return smcIsIcon(c); }
+// [2026.11.16] "아이콘으로 접어 두니 하나씩 마우스를 올려야 해서 불편"(요청) - ① 표 위 '내용 펼치기' 버튼: 누르면 아이콘 칸이 모두 글자로(다시 누르면 아이콘, 이 기기에 기억) ② 아이콘일 때도 아래에 날짜를 작게
+let closeExpand = (() => { try{ return localStorage.getItem('sm_close_expand') === '1'; }catch(e){ return false; } })();
+function closeToggleExpand(){ closeExpand = !closeExpand; try{ localStorage.setItem('sm_close_expand', closeExpand ? '1' : ''); }catch(e){} renderClose(); }
+const ICON_CL_EXPAND = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h18M7 8l-4 4 4 4M17 8l4 4-4 4"/></svg>';
+function closeColIcon(c){ return !closeExpand && smcIsIcon(c); }
+// 아이콘 아래 작은 날짜(날짜·기간 끝·월·처리날짜)
+function smIcShort(t, v, y){
+  if(v == null || v === '' || v === true || v === false) return '';
+  const d = x => smcIso(x) ? smcFmt('date', x, y) : '';
+  if(t === 'date'){ const o = closeDateMemo(v); return d(o.d); }
+  if(t === 'range'){ const b = String(v).split('~')[1] || ''; return d(b) ? '~' + d(b) : ''; }
+  if(t === 'month') return /^\d{4}-\d{2}$/.test(String(v)) ? `${Number(String(v).slice(5))}월` : '';
+  if(t === 'rangedate'){ const o = smcRd(v); if(o.d) return '✓' + d(o.d); const b = (o.r || '').split('~')[1] || ''; return d(b) ? '~' + d(b) : ''; }
+  if(t === 'monthdate'){ const o = smcMd(v); return o.d ? '✓' + d(o.d) : o.mo ? `${Number(o.mo.slice(5))}월` : ''; }
+  if(t === 'dcm'){ const o = smcDcm(v); return (o.ck ? '✓' : '') + d(o.d); }
+  return '';
+}
 function closeIconBtn(cid, colId, val, tip, fn, svg){
-  const has = val != null && val !== '';
-  return `<button type="button" class="cl-dt vp-memo${has ? ' has' : ''}" data-cid="${cid}" data-col="${colId}" title="${escapeAttr(has ? tip : '입력')}" onclick="${fn}(this)">${has ? svg : ''}</button>`;
+  const has = val != null && val !== '', sub = has ? smIcShort(fn === 'closeDatePop' ? 'date' : fn === 'closeRangePop' ? 'range' : fn === 'closeMonthPop' ? 'month' : '', val, closeYear) : '';
+  return `<button type="button" class="cl-dt vp-memo${has ? ' has' : ''}${sub ? ' has-sub' : ''}" data-cid="${cid}" data-col="${colId}" title="${escapeAttr(has ? tip : '입력')}" onclick="${fn}(this)">${has ? svg : ''}${sub ? `<span class="cl-ic-sub">${taxjEsc(sub)}</span>` : ''}</button>`;
 }
 function closeTextPop(btn){
   closeDatePopClose();
@@ -6762,7 +6784,7 @@ function closeTableHtml(docs){
     const cells = closeCols.map(c => {
       const val = v[c.id];
       if(c.type === 'check') return `<td style="text-align:center;"><input type="checkbox" ${val ? 'checked' : ''} onchange="closeSetVal('${cid}','${c.id}',this.checked)"></td>`;
-      if(c.type === 'checkdate' || c.type === 'select' || c.type === 'rangedate' || c.type === 'monthdate' || c.type === 'dcm') return smcTd('close', x.id, c, val);   // [2026.11.11] 공통 목록에서 새로 생긴 입력 방식
+      if(c.type === 'checkdate' || c.type === 'select' || c.type === 'rangedate' || c.type === 'monthdate' || c.type === 'dcm') return smcTd('close', x.id, closeExpand ? Object.assign({}, c, { view:'text' }) : c, val);   // [2026.11.11] 공통 목록에서 새로 생긴 입력 방식
       const ic = closeColIcon(c);
       if(c.type === 'memo'){ const L = closeMemoLines(val); return ic || !L.length ? `<td style="text-align:center;">${closeMemoBtn(cid, c.id, val)}</td>` : `<td style="text-align:center;"><button type="button" class="cl-dt" data-cid="${cid}" data-col="${c.id}" title="${escapeAttr(L.map((x, i) => `${i + 1}) ${x}`).join('\n'))}" onclick="closeMemoPop(this)">${taxjEsc(L.join(' / '))}</button></td>`; }   // [2026.11.11] 글자 전체면 줄을 이어서 보임   // [2026.10.23] 메모(목록) - 아이콘(개수), 눌러서 목록 보기·추가
       const hb = closeHistBadge(x.id, c.id);   // [2026.11.04] 2회 이상 입력한 칸은 오른쪽 위에 횟수
@@ -6898,6 +6920,7 @@ function renderClose(){
       ${d ? '' : `<button class="btn primary xs" onclick="closeNewRound()">+ ${closeYear}년 결산 만들기</button>`}
       ${d ? `<button class="sm-tool-ic" onclick="closeBulk()" title="날짜 일괄 입력 - 왼쪽 체크박스로 고른 거래처(없으면 보이는 전체)에 오늘 또는 고른 날짜를 넣어요" aria-label="날짜 일괄 입력">${ICON_BULK}</button>` : ''}
       <button class="sm-tool-ic" onclick="closeAddCol()" title="항목 추가" aria-label="항목 추가">${ICON_PLUS}</button>
+      <button class="sm-tool-ic${closeExpand ? ' on' : ''}" onclick="closeToggleExpand()" title="${closeExpand ? '아이콘으로 접기' : '내용 펼치기 - 아이콘 칸을 모두 글자로 보여요'}" aria-label="내용 펼치기" aria-pressed="${closeExpand}">${ICON_CL_EXPAND}</button>
       <button class="sm-tool-ic" onclick="closeBulkCols()" title="항목 일괄 변경 - 여러 항목을 골라 입력 방식·칸 표시를 한 번에 바꿔요" aria-label="항목 일괄 변경">${ICON_COLS_BULK}</button>
       <button class="sm-tool-ic" onclick="document.getElementById('closeXlsx').click()" title="엑셀 올리기 - 1행 = 항목 이름인 결산 엑셀을 이 연도 결산에 넣어요(값은 칸마다 새 기록으로 쌓임)" aria-label="엑셀 올리기">${UPLOAD_XLSX_SVG}</button><!-- [2026.11.02] 글자 → 아이콘(요청) --><input type="file" id="closeXlsx" accept=".xlsx,.xls" style="display:none;" onchange="closeImport(this)">
     </div>
@@ -12775,10 +12798,10 @@ function smPvPane(doc, f, removable, onRemove){
   // [2026.11.12] "첨부파일 미리보기에서 이미지 위에도 메모 가능?"(요청) - 칸 첨부(cellFiles) 파일이면 그림 위에 파일 메모 줄(보기·✎ 수정, 칸 창의 파일 메모와 같은 값)
   { const mb = el.querySelector('.sm-pv-memo');
     if(mb){ const fo = smAttFindById(f.id);
-      const view = () => { mb.innerHTML = `<span class="t${fo.memo ? '' : ' empty'}">${fo.memo ? taxjEsc(fo.memo) : '파일 메모 없음'}</span><button type="button">✎ ${fo.memo ? '수정' : '메모'}</button>`; mb.querySelector('button').onclick = edit; };
+      const view = () => { mb.innerHTML = `<span class="t${fo.memo ? '' : ' empty'}">${fo.memo ? taxjEsc(fo.memo) : '파일 메모 없음'}</span>${fo.memo && fo.memoAt ? `<span style="flex:none; font-size:11px; color:#a08a5c;">${fo.memoAt.replace(/-/g, '.')}</span>` : ''}<button type="button">✎ ${fo.memo ? '수정' : '메모'}</button>`; mb.querySelector('button').onclick = edit; };
       const edit = () => {
         mb.innerHTML = `<input type="text" value="${escapeAttr(fo.memo || '')}" placeholder="이 파일 메모 (비우고 저장 = 지우기)"><button type="button">저장</button>`;
-        const inp = mb.querySelector('input'), done = () => { const t = inp.value.trim(); if(t) fo.memo = t; else delete fo.memo; scheduleGoogleSave(); view(); smAttRefreshOpen(); };
+        const inp = mb.querySelector('input'), done = () => { const t = inp.value.trim(); if(t){ if(t !== fo.memo) fo.memoAt = todayStr(); fo.memo = t; } else { delete fo.memo; delete fo.memoAt; } scheduleGoogleSave(); view(); smAttRefreshOpen(); };
         inp.addEventListener('keydown', ev => { if(ev.key === 'Enter' && !ev.isComposing){ ev.preventDefault(); done(); } if(ev.key === 'Escape'){ ev.preventDefault(); ev.stopPropagation(); view(); } });
         mb.querySelector('button').onclick = done; inp.focus();
       };
