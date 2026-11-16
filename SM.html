@@ -3727,6 +3727,7 @@ const SM_QUICK_SETTERS = {
   smcPop: (b, v) => smcSet(b, v),   // [2026.11.11] works 공통 칸
   closeMonthPop: (b, v) => { closeSetVal(b.dataset.cid, b.dataset.col, v); renderClose(); },   // [2026.11.11] 모든 칸으로 넓힘(요청)
   closeMemoPop: (b, v) => { closeSetVal(b.dataset.cid, b.dataset.col, v); renderClose(); },
+  closeTextPop: (b, v) => { closeSetVal(b.dataset.cid, b.dataset.col, v); renderClose(); },   // [2026.11.16] "아이콘 칸에서 우클릭 반응 없음"(요청) - 결산 글자·숫자 칸을 아이콘으로 볼 때 빠져 있었음
   vatProgMemoPop: (b, v) => vatProgSet(b.dataset.cid, b.dataset.col, v, true),
   submitDatePop: (b, v) => setSubmitClose(b.dataset.key, b.dataset.item, v, b.dataset.pk),
   submitSavedPop: (b, v) => updateSubmitMine(b.dataset.key, 'done', v, b.dataset.pk),
