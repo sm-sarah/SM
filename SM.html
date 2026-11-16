@@ -4017,7 +4017,7 @@ function renderWlMonthCal(){
         <div class="cal-day ${ds === todayS ? 'today' : ''} ${ds.slice(0,7) !== wlCalYM ? 'other' : ''} ${ds === sel ? 'wl-sel' : ''}" onclick="setWlHistDay('${ds}', true)" title="${list.length ? `${list.length}건 · 남은 일 ${left}건` : ''}">
           <div class="wl-mcal-top"><div class="cal-daynum ${mk && mk.hol ? 'tj-hol' : ''}">${parseInt(ds.slice(8), 10)}${mk && mk.hol ? `<span class="tj-holname">${taxjEsc(mk.hol)}</span>` : ''}</div>${list.length ? `<span class="wl-mcal-cnt ${left ? '' : 'all-done'}">${list.length}</span>` : ''}</div>
           ${starts.length ? `<div class="tj-atts">${starts.map(x => `<span class="tj-att plan" title="${escapeAttr(`안내 시작 · ${x.title} (마감 ${Number(x.date.slice(5, 7))}/${Number(x.date.slice(8))})\n${smTaxDesc(x)}`)}">${taxjEsc(smTaxShort(x))} 안내</span>`).join('')}</div>` : ''}<!-- [2026.11.03] 무슨 안내·무슨 마감인지 이름으로(요청) -->
-          ${due.length ? `<div class="tj-atts">${due.map(x => `<span class="tj-att due" title="${escapeAttr(`${x.title} 마감\n${smTaxDesc(x)}\n→ 납부여부 확인 및 납부마감 멘트 발송`)}">${taxjEsc(smTaxShort(x))} 마감</span>`).join('')}</div>` : ''}
+          ${due.length ? `<div class="tj-atts">${due.map(x => `<span class="tj-att due" title="${escapeAttr(`${x.title} 마감\n${smTaxDesc(x)}\n→ ${smTaxDueAct([x])}`)}">${taxjEsc(smTaxShort(x))} 마감</span>`).join('')}</div>` : ''}
           ${taxjCalItemsHtml(mk, ds)}
           <div class="cal-tasks" style="max-height:none;">
             ${shown.map(t => `<div class="wl-ct ${t.done ? 'done' : ''}">${escapeAttr(t.text)}</div>`).join('')}
@@ -11453,12 +11453,15 @@ function smTaxChkNoticeHtml(m){
   }).join('')}</div>`;
 }
 function smTaxDesc(x){ return SM_TAX_DESC[x.id] || (x.src === '내 일정' ? '내가 넣은 일정' : '회사웹 세무일정'); }
+// [2026.11.16] "근로내용확인신고서는 납부여부 확인이랄 게 없음, 제출이라서"(요청) - 제출만 하는 일정(지급명세서·근로내용확인신고 등 '납부' 없는 제출)은 '제출 여부 확인'
+function smTaxIsSubmit(x){ const t = String((x && x.title) || ''); return !/납부|보험료|중간예납|예정고지/.test(t) && /제출|지급명세서|근로내용확인|신고서/.test(t); }
+function smTaxDueAct(list){ const sub = list.filter(smTaxIsSubmit).length; return sub === list.length ? '제출 여부 확인' : sub ? '납부·제출 여부 확인 및 마감 멘트 발송' : '납부여부 확인 및 납부마감 멘트 발송'; }
 function smTaxBandHtml(date, dueOnly){
   const todayS = todayStr(), on = smTaxAround(date).ongoing, due = smDueOn(date);
   const md = ds => `${Number(ds.slice(5, 7))}/${Number(ds.slice(8))}`;
   const row = (x, isDue) => `<div class="wl-tax-row"><span class="${isDue ? 'wl-due-chip' : 'wl-plan-chip'}">${taxjEsc(x.title)}${isDue ? '' : ` <b>${md(x.date)}</b> <span>${smDday(x.date, date)}</span>`}</span><span class="wl-tax-desc">${taxjEsc(smTaxDesc(x))}</span></div>`;
   return (on.length && !dueOnly ? `<div class="wl-plan"><div class="wl-due-head">📌 준비할 세무일정</div><div class="wl-tax-rows">${on.map(x => row(x, false)).join('')}</div></div>` : '')
-    + (due.length ? `<div class="wl-due"><div class="wl-due-head">📢 ${date === todayS ? '오늘' : taxjEsc(worklistDayLabel(date).replace(/^\d{4}-/, ''))} 마감 · <b>납부여부 확인 및 납부마감 멘트 발송</b></div><div class="wl-tax-rows">${due.map(x => row(x, true)).join('')}</div></div>` : '');
+    + (due.length ? `<div class="wl-due"><div class="wl-due-head">📢 ${date === todayS ? '오늘' : taxjEsc(worklistDayLabel(date).replace(/^\d{4}-/, ''))} 마감 · <b>${smTaxDueAct(due)}</b></div><div class="wl-tax-rows">${due.map(x => row(x, true)).join('')}</div></div>` : '');
 }
 function smDday(ds, from){ const n = Math.round((new Date(ds + 'T00:00:00') - new Date(from + 'T00:00:00')) / 86400000); return n === 0 ? 'D-DAY' : n > 0 ? `D-${n}` : `D+${-n}`; }
 // [2026.11.03] 그날이 세무일정(내부 › 세무일정과 같은 계산 - 회사웹 수정·등록 일정 포함, 주말·공휴일이면 다음 영업일) 마감일인 항목들
