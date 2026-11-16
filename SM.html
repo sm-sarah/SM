@@ -6733,8 +6733,10 @@ function smIcShort(t, v, y){
   if(t === 'date'){ const o = closeDateMemo(v); return d(o.d); }
   if(t === 'range'){ const b = String(v).split('~')[1] || ''; return d(b) ? '~' + d(b) : ''; }
   if(t === 'month') return /^\d{4}-\d{2}$/.test(String(v)) ? `${Number(String(v).slice(5))}월` : '';
-  if(t === 'rangedate'){ const o = smcRd(v); if(o.d) return '✓' + d(o.d); const b = (o.r || '').split('~')[1] || ''; return d(b) ? '~' + d(b) : ''; }
-  if(t === 'monthdate'){ const o = smcMd(v); return o.d ? '✓' + d(o.d) : o.mo ? `${Number(o.mo.slice(5))}월` : ''; }
+  // [2026.11.16] "처리날짜가 있으면 ✓+기간(끝 월·월), 미해당이면 ✓+미해당 - 자세한 건 마우스를 올리면"(요청)
+  const em = r => { const b = String(r || '').split('~')[1] || ''; return smcIso(b) ? `${Number(b.slice(5, 7))}월` : ''; };
+  if(t === 'rangedate'){ const o = smcRd(v), p = /미해당/.test(o.m) ? '미해당' : em(o.r); return (o.d ? '✓' : '') + p; }
+  if(t === 'monthdate'){ const o = smcMd(v), p = /미해당/.test(o.m) ? '미해당' : o.mo ? `${Number(o.mo.slice(5))}월` : ''; return (o.d ? '✓' : '') + p; }
   if(t === 'dcm'){ const o = smcDcm(v); return (o.ck ? '✓' : '') + d(o.d); }
   return '';
 }
