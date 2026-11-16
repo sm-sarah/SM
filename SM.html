@@ -6737,7 +6737,7 @@ function smIcShort(t, v, y){
   const em = r => { const b = String(r || '').split('~')[1] || ''; return smcIso(b) ? `${Number(b.slice(5, 7))}월` : ''; };
   if(t === 'rangedate'){ const o = smcRd(v), p = /미해당/.test(o.m) ? '미해당' : em(o.r); return (o.d ? '✓' : '') + p; }
   if(t === 'monthdate'){ const o = smcMd(v), p = /미해당/.test(o.m) ? '미해당' : o.mo ? `${Number(o.mo.slice(5))}월` : ''; return (o.d ? '✓' : '') + p; }
-  if(t === 'dcm'){ const o = smcDcm(v); return (o.ck ? '✓' : '') + d(o.d); }
+  if(t === 'dcm'){ const o = smcDcm(v); return /미해당/.test(o.m) ? (o.ck || o.d ? '✓' : '') + '미해당' : (o.ck ? '✓' : '') + d(o.d); }   // [2026.11.16] 날짜+체크+메모도 미해당이면 다른 칸처럼 (✓)미해당
   return '';
 }
 function closeIconBtn(cid, colId, val, tip, fn, svg){
