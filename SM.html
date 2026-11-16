@@ -1274,7 +1274,8 @@ function smTogglePcView(){ try{ localStorage.setItem('sm_pc_view', window.SM_PC_
   .mn-band .mn-add{ width:100%; margin-top:4px; box-sizing:border-box; }
   .cl-memo-act{ border:none; background:none; color:var(--muted-soft); cursor:pointer; padding:0 3px; font-size:12px; line-height:1.45; opacity:0; transition:opacity .12s; }   /* [2026.10.27] 결산 메모 줄 - 마우스를 올리면 수정·삭제(요청) */
   .cl-memo-row:hover .cl-memo-act, .cl-memo-act:focus-visible{ opacity:1; }
-  td.sb-on{ background:#fff7e0; }   /* [2026.11.16] 지급명세서 제출 대상 칸(마감·제출일) 음영 - 머리글 핑크와 겹치지 않게 연한 골드(요청) */
+  /* [2026.11.16] 지급명세서 제출 대상의 마감·제출일 - 머리글 핑크와 겹치지 않게 연한 골드, 칸 전체가 아니라 날짜·글자에만(요청) */
+  .sb-v, td.sb-on > .cl-dt{ display:inline-block; background:#fff1cc; border-radius:6px; padding:1px 7px; }
   .cl-memo-at{ flex:none; font-size:11px; color:var(--muted-soft); font-weight:600; padding-top:1px; }   /* [2026.11.12] 결산 메모 줄 등록일 */
   .cl-memo-act:hover{ color:var(--primary-dark); }
   @media (hover:none){ .cl-memo-act{ opacity:1; } }   /* 휴대폰처럼 마우스가 없으면 늘 보이게 */
@@ -9736,7 +9737,8 @@ function renderSubmit(){
   const amtMark = a => ` <span title="제출금액 ${a.rep == null ? '-' : a.rep.toLocaleString()} · 급여 합계 ${a.calc.toLocaleString()}" style="font-weight:800; color:${a.state === 'ok' ? '#059669' : '#e11d48'};">${a.state === 'ok' ? '✓' : '✕'}</span>`;
   // 순번·상호명은 같은 거래처 줄끼리 합침(rowspan)
   let seq = 0;
-  submitRowsShown = rows.map(r => ({ key: r.key, pk: monthly ? r.p : period, name: r.c.name, lane: r.dual ? r.lane : '', done: mineOf(r).done }));
+  submitRowsShown = rows.map(r => ({ key: r.key, pk: monthly ? r.p : period, name: r.c.name, lane: r.dual ? r.lane : '', done: mineOf(r).done,
+    close: Object.assign({}, mineOf(r).close || {}), its: r.cells.map((x, ci) => (x.st === 'done' || x.st === 'todo') ? items[ci][0] : '').filter(Boolean) }));   // [2026.11.16] its = 이 줄이 제출 대상인 항목(마감 일괄 입력용)
   const body = rows.map((r, idx) => {
     const first = idx === 0 || rows[idx - 1].c !== r.c;
     let n = 1; if(first) while(rows[idx + n] && rows[idx + n].c === r.c) n++;
@@ -9752,9 +9754,10 @@ function renderSubmit(){
       ${r.cells.map((x, ci) => { const it = items[ci][0], cv = ((m.close || {})[it]) || '';
         if(x.st === 'hide') return `<td>${na}</td><td>${na}</td>`;
         // [2026.11.16] "제출에 해당되는 칸은 마감·제출일 컬러 음영"(요청) - 이번 제출 대상(제출됨·미제출) 칸만 연한 음영
-        const on = x.st === 'done' || x.st === 'todo' ? ' class="sb-on"' : '';
-        const closeTd = x.st === 'off' && !cv ? `<td>${na}</td>` : `<td${on}>${payDateBtnHtmlS(r.key, it, cv, pk)}</td>`;
-        return closeTd + `<td${on}>${cellHtml(x)}</td>`; }).join('')}
+        //   [2026.11.16] "칸 전체 말고 날짜·내용에만"(요청) - 칸 배경 대신 날짜·글자에만 음영(빈 ＋ 칸은 음영 없음)
+        const on = x.st === 'done' || x.st === 'todo';
+        const closeTd = x.st === 'off' && !cv ? `<td>${na}</td>` : `<td${on && cv ? ' class="sb-on"' : ''}>${payDateBtnHtmlS(r.key, it, cv, pk)}</td>`;
+        return closeTd + `<td>${on ? `<span class="sb-v">${cellHtml(x)}</span>` : cellHtml(x)}</td>`; }).join('')}
       <td><button type="button" class="cl-dt" data-key="${k}" data-pk="${escapeAttr(pk)}" title="${escapeAttr(m.done ? '신고서류 저장 ' + m.done : '신고서류 저장일 입력 (달력·오늘)')}" onclick="submitSavedPop(this)">${payFmtDate(m.done)}</button></td><!-- [2026.10.23] "내 확인 → 신고서류 저장, 아이콘만(눌러서 달력·오늘)"(요청) -->
       ${smCoMemoTd(r.memo, `${r.c.name} · 지급명세서 회사 메모`)}
       <td class="note-cell"><input type="text" value="${escapeAttr(m.note)}" onchange="updateSubmitMine('${k}','note',this.value,'${pk}')" style="width:100%"></td>
@@ -9767,7 +9770,7 @@ function renderSubmit(){
         <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;"><div class="sm-seg" id="submitModeSeg">${['월별','반기','연간'].map(m => `<button class="${submitMode === m ? 'on' : ''}" onclick="setSubmitMode('${m}')">${SUBMIT_MODE_LABEL[m]}</button>`).join('')}</div></div>
         <div style="display:flex; align-items:center; gap:10px;"><select onchange="submitYear=this.value; renderSubmit();">${years.map(y => `<option value="${y}" ${y===submitYear?'selected':''}>${y}년${submitMode === '연간' ? ' 귀속' : ''}</option>`).join('')}</select>
         ${sub}${viewSeg}</div>
-        <div style="justify-self:end; display:flex; align-items:center; gap:10px;">${prevNote}<button class="sm-tool-ic" onclick="submitSavedBulk()" title="신고서류 저장일 일괄 입력 - 날짜를 고르고 거래처를 체크해서 한 번에 넣어요" aria-label="신고서류 저장일 일괄 입력">${ICON_BULK}</button><label class="hint" style="margin:0; display:inline-flex; align-items:center; gap:4px; cursor:pointer;"><input type="checkbox" ${submitOnlyLeft ? 'checked' : ''} onchange="submitOnlyLeft=this.checked; renderSubmit();"> 남은 것만</label></div>
+        <div style="justify-self:end; display:flex; align-items:center; gap:10px;">${prevNote}<button class="sm-tool-ic" onclick="submitSavedBulk()" title="날짜 일괄 입력 - 신고서류 저장일·항목별 마감일을 골라 거래처를 체크해서 한 번에 넣어요" aria-label="신고서류 저장일 일괄 입력">${ICON_BULK}</button><label class="hint" style="margin:0; display:inline-flex; align-items:center; gap:4px; cursor:pointer;"><input type="checkbox" ${submitOnlyLeft ? 'checked' : ''} onchange="submitOnlyLeft=this.checked; renderSubmit();"> 남은 것만</label></div>
       </div>
       ${!taxjFull ? '<div class="empty">Tax.J에 연결하면 회사웹 지급명세서 제출현황이 여기에 채워져요.</div>' : `
       <!-- [2026.11.02] 신고현황과 같게 큰 숫자 카드·진행 막대 대신 한 줄 칩(요청) -->
@@ -9803,19 +9806,26 @@ function submitSavedPop(btn){
 // [2026.10.23] 신고서류 저장일 일괄 입력(요청) - 신고현황 날짜 일괄 입력 창과 같은 모양. 기본 체크 = 아직 저장일이 없는 줄
 function submitSavedBulk(){
   if(!submitRowsShown.length) return smAlert('입력할 줄이 없어요', '지금 표에 보이는 거래처가 없어요.');
+  // [2026.11.16] "날짜 일괄 입력에 내가 넣은 날짜 항목(마감)도 골라서"(요청) - 항목 = 신고서류 저장 + 지금 표의 '○○ 마감'(제출 대상 줄만 목록에)
+  const its = SUBMIT_ITEMS[submitMode] || [];
+  const tgts = [['', '신고서류 저장']].concat(its.filter(([k]) => submitRowsShown.some(r => r.its.includes(k))).map(([k, l]) => [k, `${l} 마감`]));
+  const rowsOf = t => submitRowsShown.map((r, i) => [r, i]).filter(([r]) => !t || r.its.includes(t));
+  const valOf = (r, t) => t ? (r.close[t] || '') : r.done;
+  const listHtml = t => rowsOf(t).map(([r, i]) => `<label style="display:flex; align-items:center; gap:8px; padding:7px 0; border-bottom:1px dashed var(--border); font-size:12.5px; cursor:pointer;">
+            <input type="checkbox" class="pb-chk" data-i="${i}" ${valOf(r, t) ? '' : 'checked'} style="width:auto; margin:0;">
+            <span style="margin:0; font-size:12.5px; color:var(--text); font-weight:700; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${taxjEsc(r.name)}${r.lane ? ` <span style="display:inline; margin:0; font-size:11px; color:${r.lane === 'sameMonth' ? '#059669' : '#e11d48'};">${r.lane === 'sameMonth' ? '당월' : '익월'}</span>` : ''}</span>
+            <span class="hint" style="display:inline; margin:0; white-space:nowrap;">${valOf(r, t) ? payFmtDate(valOf(r, t)) : ''}</span></label>`).join('') || '<div class="hint" style="padding:10px 0;">이 항목은 제출 대상 줄이 없어요.</div>';
   const wrap = document.createElement('div');
   wrap.className = 'sm-modal-backdrop';
   wrap.innerHTML = `<div class="sm-modal wide" role="dialog" aria-modal="true">
       <button type="button" class="sm-modal-x" title="닫기" aria-label="닫기">×</button>
       <div class="sm-modal-ic">✓</div>
-      <div class="sm-modal-title">신고서류 저장일 일괄 입력</div>
+      <div class="sm-modal-title">날짜 일괄 입력</div>
       <div class="sm-modal-fields">
+        <label class="sm-modal-field"><span>항목</span><select class="pb-tgt">${tgts.map(t => `<option value="${escapeAttr(t[0])}">${taxjEsc(t[1])}</option>`).join('')}</select></label>
         <label class="sm-modal-field"><span>날짜</span><div style="display:flex; gap:6px;"><input type="date" class="pb-date" value="${todayStr()}" style="flex:1;"><button type="button" class="btn xs pb-today">오늘</button></div></label>
         <div class="sm-modal-field"><span style="display:flex; align-items:center; gap:6px;"><input type="checkbox" class="pb-all" style="width:auto; margin:0;"> 거래처 <b class="pb-cnt" style="margin-left:auto; font-weight:700;"></b></span>
-          <div class="pb-list" style="max-height:300px; overflow:auto; border:1px solid var(--border); border-radius:12px; padding:2px 10px;">${submitRowsShown.map((r, i) => `<label style="display:flex; align-items:center; gap:8px; padding:7px 0; border-bottom:1px dashed var(--border); font-size:12.5px; cursor:pointer;">
-            <input type="checkbox" class="pb-chk" data-i="${i}" ${r.done ? '' : 'checked'} style="width:auto; margin:0;">
-            <span style="margin:0; font-size:12.5px; color:var(--text); font-weight:700; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${taxjEsc(r.name)}${r.lane ? ` <span style="display:inline; margin:0; font-size:11px; color:${r.lane === 'sameMonth' ? '#059669' : '#e11d48'};">${r.lane === 'sameMonth' ? '당월' : '익월'}</span>` : ''}</span>
-            <span class="hint" style="display:inline; margin:0; white-space:nowrap;">${r.done ? payFmtDate(r.done) : ''}</span></label>`).join('')}</div></div>
+          <div class="pb-list" style="max-height:300px; overflow:auto; border:1px solid var(--border); border-radius:12px; padding:2px 10px;">${listHtml('')}</div></div>
       </div>
       <div class="sm-modal-btns"><button type="button" class="sm-modal-cancel">취소</button><button type="button" class="sm-modal-ok">입력</button></div>
     </div>`;
@@ -9828,13 +9838,16 @@ function submitSavedBulk(){
     const date = $('.pb-date').value || todayStr();
     const picked = [...list.querySelectorAll('.pb-chk')].filter(x => x.checked).map(x => submitRowsShown[Number(x.dataset.i)]);
     if(!picked.length) return smAlert('거래처를 골라 주세요', '목록에서 입력할 거래처를 하나 이상 체크해 주세요.');
-    picked.forEach(r => { const per = submitMine[r.pk] = submitMine[r.pk] || {}; const row = per[r.key] = per[r.key] || { done:'', note:'' }; row.done = date; });
+    const t = $('.pb-tgt').value, tl = $('.pb-tgt').selectedOptions[0].textContent;
+    picked.forEach(r => { const per = submitMine[r.pk] = submitMine[r.pk] || {}; const row = per[r.key] = per[r.key] || { done:'', note:'' }; if(t){ row.close = row.close || {}; row.close[t] = date; } else row.done = date; });
     close(); renderSubmit(); scheduleGoogleSave();
-    smAlert('입력했어요', `신고서류 저장 · ${picked.length}줄에 ${date}`, { icon:'✓' });
+    smAlert('입력했어요', `${tl} · ${picked.length}줄에 ${date}`, { icon:'✓' });
   };
   const onKey = e => { if(e.key === 'Escape'){ e.preventDefault(); e.stopPropagation(); close(); } };
   document.addEventListener('keydown', onKey, true);
-  list.querySelectorAll('.pb-chk').forEach(x => x.addEventListener('change', sync));
+  const wireList = () => list.querySelectorAll('.pb-chk').forEach(x => x.addEventListener('change', sync));
+  wireList();
+  $('.pb-tgt').onchange = () => { list.innerHTML = listHtml($('.pb-tgt').value); wireList(); sync(); };
   $('.pb-today').onclick = () => { $('.pb-date').value = todayStr(); };
   $('.pb-all').addEventListener('change', e => { list.querySelectorAll('.pb-chk').forEach(x => { x.checked = e.target.checked; }); sync(); });
   $('.sm-modal-x').onclick = close; $('.sm-modal-cancel').onclick = close; $('.sm-modal-ok').onclick = apply;
