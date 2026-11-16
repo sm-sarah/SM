@@ -1274,6 +1274,7 @@ function smTogglePcView(){ try{ localStorage.setItem('sm_pc_view', window.SM_PC_
   .mn-band .mn-add{ width:100%; margin-top:4px; box-sizing:border-box; }
   .cl-memo-act{ border:none; background:none; color:var(--muted-soft); cursor:pointer; padding:0 3px; font-size:12px; line-height:1.45; opacity:0; transition:opacity .12s; }   /* [2026.10.27] 결산 메모 줄 - 마우스를 올리면 수정·삭제(요청) */
   .cl-memo-row:hover .cl-memo-act, .cl-memo-act:focus-visible{ opacity:1; }
+  td.sb-on{ background:#fcedf3; }   /* [2026.11.16] 지급명세서 제출 대상 칸(마감·제출일) 음영 */
   .cl-memo-at{ flex:none; font-size:11px; color:var(--muted-soft); font-weight:600; padding-top:1px; }   /* [2026.11.12] 결산 메모 줄 등록일 */
   .cl-memo-act:hover{ color:var(--primary-dark); }
   @media (hover:none){ .cl-memo-act{ opacity:1; } }   /* 휴대폰처럼 마우스가 없으면 늘 보이게 */
@@ -9750,8 +9751,10 @@ function renderSubmit(){
       ${info}
       ${r.cells.map((x, ci) => { const it = items[ci][0], cv = ((m.close || {})[it]) || '';
         if(x.st === 'hide') return `<td>${na}</td><td>${na}</td>`;
-        const closeTd = x.st === 'off' && !cv ? `<td>${na}</td>` : `<td>${payDateBtnHtmlS(r.key, it, cv, pk)}</td>`;
-        return closeTd + `<td>${cellHtml(x)}</td>`; }).join('')}
+        // [2026.11.16] "제출에 해당되는 칸은 마감·제출일 컬러 음영"(요청) - 이번 제출 대상(제출됨·미제출) 칸만 연한 음영
+        const on = x.st === 'done' || x.st === 'todo' ? ' class="sb-on"' : '';
+        const closeTd = x.st === 'off' && !cv ? `<td>${na}</td>` : `<td${on}>${payDateBtnHtmlS(r.key, it, cv, pk)}</td>`;
+        return closeTd + `<td${on}>${cellHtml(x)}</td>`; }).join('')}
       <td><button type="button" class="cl-dt" data-key="${k}" data-pk="${escapeAttr(pk)}" title="${escapeAttr(m.done ? '신고서류 저장 ' + m.done : '신고서류 저장일 입력 (달력·오늘)')}" onclick="submitSavedPop(this)">${payFmtDate(m.done)}</button></td><!-- [2026.10.23] "내 확인 → 신고서류 저장, 아이콘만(눌러서 달력·오늘)"(요청) -->
       ${smCoMemoTd(r.memo, `${r.c.name} · 지급명세서 회사 메모`)}
       <td class="note-cell"><input type="text" value="${escapeAttr(m.note)}" onchange="updateSubmitMine('${k}','note',this.value,'${pk}')" style="width:100%"></td>
