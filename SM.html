@@ -1278,6 +1278,8 @@ function smTogglePcView(){ try{ localStorage.setItem('sm_pc_view', window.SM_PC_
   .sb-v, td.sb-on > .cl-dt{ display:inline-block; background:#f1edfa; border-radius:6px; padding:1px 7px; font-size:11px; line-height:1.5; }   /* [2026.11.16] 아주 연한 보라 + 글자 작게(머리글보다 커서 튀어 보임 - 요청) */
   td.sb-on > .cl-dt{ height:auto; min-width:0; }
   .smc-dcm{ display:inline-flex; align-items:center; gap:2px; white-space:nowrap; } .smc-dcm > input{ margin:0; } .smc-dcm .cl-dt{ min-width:38px; } .smc-dcm-m{ font-size:11px; margin-left:2px; }   /* [2026.11.16] 날짜+체크+메모 칸 */
+  .cl-hist[data-chc]{ margin-top:16px; }   /* 창 닫기 ×와 겹치지 않게 */
+  .cl-ch-act{ display:inline-flex; gap:2px; } .cl-ch-act button{ border:none; background:none; color:var(--muted-soft); cursor:pointer; font-size:11.5px; padding:0 2px; } .cl-ch-act button:hover{ color:var(--primary-dark); } .cl-ch-act button[data-chdel]:hover{ color:var(--rose); }   /* [2026.11.16] 회차 수정·삭제 */
   .cl-round-sel{ display:flex; align-items:center; gap:6px; margin:6px 0 2px; font-size:11.5px; color:var(--muted); font-weight:700; } .cl-round-sel select{ flex:1; font:inherit; font-size:12px; padding:2px 6px; border:1px solid var(--border); border-radius:7px; background:#fff; }   /* [2026.11.16] 결산 칸 창 - 저장할 차수 */
   .cl-memo-at{ flex:none; font-size:11px; color:var(--muted-soft); font-weight:600; padding-top:1px; }   /* [2026.11.12] 결산 메모 줄 등록일 */
   .cl-memo-act:hover{ color:var(--primary-dark); }
@@ -5584,7 +5586,19 @@ function closeTracks(){ return true; }
 function closeRowHist(cid){ const d = closeData[closeKey()]; return (((d && d.rh) || {})[cid]) || []; }
 function closeClone(o){ return JSON.parse(JSON.stringify(o || {})); }
 var closeRoundPick = null;   // [2026.11.16] 칸 창에서 고른 저장 차수(null = 자동)
+// 칸 값 저장: 고른 회차(없으면 가장 큰 회차, 처음이면 1차)에 넣고, 표에 보일 값(가장 큰 회차)을 줄 기록에 반영
 function closeSetVal(cid, colId, val){
+  const d = closeData[closeKey()]; if(!d) return;
+  const C = closeCellHist(cid, colId, true), empty = val === '' || val == null || val === false;
+  const top0 = closeCellTop(C), n = closeRoundPick || (top0 ? top0.n : 1), e = C.find(x => x.n === n);
+  if(empty){ if(e) C.splice(C.indexOf(e), 1); }
+  else if(e){ e.v = val; e.at = todayStr(); }
+  else C.push({ n, v: val, at: todayStr() });
+  closeRoundPick = null;
+  const top = closeCellTop(C);
+  closeSetValRaw(cid, colId, top ? top.v : '');
+}
+function closeSetValRaw(cid, colId, val){
   const d = closeData[closeKey()]; if(!d) return;
   const empty = val === '' || val == null || val === false;
   const cur = (d.v[cid] || {})[colId];
@@ -5593,14 +5607,7 @@ function closeSetVal(cid, colId, val){
   if(!L || !L.length){ L = R[cid] = []; if(d.v[cid] && Object.keys(d.v[cid]).length) L.push({ at:'', v: closeClone(d.v[cid]) }); }   // 회차 기록이 생기기 전 값 = 1회
   const today = todayStr();
   let last = L[L.length - 1];
-  if(closeRoundPick && closeRoundPick <= L.length){   // [2026.11.16] 고른 차수에 저장(지난 차수를 고르면 그 차수 값만 바뀜, 마지막 차수면 지금 값도)
-    const T = L[closeRoundPick - 1]; T.v = T.v || {};
-    if(empty) delete T.v[colId]; else T.v[colId] = val;
-    if(T === last){ d.v[cid] = closeClone(last.v); if(!Object.keys(d.v[cid]).length) delete d.v[cid]; }
-    scheduleGoogleSave(); return;
-  }
-  if(closeRoundPick && closeRoundPick > L.length){ last = { at: today, v: closeClone(last ? last.v : (d.v[cid] || {})) }; L.push(last); }
-  else if(!last || last.at !== today){
+  if(!last || last.at !== today){
     if(empty ? (cur == null || cur === '' || cur === false) : JSON.stringify(cur) === JSON.stringify(val)) { if(!L.length) delete R[cid]; return; }   // 바뀐 게 없으면 회차 안 늘림
     last = { at: today, v: closeClone(last ? last.v : d.v[cid]) }; L.push(last);
   }
@@ -5629,24 +5636,45 @@ function closeRowBadge(cid){
   return ` <button type="button" class="cl-rn" data-cid="${escapeAttr(cid)}" onclick="event.stopPropagation(); closeRowHistPop(this)" title="${L.length}회 · ${escapeAttr(closeRoundLabel(x))} - 눌러서 회차 보기">${L.length}회</button>`;
 }
 // 칸 창 위쪽: 이 칸이 회차마다 어땠는지(바뀐 회차만)
-function closeHistListHtml(cid, colId){
-  const L = closeRowHist(cid), cur = closeGet(cid, colId), today = todayStr();
-  const n = L.length, last = L[n - 1], nextN = !n ? 1 : last.at === today ? n : n + 1;
-  // [2026.11.16] "'이 칸 기록' 이름 빼고, 고칠 때마다 올라가는 게 아니라 결산 차수를 고를 수 있게"(요청) - 기록 줄은 N차, 아래에 저장할 차수 고르기(기본 = 예전처럼: 오늘 이미 고쳤으면 그 차수, 아니면 다음 차수)
-  closeRoundPick = null;
-  const Lv = n ? L : (cur != null && cur !== '' ? [{ at:'' }] : []), defN = !Lv.length ? 1 : (Lv[Lv.length - 1].at === today ? Lv.length : Lv.length + 1);
-  const tip = `<div class="cl-round-sel"><span>저장할 차수</span><select onchange="closeRoundPick = Number(this.value)">${Lv.map((x, i) => `<option value="${i + 1}"${i + 1 === defN ? ' selected' : ''}>${i + 1}차${closeRoundLabel(x) ? ' · ' + closeRoundLabel(x) : ''}</option>`).join('')}${defN > Lv.length ? `<option value="${Lv.length + 1}" selected>${Lv.length + 1}차 (새 차수)</option>` : `<option value="${Lv.length + 1}">${Lv.length + 1}차 (새 차수)</option>`}</select></div>`;
-  const rows = [];
-  let prev;
-  (n ? L : (cur != null && cur !== '' ? [{ at:'', v:{ [colId]: cur } }] : [])).forEach((x, i) => {
-    const v = (x.v || {})[colId];
-    if(JSON.stringify(v) === JSON.stringify(prev)) return; prev = v;
-    if(v == null || v === '' || v === false){ if(i) rows.push([i, '(지움)', x]); return; }
-    rows.push([i, closeHistFmt(colId, v), x]);
+// [2026.11.16] "여러 번 입력하면 횟수가 자꾸 늘어남 - 입력할 때 회차를 내가 지정, 등록된 것 수정·삭제"(요청)
+//   칸마다 따로 쌓는 회차 목록 closeData[키].ch[거래처][항목] = [{ n: 회차, v: 값, at: 날짜 }]. 표에 보이는 값 = 가장 큰 회차 값
+//   예전 기록(줄 전체 스냅숏 rh)만 있던 칸은 처음 열 때 값이 바뀐 순서대로 1·2·3차로 옮겨 씀
+function closeCellHist(cid, colId, make){
+  const d = closeData[closeKey()]; if(!d) return [];
+  const has = d.ch && d.ch[cid] && Array.isArray(d.ch[cid][colId]);
+  if(has) return d.ch[cid][colId];
+  const out = []; let prev;
+  const L = closeRowHist(cid), cur = closeGet(cid, colId);
+  (L.length ? L : (cur != null && cur !== '' ? [{ at:'', v:{ [colId]: cur } }] : [])).forEach(x => {
+    const v = (x.v || {})[colId]; if(JSON.stringify(v) === JSON.stringify(prev)) return; prev = v;
+    if(v == null || v === '' || v === false) return;
+    out.push({ n: out.length + 1, v, at: x.at || '' });
   });
-  return `<div class="cl-hist">${rows.length ? `${rows.map(([i, t, x]) => `<div class="cl-hist-row${i === n - 1 || !n ? ' last' : ''}"><b>${i + 1}차</b><span class="v">${taxjEsc(t)}</span><span class="at">${taxjEsc(closeRoundLabel(x))}</span><span></span></div>`).join('')}` : ''}${tip}</div>`;
+  if(make){ d.ch = d.ch || {}; (d.ch[cid] = d.ch[cid] || {})[colId] = out; }
+  return out;
 }
-function closeHistWire(){}
+function closeCellTop(C){ return C.length ? C.reduce((a, b) => (b.n > a.n ? b : a)) : null; }
+function closeHistListHtml(cid, colId){
+  closeRoundPick = null;
+  const C = closeCellHist(cid, colId).slice().sort((a, b) => a.n - b.n), top = closeCellTop(C), maxN = top ? top.n : 0;
+  const fmtAt = at => at ? `${Number(at.slice(5, 7))}/${Number(at.slice(8))}` : '';
+  const rows = C.map(e => `<div class="cl-hist-row${e === top ? ' last' : ''}" style="grid-template-columns:34px 1fr auto auto;"><b>${e.n}차</b><span class="v">${taxjEsc(closeHistFmt(colId, e.v))}</span><span class="at">${taxjEsc(fmtAt(e.at))}</span><span class="cl-ch-act"><button type="button" data-chedit="${e.n}" title="${e.n}차 수정">✎</button><button type="button" data-chdel="${e.n}" title="${e.n}차 삭제">×</button></span></div>`).join('');
+  const sel = `<div class="cl-round-sel"><span>저장할 회차</span><select class="cl-ch-n" onchange="closeRoundPick = Number(this.value)">${C.map(e => `<option value="${e.n}"${e === top ? ' selected' : ''}>${e.n}차 고치기</option>`).join('')}<option value="${maxN + 1}"${top ? '' : ' selected'}>${maxN + 1}차 새로 입력</option>${Array.from({ length: 3 }, (_, k) => maxN + 2 + k).map(n => `<option value="${n}">${n}차 새로 입력</option>`).join('')}</select></div>`;
+  return `<div class="cl-hist" data-chc="${escapeAttr(cid)}" data-chk="${escapeAttr(colId)}">${rows}${sel}</div>`;
+}
+// 회차 줄의 ✎(그 회차 값을 아래 입력칸에 불러와서 그 회차로 저장) · ×(그 회차 지우기)
+function closeHistWire(pop, fill, redraw){
+  const h = pop.querySelector('.cl-hist[data-chc]'); if(!h) return;
+  const cid = h.dataset.chc, colId = h.dataset.chk, sel = h.querySelector('.cl-ch-n');
+  h.querySelectorAll('[data-chedit]').forEach(b => b.onclick = e => { e.stopPropagation(); const n = Number(b.dataset.chedit), en = closeCellHist(cid, colId).find(x => x.n === n); sel.value = String(n); closeRoundPick = n; if(fill && en) fill(en.v); });
+  h.querySelectorAll('[data-chdel]').forEach(b => b.onclick = async e => {
+    e.stopPropagation(); const n = Number(b.dataset.chdel);
+    closeDatePopClose();
+    if(!(await smConfirm(`${n}차를 지울까요?`, '이 칸의 그 회차 기록만 지워져요.', { tone:'danger', icon:'!', okText:'삭제' }))) return;
+    const C = closeCellHist(cid, colId, true), k = C.findIndex(x => x.n === n); if(k >= 0) C.splice(k, 1);
+    const top = closeCellTop(C); closeSetValRaw(cid, colId, top ? top.v : ''); renderClose();
+  });
+}
 function closeHistPop(){}
 // 상호명 옆 'N회'를 누르면: 회차마다 날짜와 그 회차에 바뀐 칸
 function closeRowHistPop(el){
@@ -5674,7 +5702,15 @@ function closeRowHistPop(el){
 }
 // 작은 창 닫기(×) 버튼
 function closePopX(){ return '<button type="button" class="cl-pop-x" title="닫기" aria-label="닫기">×</button>'; }
-function closePopWire(pop){ const x = pop.querySelector('.cl-pop-x'); if(x) x.onclick = e => { e.stopPropagation(); closeDatePopClose(); }; }
+function closePopWire(pop){ const x = pop.querySelector('.cl-pop-x'); if(x) x.onclick = e => { e.stopPropagation(); closeDatePopClose(); }; try{ closeHistWire(pop, v => closeChFill(pop, v)); }catch(e){ console.warn(e); } }
+// [2026.11.16] 회차 ✎ - 그 회차 값을 창의 입력칸에 채움(날짜·월·기간·글자 창 공통, 공통 칸 창은 회차만 고름)
+function closeChFill(pop, v){
+  const t = v == null ? '' : String(v), di = pop.querySelector('.cl-pop-date'), ti = pop.querySelector('.cl-pop-text'), ia = pop.querySelector('.cl-r-a'), ib = pop.querySelector('.cl-r-b');
+  if(ia && ib){ if(closeIsRange(t)){ const [a, b] = t.split('~'); ia.value = a; ib.value = b; if(ti) ti.value = ''; } else if(ti) ti.value = t; return; }
+  if(di && di.type === 'date'){ const o = closeDateMemo(t); di.value = o.d; if(ti) ti.value = o.m; return; }
+  if(di && di.type === 'month'){ if(/^\d{4}-\d{2}$/.test(t)){ di.value = t; if(ti) ti.value = ''; } else { di.value = ''; if(ti) ti.value = t; } return; }
+  if(ti){ ti.value = t; ti.focus(); }
+}
 // 한 번만: 칸마다 쌓던 기록(d.h, 11/4 잠깐 쓴 방식)을 줄 회차(d.rh)로 바꿈 - 예전 회차 이름(1차·2차) → 입력한 날짜 순서로 회차를 만들고, 기록 없던 칸은 처음부터 있던 값으로
 function closeHToRows(){
   let changed = false;
