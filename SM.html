@@ -9834,11 +9834,14 @@ function submitSavedBulk(){
   const $ = q => wrap.querySelector(q), list = $('.pb-list');
   const sync = () => { const all = [...list.querySelectorAll('.pb-chk')], on = all.filter(x => x.checked).length; $('.pb-all').checked = all.length > 0 && on === all.length; $('.pb-all').indeterminate = on > 0 && on < all.length; $('.pb-cnt').textContent = `${on} / ${all.length}`; };
   const close = () => { document.removeEventListener('keydown', onKey, true); wrap.classList.remove('show'); setTimeout(() => wrap.remove(), 150); };
-  const apply = () => {
+  const apply = async () => {
     const date = $('.pb-date').value || todayStr();
     const picked = [...list.querySelectorAll('.pb-chk')].filter(x => x.checked).map(x => submitRowsShown[Number(x.dataset.i)]);
     if(!picked.length) return smAlert('거래처를 골라 주세요', '목록에서 입력할 거래처를 하나 이상 체크해 주세요.');
     const t = $('.pb-tgt').value, tl = $('.pb-tgt').selectedOptions[0].textContent;
+    // [2026.11.16] "이미 날짜가 있는 줄을 모르고 체크해서 덮어씀"(요청) - 이미 다른 날짜가 있는 줄이 있으면 바꿀지 먼저 물음
+    const over = picked.filter(r => valOf(r, t) && valOf(r, t) !== date);
+    if(over.length && !(await smConfirm(`이미 날짜가 있는 거래처 ${over.length}곳을 바꿀까요?`, over.map(r => `${r.name} : ${payFmtDate(valOf(r, t))} → ${payFmtDate(date)}`).join('\n'), { icon:'!', okText:'바꾸기' }))) return;
     picked.forEach(r => { const per = submitMine[r.pk] = submitMine[r.pk] || {}; const row = per[r.key] = per[r.key] || { done:'', note:'' }; if(t){ row.close = row.close || {}; row.close[t] = date; } else row.done = date; });
     close(); renderSubmit(); scheduleGoogleSave();
     smAlert('입력했어요', `${tl} · ${picked.length}줄에 ${date}`, { icon:'✓' });
@@ -10624,11 +10627,16 @@ function payBulk(){
     sync();
   };
   const close = () => { document.removeEventListener('keydown', onKey, true); wrap.classList.remove('show'); setTimeout(() => wrap.remove(), 150); };
-  const apply = () => {
+  const apply = async () => {
     const item = itemSel.value, date = dateIn.value || todayStr();
     const keys = [...list.querySelectorAll('.pb-chk')].filter(x => x.checked).map(x => payRowsShown[Number(x.dataset.i)].key);
     if(!keys.length) return smAlert('거래처를 골라 주세요', '목록에서 입력할 거래처를 하나 이상 체크해 주세요.');
     const per = payCustomVals[payMonth] = payCustomVals[payMonth] || {};
+    // [2026.11.16] 지급명세서 일괄 입력과 같이 - 이미 다른 값이 있는 줄이 있으면 바꿀지 먼저 물음(모르고 덮어쓰기 방지)
+    const curOf = k => { const row = per[k] || {}; return item === '__paid' || item === '__unpaid' ? (row._payState ? `${row._payState}${row._payCheck ? ' ' + payFmtDate(row._payCheck) : ''}` : '') : (row[item] || ''); };
+    const nameOf = k => (payRowsShown.find(r => r.key === k) || {}).name || k;
+    const over = keys.filter(k => { const c = curOf(k); return c && c !== date; });
+    if(over.length && !(await smConfirm(`이미 입력된 거래처 ${over.length}곳을 바꿀까요?`, over.map(k => `${nameOf(k)} : ${/^\d{4}-/.test(curOf(k)) ? payFmtDate(curOf(k)) : curOf(k)}`).join('\n'), { icon:'!', okText:'바꾸기' }))) return;
     keys.forEach(k => {
       const row = per[k] = per[k] || {};
       if(item === '__paid' || item === '__unpaid'){ row._payState = item === '__paid' ? '완납' : '미납'; row._payCheck = date; if(item === '__paid') delete row._payMsg; }
