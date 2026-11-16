@@ -6301,7 +6301,7 @@ function smAttWire(pop, sc, per, row, col, after, gone){
     e.stopPropagation(); const f = F[+b.dataset.fmemo]; if(!f) return; const chip = b.closest('.att-chip');
     chip.querySelectorAll('a, .att-memo-at, .att-me, [data-fdel]').forEach(x => x.style.display = 'none');
     chip.insertAdjacentHTML('beforeend', `<input type="text" class="att-memo-in" value="${escapeAttr(f.name || '')}" placeholder="파일 이름"><button type="button" class="att-memo-ok">저장</button>`);
-    const inp = chip.querySelector('.att-memo-in'), done = () => { const t = inp.value.trim(); if(t && t !== f.name){ f.name = t; scheduleGoogleSave(); } if(after) after(); };
+    const inp = chip.querySelector('.att-memo-in'), done = () => { let t = inp.value.trim(); if(t && t !== f.name){ const oe = smExt(f.orig || f.name); if(!f.orig) f.orig = f.name; if(oe && smExt(t) !== oe) t += '.' + oe; f.name = t; scheduleGoogleSave(); } if(after) after(); };   // 확장자는 그대로 붙임(빼면 미리보기가 종류를 몰라서), 처음 이름은 orig
     inp.addEventListener('keydown', ev => { if(ev.key === 'Enter' && !ev.isComposing){ ev.preventDefault(); done(); } if(ev.key === 'Escape'){ ev.preventDefault(); ev.stopPropagation(); if(after) after(); } });
     chip.querySelector('.att-memo-ok').onclick = ev => { ev.stopPropagation(); done(); };
     inp.focus();
@@ -12788,7 +12788,10 @@ function smPvCandidates(){
 }
 function smPvPane(doc, f, removable, onRemove){
   const win = doc.defaultView || window;
-  const ext = smExt(f.name), direct = SM_PV_DIRECT[ext], viaDrive = SM_PV_DRIVE.includes(ext);
+  // [2026.11.16] "이름을 바꾸니 불러올 수 없대"(요청) - 파일 종류는 바꾸기 전 이름(orig)으로 판단, 확장자가 아예 없으면 내용 앞부분으로 알아냄(아래)
+  const fo0 = smAttFindById(f.id);
+  let ext = smExt((fo0 && fo0.orig) || f.orig || f.name), direct = SM_PV_DIRECT[ext], viaDrive = SM_PV_DRIVE.includes(ext);
+  const sniff = !direct && !viaDrive && !ext;
   const el = doc.createElement('div'); el.className = 'sm-pv-pane';
   el.innerHTML = `<div class="sm-pv-ph"><span class="sm-pv-pn" title="${escapeAttr(f.name)}">${taxjEsc(f.name)}</span>
       ${direct ? `<button class="sm-pv-tb sm-pv-ib" data-a="out" title="축소 (Ctrl+휠)">−</button><span class="sm-pv-z">-</span><button class="sm-pv-tb sm-pv-ib" data-a="in" title="확대 (Ctrl+휠)">+</button><button class="sm-pv-tb" data-a="fit" title="폭에 맞추기">맞춤</button><button class="sm-pv-tb sm-pv-ib on" data-a="hand" title="손 도구: 끌어서 이동 (끄면 글자 선택)" aria-label="손 도구">${SM_PV_HAND}</button>` : ''}
@@ -12838,6 +12841,9 @@ function smPvPane(doc, f, removable, onRemove){
   let firstDraw = true;
   const keepCenter = fn => { if(firstDraw){ firstDraw = false; fn(); sc.scrollTop = 0; sc.scrollLeft = Math.max(0, (sc.scrollWidth - sc.clientWidth) / 2); return; } const rx = sc.scrollWidth ? (sc.scrollLeft + sc.clientWidth / 2) / sc.scrollWidth : 0.5, ry = sc.scrollHeight ? (sc.scrollTop + sc.clientHeight / 2) / sc.scrollHeight : 0; fn(); sc.scrollLeft = rx * sc.scrollWidth - sc.clientWidth / 2; sc.scrollTop = ry * sc.scrollHeight - sc.clientHeight / 2; };
   (async () => {
+    if(sniff){ try{ const b = new Uint8Array((await smPvFetch(f)).slice(0, 12)), h = [...b].map(x => x.toString(16).padStart(2, '0')).join('');
+      ext = h.startsWith('89504e47') ? 'png' : h.startsWith('ffd8ff') ? 'jpg' : h.startsWith('47494638') ? 'gif' : h.startsWith('25504446') ? 'pdf' : (h.startsWith('52494646') && h.slice(16, 24) === '57454250') ? 'webp' : '';
+      direct = SM_PV_DIRECT[ext]; if(ext && fo0 && !fo0.orig){ fo0.orig = `${fo0.name || 'file'}.${ext}`; scheduleGoogleSave(); } }catch(e){} }
     if(!direct && !viaDrive){ cannot(ext === 'hwp' || ext === 'hwpx' ? '한글(.hwp) 파일은 미리보기를 할 수 없어요. PDF로 저장해 올리면 미리보기와 내용 검색이 돼요.' : `.${ext || '?'} 파일은 미리보기를 지원하지 않아요.`); return; }
     if(viaDrive){ sc.classList.remove('hand'); sc.innerHTML = `<iframe class="sm-pv-frame" src="https://drive.google.com/file/d/${encodeURIComponent(f.id)}/preview"></iframe>`; return; }
     try{
