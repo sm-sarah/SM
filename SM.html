@@ -1274,7 +1274,7 @@ function smTogglePcView(){ try{ localStorage.setItem('sm_pc_view', window.SM_PC_
   .mn-band .mn-add{ width:100%; margin-top:4px; box-sizing:border-box; }
   .cl-memo-act{ border:none; background:none; color:var(--muted-soft); cursor:pointer; padding:0 3px; font-size:12px; line-height:1.45; opacity:0; transition:opacity .12s; }   /* [2026.10.27] 결산 메모 줄 - 마우스를 올리면 수정·삭제(요청) */
   .cl-memo-row:hover .cl-memo-act, .cl-memo-act:focus-visible{ opacity:1; }
-  td.sb-on{ background:#fcedf3; }   /* [2026.11.16] 지급명세서 제출 대상 칸(마감·제출일) 음영 */
+  td.sb-on{ background:#fff7e0; }   /* [2026.11.16] 지급명세서 제출 대상 칸(마감·제출일) 음영 - 머리글 핑크와 겹치지 않게 연한 골드(요청) */
   .cl-memo-at{ flex:none; font-size:11px; color:var(--muted-soft); font-weight:600; padding-top:1px; }   /* [2026.11.12] 결산 메모 줄 등록일 */
   .cl-memo-act:hover{ color:var(--primary-dark); }
   @media (hover:none){ .cl-memo-act{ opacity:1; } }   /* 휴대폰처럼 마우스가 없으면 늘 보이게 */
