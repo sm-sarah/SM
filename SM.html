@@ -1284,6 +1284,7 @@ function smTogglePcView(){ try{ localStorage.setItem('sm_pc_view', window.SM_PC_
   .cl-ic-sub{ display:block; font-size:9.5px; font-weight:700; color:var(--muted); margin-top:2px; white-space:nowrap; }   /* [2026.11.16] 결산 아이콘 아래 날짜 */
   .sm-tool-ic.on{ border-color:var(--primary); color:var(--primary-dark); background:var(--primary-soft); }
   .sm-mpeek{ margin-left:3px; font-size:11px; cursor:pointer; }   /* [2026.11.16] 긴 메모 아이콘 */
+  .rd-na-row{ margin-top:4px; } .rd-na.on{ background:var(--primary-soft); border-color:var(--primary); color:var(--primary-dark); font-weight:800; }   /* [2026.11.16] 미해당 버튼 */
   .cl-pop-row.cl-pop-btns{ justify-content:center !important; gap:8px; }   /* [2026.11.16] 저장·닫기 아래 가운데 */
   .rd-pane[hidden]{ display:none !important; }
   .rd-modes button.on{ background:var(--primary-soft); border-color:var(--primary); color:var(--primary-dark); font-weight:800; }   /* [2026.11.16] 기간 고르는 방법 */
@@ -5711,6 +5712,11 @@ function closeRowHistPop(el){
 // 작은 창 닫기(×) 버튼
 function closePopX(){ return '<button type="button" class="cl-pop-x" title="닫기" aria-label="닫기">×</button>'; }
 function closePopWire(pop){ const x = pop.querySelector('.cl-pop-x'); if(x) x.onclick = e => { e.stopPropagation(); closeDatePopClose(); };
+  // [2026.11.16] "미해당을 메모에 계속 치기 힘드니 버튼으로"(요청) - 메모칸이 있는 날짜·기간 창(결산 날짜, 기간·월+처리날짜, 날짜+체크+메모)에 '미해당' 버튼(다시 누르면 빼기)
+  { const mi = pop.querySelector('.rd-m') || (pop.querySelector('.cl-pop-date[type=date]') ? pop.querySelector('.cl-pop-text') : null);
+    if(mi && !pop.querySelector('.rd-na')){ const row = document.createElement('div'); row.className = 'cl-pop-row rd-na-row'; row.innerHTML = '<button type="button" class="rd-na">미해당</button>'; mi.insertAdjacentElement('afterend', row);
+      const b = row.firstChild, paint = () => b.classList.toggle('on', mi.value.trim() === '미해당');
+      b.onclick = e => { e.stopPropagation(); mi.value = mi.value.trim() === '미해당' ? '' : '미해당'; paint(); }; mi.addEventListener('input', paint); paint(); } }
   // [2026.11.16] "닫기 버튼이 두 개라 헷갈림 - 아래 가운데에 저장·닫기만, 위 ×는 지움"(요청) - 저장 버튼이 있는 창은 위 ×를 빼고 저장 줄을 가운데로, 닫기(또는 취소)가 없으면 넣음
   { const ok = pop.querySelector('[data-a=ok], [data-v=__ok]');
     if(ok){ if(x) x.remove(); const row = ok.parentElement; row.classList.add('cl-pop-btns');
