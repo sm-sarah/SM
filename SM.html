@@ -1280,6 +1280,8 @@ function smTogglePcView(){ try{ localStorage.setItem('sm_pc_view', window.SM_PC_
   .smc-dcm{ display:inline-flex; align-items:center; gap:2px; white-space:nowrap; } .smc-dcm > input{ margin:0; } .smc-dcm .cl-dt{ min-width:38px; } .smc-dcm-m{ font-size:11px; margin-left:2px; }   /* [2026.11.16] 날짜+체크+메모 칸 */
   .cl-hist[data-chc]{ margin-top:16px; }   /* 창 닫기 ×와 겹치지 않게 */
   .cl-ch-act{ display:inline-flex; gap:2px; } .cl-ch-act button{ border:none; background:none; color:var(--muted-soft); cursor:pointer; font-size:11.5px; padding:0 2px; } .cl-ch-act button:hover{ color:var(--primary-dark); } .cl-ch-act button[data-chdel]:hover{ color:var(--rose); }   /* [2026.11.16] 회차 수정·삭제 */
+  .sm-mpeek{ margin-left:3px; font-size:11px; cursor:pointer; }   /* [2026.11.16] 긴 메모 아이콘 */
+  .cl-pop-row.cl-pop-btns{ justify-content:center !important; gap:8px; }   /* [2026.11.16] 저장·닫기 아래 가운데 */
   .rd-pane[hidden]{ display:none !important; }
   .rd-modes button.on{ background:var(--primary-soft); border-color:var(--primary); color:var(--primary-dark); font-weight:800; }   /* [2026.11.16] 기간 고르는 방법 */
   .cl-round-sel{ display:flex; align-items:center; gap:6px; margin:6px 0 2px; font-size:11.5px; color:var(--muted); font-weight:700; } .cl-round-sel select{ flex:1; font:inherit; font-size:12px; padding:2px 6px; border:1px solid var(--border); border-radius:7px; background:#fff; }   /* [2026.11.16] 결산 칸 창 - 저장할 차수 */
@@ -5704,7 +5706,11 @@ function closeRowHistPop(el){
 }
 // 작은 창 닫기(×) 버튼
 function closePopX(){ return '<button type="button" class="cl-pop-x" title="닫기" aria-label="닫기">×</button>'; }
-function closePopWire(pop){ const x = pop.querySelector('.cl-pop-x'); if(x) x.onclick = e => { e.stopPropagation(); closeDatePopClose(); }; try{ closeHistWire(pop, v => closeChFill(pop, v)); }catch(e){ console.warn(e); } }
+function closePopWire(pop){ const x = pop.querySelector('.cl-pop-x'); if(x) x.onclick = e => { e.stopPropagation(); closeDatePopClose(); };
+  // [2026.11.16] "닫기 버튼이 두 개라 헷갈림 - 아래 가운데에 저장·닫기만, 위 ×는 지움"(요청) - 저장 버튼이 있는 창은 위 ×를 빼고 저장 줄을 가운데로, 닫기(또는 취소)가 없으면 넣음
+  { const ok = pop.querySelector('[data-a=ok], [data-v=__ok]');
+    if(ok){ if(x) x.remove(); const row = ok.parentElement; row.classList.add('cl-pop-btns');
+      if(!row.querySelector('[data-a=close], [data-a=back], [data-a=xclose]')){ const b = document.createElement('button'); b.type = 'button'; b.dataset.a = 'xclose'; b.textContent = '닫기'; b.onclick = e => { e.stopPropagation(); closeDatePopClose(); }; row.insertBefore(b, ok); } } } try{ closeHistWire(pop, v => closeChFill(pop, v)); }catch(e){ console.warn(e); } }
 // [2026.11.16] 회차 ✎ - 그 회차 값을 창의 입력칸에 채움(날짜·월·기간·글자 창 공통, 공통 칸 창은 회차만 고름)
 function closeChFill(pop, v){
   const t = v == null ? '' : String(v), di = pop.querySelector('.cl-pop-date'), ti = pop.querySelector('.cl-pop-text'), ia = pop.querySelector('.cl-r-a'), ib = pop.querySelector('.cl-r-b');
@@ -5789,6 +5795,27 @@ function closeMergeRounds(){
   return true;
 }
 // [2026.11.16] 날짜 칸 = 날짜만 'YYYY-MM-DD' / 메모만 '글자' / 둘 다 'YYYY-MM-DD 글자'
+// [2026.11.16] "날짜와 같이 넣은 메모가 길면 아이콘으로, 누르면 내용 팝업"(요청) - 표 칸 글자에서 메모가 SM_MEMO_SHORT자를 넘으면 📝만, 누르면 메모 창
+const SM_MEMO_SHORT = 8;
+function smMemoShort(parts, m){
+  const head = parts.filter(Boolean).map(taxjEsc).join(' · ');
+  if(!m) return head;
+  if(m.length <= SM_MEMO_SHORT) return [head, taxjEsc(m)].filter(Boolean).join(' · ');
+  return `${head}<span class="sm-mpeek" data-t="${escapeAttr(m)}" title="${escapeAttr(m)}">📝</span>`;
+}
+document.addEventListener('click', e => {
+  const el = e.target && e.target.closest ? e.target.closest('.sm-mpeek') : null; if(!el) return;
+  e.preventDefault(); e.stopImmediatePropagation();
+  closeDatePopClose();
+  const r = el.getBoundingClientRect(), pop = document.createElement('div');
+  pop.id = 'closeDatePop'; pop.className = 'cl-pop'; pop.style.width = '260px';
+  pop.innerHTML = `${closePopX()}<div class="rd-lab" style="margin-top:2px;">메모</div><div style="white-space:pre-wrap; word-break:break-all; font-size:12.5px; line-height:1.5; padding-right:14px;">${taxjEsc(el.dataset.t)}</div>`;
+  document.body.appendChild(pop); closePopWire(pop);
+  const pw = pop.offsetWidth, ph = pop.offsetHeight;
+  pop.style.left = Math.max(8, Math.min(window.innerWidth - pw - 8, r.left - 20)) + 'px';
+  pop.style.top = (r.bottom + ph + 8 > window.innerHeight ? Math.max(8, r.top - ph - 4) : r.bottom + 4) + 'px';
+  setTimeout(() => document.addEventListener('mousedown', closeDatePopOutside, true), 0);
+}, true);
 function closeDateMemo(v){ const t = v == null ? '' : String(v); const m = /^(\d{4}-\d{2}-\d{2})(?:\s+([\s\S]*))?$/.exec(t); return m ? { d: m[1], m: (m[2] || '').trim() } : { d: '', m: t }; }
 function closeDateMemoVal(d, m){ return d && m ? `${d} ${m}` : d || m || ''; }
 function closeFmtDate(v){
@@ -6546,9 +6573,9 @@ function smcTd(s, k, col, val, tdCls){
   const AF = t === 'memo' ? smAttOf(smAttKey(s === 'close' ? 'close' : s, smcPer(s), k, col.id)) : [];   // [2026.11.11] 글자(팝업) 첨부파일
   if(smcIsIcon(col)) return `${td}<button type="button" class="cl-dt vp-memo${has || AF.length ? ' has' : ''}" ${at} title="${escapeAttr((has ? (t === 'memo' ? String(val) : smcFmt(t, val, y)) : AF.length ? '' : '입력') + smAttTip(AF))}" onclick="smcPop(this)">${AF.length ? ICON_CL_CLIP + (AF.length > 1 ? `<span class="vt-ic-n">${AF.length}</span>` : '') : has ? (/^(date|month|range|rangedate|monthdate)$/.test(t) ? ICON_CL_CAL : ICON_MEMO_DOC) : ''}</button></td>`;
   if(t === 'select'){ const opts = col.opts || [], sv = has ? String(val) : ''; return `<td><select class="vp-in" style="min-width:84px;" ${at} onchange="smcSet(this, this.value)"><option value=""></option>${(sv && !opts.includes(sv) ? [sv] : []).concat(opts).map(o => `<option ${o === sv ? 'selected' : ''}>${taxjEsc(o)}</option>`).join('')}</select></td>`; }
-  if(t === 'monthdate' && !smcIsIcon(col)){ const o = smcMd(val), y2 = S.year(); return `${td}<button type="button" class="cl-dt" ${at} title="${escapeAttr(has ? smcFmt(t, val, y2) : '입력')}" onclick="smcPop(this)">${has ? `${taxjEsc([o.mo ? smcFmt('month', o.mo, y2) : '', o.m].filter(Boolean).join(' · '))}${o.d ? `<span class="rd-dd">✓${taxjEsc(smcFmt('date', o.d, y2))}</span>` : ''}` : ''}</button></td>`; }   // [2026.11.11] 월+처리날짜
+  if(t === 'monthdate' && !smcIsIcon(col)){ const o = smcMd(val), y2 = S.year(); return `${td}<button type="button" class="cl-dt" ${at} title="${escapeAttr(has ? smcFmt(t, val, y2) : '입력')}" onclick="smcPop(this)">${has ? `${smMemoShort([o.mo ? smcFmt('month', o.mo, y2) : ''], o.m)}${o.d ? `<span class="rd-dd">✓${taxjEsc(smcFmt('date', o.d, y2))}</span>` : ''}` : ''}</button></td>`; }   // [2026.11.11] 월+처리날짜
   if(t === 'dcm' && !smcIsIcon(col)){ const o = smcDcm(val); return `${td}<span class="smc-dcm"><input type="checkbox" ${o.ck ? 'checked' : ''} ${at} title="체크" onchange="smcDcmCheck(this)"><button type="button" class="cl-dt" ${at} title="${escapeAttr(has ? smcFmt(t, val, y) : '날짜·메모 입력')}" onclick="smcPop(this)">${o.d ? taxjEsc(smcFmt('date', o.d, y)) : ''}${o.m ? `<span class="smc-dcm-m" title="${escapeAttr(o.m)}">📝</span>` : ''}</button></span></td>`; }   // [2026.11.16] 날짜+체크+메모
-  if(t === 'rangedate'){ const o = smcRd(val), y2 = S.year(); return `${td}<button type="button" class="cl-dt" ${at} title="${escapeAttr(has ? smcFmt(t, val, y2) : '입력')}" onclick="smcPop(this)">${has ? `${taxjEsc([o.r ? smcFmt('range', o.r, y2) : '', o.m].filter(Boolean).join(' · '))}${o.d ? `<span class="rd-dd">✓${taxjEsc(smcFmt('date', o.d, y2))}</span>` : ''}` : ''}</button></td>`; }
+  if(t === 'rangedate'){ const o = smcRd(val), y2 = S.year(); return `${td}<button type="button" class="cl-dt" ${at} title="${escapeAttr(has ? smcFmt(t, val, y2) : '입력')}" onclick="smcPop(this)">${has ? `${smMemoShort([o.r ? smcFmt('range', o.r, y2) : ''], o.m)}${o.d ? `<span class="rd-dd">✓${taxjEsc(smcFmt('date', o.d, y2))}</span>` : ''}` : ''}</button></td>`; }
   if(t === 'text' || t === 'num') return `<td class="note-cell"><input type="text" value="${escapeAttr(smcFmt(t, val, y))}" ${at}${t === 'num' ? ' inputmode="numeric"' : ''} onchange="smcText(this)" style="width:100%;${t === 'num' ? ' text-align:right;' : ''}"></td>`;
   return `${td}<button type="button" class="cl-dt" ${at} title="${escapeAttr(has ? String(val) : '입력')}" onclick="smcPop(this)">${taxjEsc(smcFmt(t, val, y))}</button></td>`;
 }
@@ -6746,7 +6773,7 @@ function closeTableHtml(docs){
       }
       if(c.type === 'range') return `<td style="text-align:center;" class="${hb ? 'cl-has-h' : ''}"><button type="button" class="cl-dt${val && !closeIsRange(val) ? ' txt' : ''}" data-cid="${cid}" data-col="${c.id}" title="${escapeAttr(val || '')}" onclick="closeRangePop(this)">${taxjEsc(closeFmtRange(val))}</button>${hb}</td>`;
       if(c.type === 'month') return `<td style="text-align:center;" class="${hb ? 'cl-has-h' : ''}"><button type="button" class="cl-dt${val && !CLOSE_YM_RE.test(val) ? ' txt' : ''}" data-cid="${cid}" data-col="${c.id}" title="${escapeAttr(val || '')}" onclick="closeMonthPop(this)">${taxjEsc(closeFmtMonth(val))}</button>${hb}</td>`;
-      if(c.type === 'date') return `<td style="text-align:center;" class="${hb ? 'cl-has-h' : ''}"><button type="button" class="cl-dt${val && !CLOSE_ISO_RE.test(val) ? ' txt' : ''}" data-cid="${cid}" data-col="${c.id}" title="${escapeAttr(val || '')}" onclick="closeDatePop(this)">${taxjEsc(closeFmtDate(val))}</button>${hb}</td>`;
+      if(c.type === 'date') return `<td style="text-align:center;" class="${hb ? 'cl-has-h' : ''}"><button type="button" class="cl-dt${val && !CLOSE_ISO_RE.test(val) ? ' txt' : ''}" data-cid="${cid}" data-col="${c.id}" title="${escapeAttr(val || '')}" onclick="closeDatePop(this)">${(() => { const o = closeDateMemo(val); return o.m.length > SM_MEMO_SHORT ? smMemoShort([o.d ? closeFmtDate(o.d) : ''], o.m) : taxjEsc(closeFmtDate(val)); })()}</button>${hb}</td>`;
       const s = val == null ? '' : typeof val === 'number' ? val.toLocaleString('ko-KR') : String(val);
       const hbt = hb ? hb.replace('<span class="cl-hn"', `<span class="cl-hn" data-cid="${cid}" data-col="${c.id}" onclick="closeHistPop(this)"`) : '';
       if(c.type === 'num') return `<td class="${hb ? 'cl-has-h' : ''}"><input class="vp-in" inputmode="numeric" style="width:${w[c.id]}px; text-align:right;" value="${escapeAttr(s)}" onchange="closeNumInput(this,'${cid}','${c.id}')">${hbt}</td>`;
