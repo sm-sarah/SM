@@ -1278,6 +1278,7 @@ function smTogglePcView(){ try{ localStorage.setItem('sm_pc_view', window.SM_PC_
   .sb-v, td.sb-on > .cl-dt{ display:inline-block; background:#f1edfa; border-radius:6px; padding:1px 7px; font-size:11px; line-height:1.5; }   /* [2026.11.16] 아주 연한 보라 + 글자 작게(머리글보다 커서 튀어 보임 - 요청) */
   td.sb-on > .cl-dt{ height:auto; min-width:0; }
   .smc-dcm{ display:inline-flex; align-items:center; gap:2px; white-space:nowrap; } .smc-dcm > input{ margin:0; } .smc-dcm .cl-dt{ min-width:38px; } .smc-dcm-m{ font-size:11px; margin-left:2px; }   /* [2026.11.16] 날짜+체크+메모 칸 */
+  .cl-round-sel{ display:flex; align-items:center; gap:6px; margin:6px 0 2px; font-size:11.5px; color:var(--muted); font-weight:700; } .cl-round-sel select{ flex:1; font:inherit; font-size:12px; padding:2px 6px; border:1px solid var(--border); border-radius:7px; background:#fff; }   /* [2026.11.16] 결산 칸 창 - 저장할 차수 */
   .cl-memo-at{ flex:none; font-size:11px; color:var(--muted-soft); font-weight:600; padding-top:1px; }   /* [2026.11.12] 결산 메모 줄 등록일 */
   .cl-memo-act:hover{ color:var(--primary-dark); }
   @media (hover:none){ .cl-memo-act{ opacity:1; } }   /* 휴대폰처럼 마우스가 없으면 늘 보이게 */
@@ -5582,6 +5583,7 @@ function smShowPicker(di){
 function closeTracks(){ return true; }
 function closeRowHist(cid){ const d = closeData[closeKey()]; return (((d && d.rh) || {})[cid]) || []; }
 function closeClone(o){ return JSON.parse(JSON.stringify(o || {})); }
+var closeRoundPick = null;   // [2026.11.16] 칸 창에서 고른 저장 차수(null = 자동)
 function closeSetVal(cid, colId, val){
   const d = closeData[closeKey()]; if(!d) return;
   const empty = val === '' || val == null || val === false;
@@ -5591,7 +5593,14 @@ function closeSetVal(cid, colId, val){
   if(!L || !L.length){ L = R[cid] = []; if(d.v[cid] && Object.keys(d.v[cid]).length) L.push({ at:'', v: closeClone(d.v[cid]) }); }   // 회차 기록이 생기기 전 값 = 1회
   const today = todayStr();
   let last = L[L.length - 1];
-  if(!last || last.at !== today){
+  if(closeRoundPick && closeRoundPick <= L.length){   // [2026.11.16] 고른 차수에 저장(지난 차수를 고르면 그 차수 값만 바뀜, 마지막 차수면 지금 값도)
+    const T = L[closeRoundPick - 1]; T.v = T.v || {};
+    if(empty) delete T.v[colId]; else T.v[colId] = val;
+    if(T === last){ d.v[cid] = closeClone(last.v); if(!Object.keys(d.v[cid]).length) delete d.v[cid]; }
+    scheduleGoogleSave(); return;
+  }
+  if(closeRoundPick && closeRoundPick > L.length){ last = { at: today, v: closeClone(last ? last.v : (d.v[cid] || {})) }; L.push(last); }
+  else if(!last || last.at !== today){
     if(empty ? (cur == null || cur === '' || cur === false) : JSON.stringify(cur) === JSON.stringify(val)) { if(!L.length) delete R[cid]; return; }   // 바뀐 게 없으면 회차 안 늘림
     last = { at: today, v: closeClone(last ? last.v : d.v[cid]) }; L.push(last);
   }
@@ -5623,7 +5632,10 @@ function closeRowBadge(cid){
 function closeHistListHtml(cid, colId){
   const L = closeRowHist(cid), cur = closeGet(cid, colId), today = todayStr();
   const n = L.length, last = L[n - 1], nextN = !n ? 1 : last.at === today ? n : n + 1;
-  const tip = `<div class="cl-hist-tip">${n && last.at === today ? `오늘 고치는 칸은 모두 ${n}회(오늘)로 묶여요` : `값을 바꾸면 이 거래처 ${nextN}회(오늘)로 기록돼요`}</div>`;
+  // [2026.11.16] "'이 칸 기록' 이름 빼고, 고칠 때마다 올라가는 게 아니라 결산 차수를 고를 수 있게"(요청) - 기록 줄은 N차, 아래에 저장할 차수 고르기(기본 = 예전처럼: 오늘 이미 고쳤으면 그 차수, 아니면 다음 차수)
+  closeRoundPick = null;
+  const Lv = n ? L : (cur != null && cur !== '' ? [{ at:'' }] : []), defN = !Lv.length ? 1 : (Lv[Lv.length - 1].at === today ? Lv.length : Lv.length + 1);
+  const tip = `<div class="cl-round-sel"><span>저장할 차수</span><select onchange="closeRoundPick = Number(this.value)">${Lv.map((x, i) => `<option value="${i + 1}"${i + 1 === defN ? ' selected' : ''}>${i + 1}차${closeRoundLabel(x) ? ' · ' + closeRoundLabel(x) : ''}</option>`).join('')}${defN > Lv.length ? `<option value="${Lv.length + 1}" selected>${Lv.length + 1}차 (새 차수)</option>` : `<option value="${Lv.length + 1}">${Lv.length + 1}차 (새 차수)</option>`}</select></div>`;
   const rows = [];
   let prev;
   (n ? L : (cur != null && cur !== '' ? [{ at:'', v:{ [colId]: cur } }] : [])).forEach((x, i) => {
@@ -5632,7 +5644,7 @@ function closeHistListHtml(cid, colId){
     if(v == null || v === '' || v === false){ if(i) rows.push([i, '(지움)', x]); return; }
     rows.push([i, closeHistFmt(colId, v), x]);
   });
-  return `<div class="cl-hist">${rows.length ? `<div class="cl-hist-h">이 칸 기록</div>${rows.map(([i, t, x]) => `<div class="cl-hist-row${i === n - 1 || !n ? ' last' : ''}"><b>${i + 1}회</b><span class="v">${taxjEsc(t)}</span><span class="at">${taxjEsc(closeRoundLabel(x))}</span><span></span></div>`).join('')}` : ''}${tip}</div>`;
+  return `<div class="cl-hist">${rows.length ? `${rows.map(([i, t, x]) => `<div class="cl-hist-row${i === n - 1 || !n ? ' last' : ''}"><b>${i + 1}차</b><span class="v">${taxjEsc(t)}</span><span class="at">${taxjEsc(closeRoundLabel(x))}</span><span></span></div>`).join('')}` : ''}${tip}</div>`;
 }
 function closeHistWire(){}
 function closeHistPop(){}
@@ -5738,8 +5750,12 @@ function closeMergeRounds(){
   scheduleGoogleSave();
   return true;
 }
+// [2026.11.16] 날짜 칸 = 날짜만 'YYYY-MM-DD' / 메모만 '글자' / 둘 다 'YYYY-MM-DD 글자'
+function closeDateMemo(v){ const t = v == null ? '' : String(v); const m = /^(\d{4}-\d{2}-\d{2})(?:\s+([\s\S]*))?$/.exec(t); return m ? { d: m[1], m: (m[2] || '').trim() } : { d: '', m: t }; }
+function closeDateMemoVal(d, m){ return d && m ? `${d} ${m}` : d || m || ''; }
 function closeFmtDate(v){
   if(v == null || v === '') return '';
+  { const o = closeDateMemo(v); if(o.d && o.m) return `${closeFmtDate(o.d)} ${o.m}`; }
   if(CLOSE_ISO_RE.test(v)){ const [y, m, d] = v.split('-'); return `${y === String(closeYear) ? '' : y.slice(2) + '.'}${Number(m)}/${Number(d)}`; }
   return String(v);
 }
@@ -5974,27 +5990,29 @@ async function closeImport(input){
   }
 }
 // 날짜 칸: 누르면 작은 창(달력·오늘·x/-/미해당·지우기·직접 입력)
-function closeDatePopClose(){ const p = document.getElementById('closeDatePop'); if(p) p.remove(); document.removeEventListener('mousedown', closeDatePopOutside, true); }
+function closeDatePopClose(){ const p = document.getElementById('closeDatePop'); if(p) p.remove(); setTimeout(() => { if(!document.getElementById('closeDatePop')) closeRoundPick = null; }, 0); /* [2026.11.16] 창을 닫고 바로 저장하는 창도 있어서 한 박자 뒤에 비움 */ document.removeEventListener('mousedown', closeDatePopOutside, true); }
 function closeDatePopOutside(e){ const p = document.getElementById('closeDatePop'); if(p && !p.contains(e.target) && !e.target.closest('.cl-dt')) closeDatePopClose(); }
 function closeDatePop(btn){
   closeDatePopClose();
-  const { cid, col } = btn.dataset, cur = closeGet(cid, col), iso = CLOSE_ISO_RE.test(cur || '');
+  const { cid, col } = btn.dataset, cur0 = closeGet(cid, col), dm = closeDateMemo(cur0), cur = dm.m, iso = !!dm.d;
   const pop = document.createElement('div');
   pop.id = 'closeDatePop'; pop.className = 'cl-pop';
-  pop.innerHTML = `${closePopX()}${closeHistListHtml(cid, col)}<input type="date" class="cl-pop-date" value="${iso ? cur : ''}">
+  pop.innerHTML = `${closePopX()}${closeHistListHtml(cid, col)}<input type="date" class="cl-pop-date" value="${dm.d}">
     <div class="cl-pop-row"><button type="button" data-v="__today">오늘</button><button type="button" data-v="__clear" class="del" title="이 칸을 비워요(오늘 회차에서)">지우기</button></div><!-- [2026.11.04] x·-·미해당 버튼 뺌(요청) - 직접 입력으로 -->
-    <input type="text" class="cl-pop-text" placeholder="직접 입력 후 Enter" value="${iso || cur == null ? '' : escapeAttr(String(cur))}">`;
+    <input type="text" class="cl-pop-text" placeholder="메모 (날짜와 같이 넣어도 돼요)" value="${escapeAttr(cur || '')}">
+    <div class="cl-pop-row" style="justify-content:flex-end;"><button type="button" data-a="ok" style="font-weight:800; color:var(--primary-dark);">저장</button></div>`;   // [2026.11.16] "날짜·메모 둘 다, 날짜만, 메모만 - 하나 넣으면 꺼짐"(요청) - 날짜를 골라도 바로 닫지 않고 저장 버튼(메모 Enter = 저장)
   document.body.appendChild(pop);
   const r = btn.getBoundingClientRect(), pw = pop.offsetWidth, ph = pop.offsetHeight;
   pop.style.left = Math.max(8, Math.min(window.innerWidth - pw - 8, r.left)) + 'px';
   pop.style.top = (r.bottom + ph + 8 > window.innerHeight ? r.top - ph - 4 : r.bottom + 4) + 'px';
   const set = v => { closeSetVal(cid, col, v); closeDatePopClose(); renderClose(); };
   closePopWire(pop);
-  const di = pop.querySelector('.cl-pop-date');
-  di.addEventListener('change', () => { if(di.value) set(di.value); });
-  pop.querySelectorAll('[data-v]').forEach(b => b.onclick = () => set(b.dataset.v === '__today' ? todayStr() : b.dataset.v === '__clear' ? '' : b.dataset.v));
-  const ti = pop.querySelector('.cl-pop-text');
-  ti.addEventListener('keydown', e => { if(e.key === 'Enter' && !e.isComposing){ e.preventDefault(); set(ti.value.trim()); } if(e.key === 'Escape') closeDatePopClose(); });
+  const di = pop.querySelector('.cl-pop-date'), ti = pop.querySelector('.cl-pop-text');
+  const save = () => { if(di.value && !/^\d{4}-/.test(di.value)) return smAlert('날짜를 확인해 주세요', '연도는 4자리로 입력해요.'); set(closeDateMemoVal(di.value, ti.value.trim())); };
+  pop.querySelectorAll('[data-v]').forEach(b => b.onclick = () => { if(b.dataset.v === '__today'){ di.value = todayStr(); ti.focus(); return; } set(b.dataset.v === '__clear' ? '' : b.dataset.v); });
+  pop.querySelector('[data-a=ok]').onclick = save;
+  di.addEventListener('keydown', e => { if(e.key === 'Enter'){ e.preventDefault(); save(); } if(e.key === 'Escape') closeDatePopClose(); });
+  ti.addEventListener('keydown', e => { if(e.key === 'Enter' && !e.isComposing){ e.preventDefault(); save(); } if(e.key === 'Escape') closeDatePopClose(); });
   setTimeout(() => document.addEventListener('mousedown', closeDatePopOutside, true), 0);
   smShowPicker(di);
 }
