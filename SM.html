@@ -13816,12 +13816,25 @@ if('serviceWorker' in navigator && location.protocol === 'https:') navigator.ser
     const tick = async () => { autoT = null; if(await tryAuto()) return; if(Date.now() - autoSince > 20*1000){ banner(); return; } autoT = setTimeout(tick, 5000); };   // [2026.11.12] 20초 안에 저절로 못 열면 바로 새로고침 창(예전 10분 → 창이 안 뜨는 것처럼 보였음)
     autoT = setTimeout(tick, 3000);
   }
+  // [2026.11.17] "배포했는데 새로고침이 바로 안 뜸"(요청) - 예전엔 열 때 받은 서버 지문을 기준으로 삼아서, 브라우저가 옛 파일(최대 10분 보관)을 띄운 채 열리면
+  //   서버는 이미 새 버전이라 '같다'고 보고 끝내 안내가 안 떴음 → 지금 띄운 화면의 코드(가장 큰 스크립트 + 첫 스타일) 지문과 서버 파일의 같은 부분 지문을 비교
+  const fnv = t => { let h = 2166136261; for(let i = 0; i < t.length; i++){ h ^= t.charCodeAt(i); h = Math.imul(h, 16777619); } return (h >>> 0).toString(36) + ':' + t.length; };
+  const bigScript = arr => arr.reduce((a, b) => (b.length > a.length ? b : a), '');
+  const selfSig = (() => { try{ return fnv(bigScript([...document.querySelectorAll('script:not([src])')].map(x => x.textContent)) + '|' + ((document.querySelector('style') || {}).textContent || '')); }catch(e){ return null; } })();
+  const fileSig = async () => { const r = await fetch(location.pathname + '?_f=' + Date.now(), { cache:'no-store' }); if(!r.ok) return null; const t = (await r.text()).replace(/\r\n?/g, '\n');
+    const sc = [...t.matchAll(/<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/g)].map(m => m[1]), st = /<style[^>]*>([\s\S]*?)<\/style>/.exec(t);
+    return fnv(bigScript(sc) + '|' + (st ? st[1] : '')); };
+  let lastTag = null;
   async function check(){
-    try{ const v = await sig(); if(!v) return; if(base === null){ base = v; return; } if(v !== base) autoStart(); }catch(e){}
+    try{
+      const v = await sig(); if(!v || v === lastTag) return; lastTag = v;
+      if(selfSig){ const f = await fileSig(); if(f && f !== selfSig) autoStart(); return; }
+      if(base === null){ base = v; return; } if(v !== base) autoStart();
+    }catch(e){}
   }
   try{ if(Date.now() - Number(sessionStorage.getItem('sm_auto_reloaded') || 0) < 60000){ sessionStorage.removeItem('sm_auto_reloaded'); setTimeout(() => { try{ smToast('새 버전으로 다시 열었어요', 3000); }catch(e){} }, 1500); } }catch(e){}
   check();
-  setInterval(check, 2*60*1000);   // [2026.11.12] 5분 → 2분
+  setInterval(check, 60*1000);   // [2026.11.12] 5분 → 2분 · [2026.11.17] 1분(서버 지문이 바뀔 때만 파일을 받아 비교)
   document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState === 'visible') check(); });
 })();
 let deferredInstallPrompt = null;
