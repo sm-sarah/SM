@@ -5759,7 +5759,7 @@ function closePopWire(pop){ const x = pop.querySelector('.cl-pop-x'); if(x) x.on
   { const ok = pop.querySelector('[data-a=ok], [data-v=__ok]');
     if(ok){ if(x) x.remove(); const row = ok.parentElement; row.classList.add('cl-pop-btns');
       if(!row.querySelector('[data-a=close], [data-a=back], [data-a=xclose]')){ const b = document.createElement('button'); b.type = 'button'; b.dataset.a = 'xclose'; b.textContent = '닫기'; b.onclick = e => { e.stopPropagation(); closeDatePopClose(); }; row.insertBefore(b, ok); }
-      { const cb = row.querySelector('[data-a=close], [data-a=back], [data-a=xclose]'); if(cb) ok.insertAdjacentElement('afterend', cb); } } }   // [2026.11.17] 저장 · 닫기 순서(요청) try{ closeHistWire(pop, v => closeChFill(pop, v)); }catch(e){ console.warn(e); } }
+      { const cb = row.querySelector('[data-a=close], [data-a=back], [data-a=xclose]'); if(cb) ok.insertAdjacentElement('afterend', cb); } } }   /* [2026.11.17] 저장 · 닫기 순서(요청) */ try{ closeHistWire(pop, v => closeChFill(pop, v)); }catch(e){ console.warn(e); } }
 // [2026.11.16] 회차 ✎ - 그 회차 값을 창의 입력칸에 채움(날짜·월·기간·글자 창 공통, 공통 칸 창은 회차만 고름)
 function closeChFill(pop, v){
   // [2026.11.17] 기간·월+처리날짜, 날짜+체크+메모(값이 묶음) - ✎를 누르면 칸마다 채움(예전엔 [object Object]가 들어갔음)
