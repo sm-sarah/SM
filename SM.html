@@ -1594,6 +1594,7 @@ function smTogglePcView(){ try{ localStorage.setItem('sm_pc_view', window.SM_PC_
   .mn-body .mn-h{ font-size:15.5px; font-weight:800; margin:10px 0 2px; color:var(--primary-dark); }
   .mn-body ul, .mn-body ol{ margin:2px 0; padding-left:22px; }
   .mn-body .mn-gap{ height:8px; }
+  .mn-tbl-wrap{ overflow-x:auto; margin:6px 0; } .mn-tbl{ border-collapse:collapse; font-size:13px; } .mn-tbl th, .mn-tbl td{ border:1px solid var(--border); padding:5px 10px; text-align:left; vertical-align:top; } .mn-tbl th{ background:var(--primary-soft); font-weight:800; white-space:nowrap; }   /* [2026.11.17] 매뉴얼 표 */
   .mn-body a{ color:var(--primary-dark); }
   .mn-refs{ display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin:-2px 0 14px; }
   .mn-refs-l{ font-size:11.5px; font-weight:700; color:var(--muted); margin-right:2px; }
@@ -12129,10 +12130,13 @@ let manualCat = '', manualSel = null, manualSearch = '';
 function setManualCat(c){ manualCat = c || ''; manualSel = null; if(activeTab !== 'manuals') switchTab('manuals'); else renderManuals(); }
 function manualBodyHtml(t){
   const inline = x => taxjEsc(x).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>');
-  const out = []; let list = null;
-  const close = () => { if(list){ out.push(`</${list}>`); list = null; } };
+  const out = []; let list = null, tbl = null;
+  const flushT = () => { if(tbl){ const rows = tbl.filter(r => !r.every(c => /^:?-{2,}:?$/.test(c.trim()))); out.push(`<div class="mn-tbl-wrap"><table class="mn-tbl">${rows.map((r, i) => `<tr>${r.map(c => i === 0 ? `<th>${inline(c.trim())}</th>` : `<td>${inline(c.trim())}</td>`).join('')}</tr>`).join('')}</table></div>`); tbl = null; } };
+  const close = () => { if(list){ out.push(`</${list}>`); list = null; } flushT(); };
   String(t || '').split('\n').forEach(line => {
     let m;
+    if(/^\s*\|.*\|\s*$/.test(line)){ if(list){ out.push(`</${list}>`); list = null; } (tbl = tbl || []).push(line.trim().slice(1, -1).split('|')); return; }   // [2026.11.17] | 칸 | 칸 | = 표(첫 줄 = 제목줄)
+    flushT();
     if((m = /^\s*#{1,3}\s+(.*)$/.exec(line))){ close(); out.push(`<div class="mn-h">${inline(m[1])}</div>`); }
     else if((m = /^\s*[-•·]\s+(.*)$/.exec(line))){ if(list !== 'ul'){ close(); out.push('<ul>'); list = 'ul'; } out.push(`<li>${inline(m[1])}</li>`); }
     else if((m = /^\s*\d+[.)]\s+(.*)$/.exec(line))){ if(list !== 'ol'){ close(); out.push('<ol>'); list = 'ol'; } out.push(`<li>${inline(m[1])}</li>`); }
@@ -12149,7 +12153,7 @@ function manualFields(x){
     { label:'분야', options: cats, value: x.cat || manualCat || cats[0] },
     { label:'제목', value:x.title || '', placeholder:'예: 원천세 반기 신고 순서' },
     { label:'참고 사이트 (이름은 비워도 돼요)', type:'refs', value:(x.refs || []).map(r => r.name && r.name !== r.url ? `${r.name} | ${r.url}` : r.url).join('\n') },
-    { label:'내용 (# 제목, - 목록, 1. 순서, **굵게** · Enter 줄바꿈, Ctrl+Enter 저장)', type:'textarea', value:x.body || '', rows:16, placeholder:'# 준비물\n- 급여대장\n- 지급명세서\n\n# 순서\n1. 홈택스 로그인\n2. 원천세 신고 메뉴' },
+    { label:'내용 (# 제목, - 목록, 1. 순서, **굵게**, | 표 | · 표는 복사해 붙여넣기 · Ctrl+Enter 저장)', type:'textarea', value:x.body || '', rows:16, placeholder:'# 준비물\n- 급여대장\n- 지급명세서\n\n# 순서\n1. 홈택스 로그인\n2. 원천세 신고 메뉴' },
   ];
 }
 // 참고 사이트 칸: 한 줄에 하나, "이름 | 주소" 또는 주소만
@@ -12205,6 +12209,7 @@ async function manualUploadFiles(input){
     const up = [];
     for(const f of files) up.push(await smDriveUpload(f));
     { const cur = manuals.find(m => m.id === mid); if(cur && cur !== x){ delete x._uploading; x = cur; } }
+    up.forEach(u => { u.at = u.at || todayStr(); });   // [2026.11.17] 올린 날짜
     (x.files = x.files || []).push(...up);
     smToast('첨부했어요.');
   }catch(e){ console.error(e); smAlert('첨부하지 못했어요', String(e && e.message || e), { tone:'danger' }); }
@@ -12227,6 +12232,49 @@ function manualHistory(id){
     html: h.length ? h.map(x => `<details style="text-align:left; margin:6px 0;"><summary style="cursor:pointer; font-weight:700;">${fmt(x.at)} 까지의 내용 <span class="hint" style="margin:0;">${taxjEsc(x.cat)} · ${taxjEsc(x.title)}</span></summary><div class="mn-body" style="margin-top:6px;">${manualBodyHtml(x.body)}</div></details>`).join('')
       : '<div class="hint">아직 고친 적이 없어요.</div>' });
 }
+// [2026.11.17] "결산처럼 매뉴얼에도 캡처 붙여넣기 첨부"(요청) - 매뉴얼 화면에서 고른 매뉴얼이 있고 글자 입력 중이 아니면 Ctrl+V 파일·캡처를 그 매뉴얼에 첨부
+document.addEventListener('paste', e => {
+  if(typeof activeTab === 'undefined' || activeTab !== 'manuals' || !manualSel || document.querySelector('.sm-modal-backdrop.show')) return;
+  const a = document.activeElement; if(a && (a.tagName === 'TEXTAREA' || (a.tagName === 'INPUT' && !/^(checkbox|radio|button)$/i.test(a.type || '')))) return;
+  const files = Array.from((e.clipboardData && e.clipboardData.files) || []); if(!files.length) return;
+  e.preventDefault();
+  const named = files.map((f, i) => f.name && f.name !== 'image.png' ? f : new File([f], `캡처_${todayStr()}${files.length > 1 ? '_' + (i + 1) : ''}.${(f.type.split('/')[1] || 'png').replace('jpeg', 'jpg')}`, { type: f.type }));
+  if(!smUploadReady()) return;
+  manualUpTarget = manualSel; manualUploadFiles({ files: named });
+});
+// [2026.11.17] "표를 복사해 붙여넣으면 엑셀처럼 칸에 맞춰"(요청) - 매뉴얼 내용칸에 표(웹·채팅의 표, 엑셀 칸)를 붙여넣으면 | 칸 | 칸 | 줄로 바꿔 넣고, 보기에서는 표로 그림
+function smTableRowsToText(rows){
+  rows = rows.map(r => r.map(c => String(c || '').replace(/\s*\n\s*/g, ' ').replace(/\|/g, '／').trim())).filter(r => r.some(Boolean));
+  return rows.length ? rows.map(r => `| ${r.join(' | ')} |`).join('\n') : '';
+}
+document.addEventListener('paste', e => {
+  const ta = e.target; if(!ta || ta.tagName !== 'TEXTAREA') return;
+  const md = ta.closest('.sm-modal'); if(!md || !/매뉴얼/.test((md.querySelector('.sm-modal-title') || {}).textContent || '')) return;
+  const cd = e.clipboardData; if(!cd) return;
+  let txt = '';
+  const html = cd.getData('text/html');
+  if(html && /<table/i.test(html)){
+    const doc = new DOMParser().parseFromString(html, 'text/html'), parts = [];
+    // 표 앞뒤 글도 살림: 표는 | 줄로, 나머지는 글 그대로
+    const walk = node => { node.childNodes.forEach(n => {
+      if(n.nodeType === 1 && n.tagName === 'TABLE'){ parts.push('\n' + smTableRowsToText([...n.querySelectorAll('tr')].map(tr => [...tr.children].map(td => td.textContent))) + '\n'); }
+      else if(n.nodeType === 1 && n.querySelector && n.querySelector('table')) walk(n);
+      else if(n.nodeType === 1){ const t = n.innerText || n.textContent || ''; if(t.trim()) parts.push(t.trim() + (/^(P|DIV|H\d|LI|UL|OL)$/.test(n.tagName) ? '\n' : '')); }
+      else if(n.nodeType === 3 && n.textContent.trim()) parts.push(n.textContent.trim());
+    }); };
+    walk(doc.body); txt = parts.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+  } else {
+    const plain = cd.getData('text/plain') || '';
+    const lines = plain.replace(/\r/g, '').split('\n');
+    if(lines.filter(l => l.includes('\t')).length >= 2) txt = lines.map(l => l.includes('\t') ? smTableRowsToText([l.split('\t')]) : l).join('\n');
+  }
+  if(!txt) return;
+  e.preventDefault();
+  const a = ta.selectionStart, b = ta.selectionEnd;
+  ta.value = ta.value.slice(0, a) + txt + ta.value.slice(b);
+  ta.selectionStart = ta.selectionEnd = a + txt.length;
+  ta.dispatchEvent(new Event('input', { bubbles:true }));
+});
 // 분야 관리: 한 줄에 하나씩. 줄 수가 같으면 같은 자리끼리 이름을 바꾼 것으로 보고, 없어진 분야의 매뉴얼은 '미분류'로 옮김
 // [2026.10.16] 줄바꿈 입력 대신 입력칸+추가, 목록에서 이름 바꾸기·순서·삭제 창으로 바꿈(요청). 이름 바꾸면 그 분야 매뉴얼도 같이 바뀜
 async function manualEditCats(){
@@ -12954,7 +13002,10 @@ function smPvNewWindow(files){
 }
 function smPreviewFile(f){ if(f && f.id) smPvOpen([f]); }
 // [2026.11.12] 파일 id로 칸 첨부(cellFiles)의 그 파일 찾기 - 미리보기 창 파일 메모용
-function smAttFindById(id){ if(!id) return null; for(const L of Object.values(cellFiles || {})) for(const x of (L || [])) if(x && x.id === id) return x; return null; }
+function smAttFindById(id){ if(!id) return null; for(const L of Object.values(cellFiles || {})) for(const x of (L || [])) if(x && x.id === id) return x;
+  // [2026.11.17] 매뉴얼·링크 첨부도(미리보기 파일 메모·이름 바꾸기)
+  for(const L of [(typeof manuals !== 'undefined' ? manuals : []), (typeof links !== 'undefined' ? links : [])]) for(const m of (L || [])) for(const x of (m.files || [])) if(x && x.id === id) return x;
+  return null; }
 // 미리보기에서 메모를 고치면 열려 있는 칸 창의 파일 줄도 바로 바뀌게(파일 이름 옆 메모)
 function smAttRefreshOpen(){ const pop = document.getElementById('closeDatePop'); if(pop && pop._attRedraw) try{ pop._attRedraw(); }catch(e){} }
 // [2026.10.22] "팝업 여러 개 띄워서 새 창처럼 골라 보고 닫고"(요청) - 미리보기를 화면을 막지 않는 떠 있는 창으로. 여러 개를 띄울 수 있고,
@@ -13036,9 +13087,17 @@ async function smFileContentSearch(q, onDone){
   }catch(e){ console.warn('첨부 내용 검색 실패', e); smFileHits[q] = 'error'; }
   if(onDone) onDone();
 }
+// [2026.11.17] 매뉴얼 등 첨부 이름 바꾸기(목록에 보이는 이름, 확장자는 그대로 붙임, 처음 이름은 orig)
+async function smFileRename(id){
+  const f = smAttFindById(id); if(!f) return;
+  const r = await smForm('파일 이름 바꾸기', [{ label:'이름', value: f.name || '' }], { okText:'저장', icon:'✎' });
+  let t = r && (r[0] || '').trim(); if(!t || t === f.name) return;
+  const oe = smExt(f.orig || f.name); if(!f.orig) f.orig = f.name; if(oe && smExt(t) !== oe) t += '.' + oe;
+  f.name = t; renderAll();
+}
 function smFilesHtml(files, removeJs){
   // [2026.10.22] "첨부 미리보기"(요청) - 누르면 이 화면 위에 미리보기 창(Ctrl/⌘+클릭은 예전처럼 드라이브 새 탭)
-  return (files || []).map(f => `<span class="att-chip"><a href="${escapeAttr(f.url)}" target="_blank" rel="noopener" title="미리보기 (Ctrl+클릭: 드라이브에서 열기)" data-f="${escapeAttr(JSON.stringify({ id:f.id, name:f.name, url:f.url }))}" onclick="if(event.ctrlKey || event.metaKey || event.shiftKey) return true; event.preventDefault(); smPreviewFile(JSON.parse(this.dataset.f));">📎 ${taxjEsc(f.name)}</a>${removeJs ? `<button onclick="${removeJs(f)}" title="첨부 빼기" aria-label="첨부 빼기">×</button>` : ''}</span>`).join('');
+  return (files || []).map(f => `<span class="att-chip"><a href="${escapeAttr(f.url)}" target="_blank" rel="noopener" title="미리보기 (Ctrl+클릭: 드라이브에서 열기)" data-f="${escapeAttr(JSON.stringify({ id:f.id, name:f.name, url:f.url }))}" onclick="if(event.ctrlKey || event.metaKey || event.shiftKey) return true; event.preventDefault(); smPreviewFile(JSON.parse(this.dataset.f));">📎 ${taxjEsc(f.name)}</a>${f.at ? `<i class="att-memo-at" title="${escapeAttr(f.at.replace(/-/g, '.'))} 올림">${Number(f.at.slice(5, 7))}/${Number(f.at.slice(8))}</i>` : ''}${removeJs ? `<button class="att-me" onclick="smFileRename('${escapeAttr(f.id)}')" title="파일 이름 바꾸기" aria-label="파일 이름 바꾸기">✎</button><button onclick="${removeJs(f)}" title="첨부 빼기" aria-label="첨부 빼기">×</button>` : ''}</span>`).join('');   // [2026.11.17] 결산 첨부처럼 올린 날짜·✎ 이름 바꾸기
 }
 function linkHref(u){ u = String(u || '').trim(); if(!u) return ''; return /^[a-z][a-z0-9+.-]*:/i.test(u) ? u : 'https://' + u; }
 function linkFields(x){
