@@ -1289,6 +1289,7 @@ function smTogglePcView(){ try{ localStorage.setItem('sm_pc_view', window.SM_PC_
   .cl-pop-row.cl-pop-btns{ justify-content:center !important; gap:8px; }   /* [2026.11.16] 저장·닫기 아래 가운데 */
   .rd-pane[hidden]{ display:none !important; }
   .rd-modes button.on{ background:var(--primary-soft); border-color:var(--primary); color:var(--primary-dark); font-weight:800; }   /* [2026.11.16] 기간 고르는 방법 */
+  .cl-round-sel.bottom{ margin:8px 0 2px; padding-top:8px; border-top:1px dashed var(--border); }
   .cl-round-sel{ display:flex; align-items:center; gap:6px; margin:6px 0 2px; font-size:11.5px; color:var(--muted); font-weight:700; } .cl-round-sel select{ flex:1; font:inherit; font-size:12px; padding:2px 6px; border:1px solid var(--border); border-radius:7px; background:#fff; }   /* [2026.11.16] 결산 칸 창 - 저장할 차수 */
   .cl-memo-at{ flex:none; font-size:11px; color:var(--muted-soft); font-weight:600; padding-top:1px; }   /* [2026.11.12] 결산 메모 줄 등록일 */
   .cl-memo-act:hover{ color:var(--primary-dark); }
@@ -2765,6 +2766,12 @@ let activeTab = 'home';
 function subCur(id){ try{ if(NAV_PARENT[activeTab] && NAV_PARENT[activeTab][0] === id) return NAV_PARENT[activeTab][1]; if(id === 'inner' && activeTab === 'inner') return (INNER_VIEWS.find(x => x[0] === innerView) || [])[1] || null; if(id === 'calc' && activeTab === 'calc') return (CALC_VIEWS.find(x => x[0] === calcView) || [])[1] || null; if(id === 'settings' && activeTab === 'settings') return ((NAV_SUBMENUS.settings || []).find(x => x.anchor === settingsView) || {}).label || null;   // [2026.11.03] 보고 있는 설정 하위메뉴 표시
     return id === 'works' ? ((WORKS_TABS.find(x => x[0] === activeTab) || [])[1] || null) : id === 'manuals' ? (manualCat || '전체') : (id === 'forms' || id === 'laws') ? (LIB[id].sel || '전체') : null; }catch(e){ return null; } }
 // [2026.11.17] "매뉴얼 왼쪽 하위메뉴는 없애고 들어가면 위에 하위메뉴 - 분야가 자꾸 늘어서"(요청) - 이 목록의 메뉴는 하위메뉴를 화면 위 칩으로만(넓은 화면에서도)
+// [2026.11.17] "대메뉴를 한 번 더 누르면 하위메뉴 접히게"(요청) - 지금 보고 있는 메뉴를 다시 누르면 하위메뉴 접기/펴기(다른 메뉴로 가면 다시 펼쳐짐)
+const navFold = {};
+function navClick(id, btn){
+  if(btn && btn.classList.contains('active') && btn.closest('.nav-wrap.has-sub')){ navFold[id] = !navFold[id]; renderNav(); return; }
+  delete navFold[id]; switchTab(id);
+}
 const SM_TOP_SUB = ['manuals', 'forms', 'laws', 'inner'];   // [2026.11.17] 서식·법령·내부도(요청)
 function renderNav(){
   const sb = document.getElementById('sidebarNav');
@@ -2772,8 +2779,8 @@ function renderNav(){
     const sub = t.id === 'works' ? WORKS_TABS.map(([k, l]) => ({ js:`switchTab('${k}')`, label:l })) : SM_TOP_SUB.includes(t.id) ? null : NAV_SUBMENUS[t.id];   // [2026.11.17] 매뉴얼은 왼쪽 하위메뉴 대신 화면 위 칩
     const on = t.id === activeTab || (t.id === 'works' && isWorksTab(activeTab)) || (NAV_PARENT[activeTab] || [])[0] === t.id;
     const btn = `
-      <button class="nav-item ${on?'active':''}" data-c="${t.c != null ? t.c : i % 6}"
-              title="${t.label}" onclick="switchTab('${t.id}')">
+      <button class="nav-item ${on?'active':''}" data-c="${t.c != null ? t.c : i % 6}" data-id="${t.id}"
+              title="${t.label}" onclick="navClick('${t.id}', this)">
         <span class="nav-ic"><svg viewBox="0 0 24 24">${ICONS[t.id]}</svg></span>
         <span class="tiny">${t.label}</span>
       </button>
@@ -2782,7 +2789,7 @@ function renderNav(){
     return `
       <div class="nav-wrap has-sub">
         ${btn}
-        <div class="nav-flyout ${on?'open':''}">
+        <div class="nav-flyout ${on && !navFold[t.id] ? 'open' : ''}">
           ${sub.map(s => `<button class="nav-flyout-item${subCur(t.id) === s.label ? ' on' : ''}" onclick="${s.js || `goToSettingsSection('${s.anchor}')`}">${s.label}</button>`).join('')}
         </div>
       </div>
@@ -5716,6 +5723,10 @@ function closeRowHistPop(el){
 // 작은 창 닫기(×) 버튼
 function closePopX(){ return '<button type="button" class="cl-pop-x" title="닫기" aria-label="닫기">×</button>'; }
 function closePopWire(pop){ const x = pop.querySelector('.cl-pop-x'); if(x) x.onclick = e => { e.stopPropagation(); closeDatePopClose(); };
+  // [2026.11.17] "위는 회차 기록(✎·×), 아래는 입력 + 기록할 회차 고르기"(요청) - 회차 고르기 줄을 저장 버튼 바로 위로, 취소(되돌아가기)는 닫기로
+  { const h = pop.querySelector('.cl-hist[data-chc]'), rs = h && h.querySelector('.cl-round-sel'), ok = pop.querySelector('[data-a=ok], [data-v=__ok]');
+    if(rs && ok){ ok.parentElement.insertAdjacentElement('beforebegin', rs); rs.classList.add('bottom'); }
+    const bk = h && pop.querySelector('[data-a=back]'); if(bk){ bk.textContent = '닫기'; bk.addEventListener('click', e => { e.stopImmediatePropagation(); closeDatePopClose(); }); } }
   // [2026.11.16] "미해당을 메모에 계속 치기 힘드니 버튼으로"(요청) - 메모칸이 있는 날짜·기간 창(결산 날짜, 기간·월+처리날짜, 날짜+체크+메모)에 '미해당' 버튼(다시 누르면 빼기)
   { const mi = pop.querySelector('.rd-m') || (pop.querySelector('.cl-pop-date[type=date]') ? pop.querySelector('.cl-pop-text') : null);
     if(mi && !pop.querySelector('.rd-na')){ const row = document.createElement('div'); row.className = 'cl-pop-row rd-na-row'; row.innerHTML = '<button type="button" class="rd-na">미해당</button>'; mi.insertAdjacentElement('afterend', row);
@@ -6489,6 +6500,7 @@ function smcDcmPop(btn){
   const place = () => { const pw = pop.offsetWidth, ph = pop.offsetHeight; pop.style.left = Math.max(8, Math.min(window.innerWidth - pw - 8, r.left)) + 'px'; pop.style.top = (r.bottom + ph + 8 > window.innerHeight ? Math.max(8, r.top - ph - 4) : r.bottom + 4) + 'px'; };
   const S = SMC[s], hist = () => (S.hist ? S.hist(k, c) : '');
   const view = () => {
+    if(S.hist) return edit();   // [2026.11.17] 회차 목록이 있는 창(결산)은 위 = 회차 기록(✎·×), 아래 = 바로 입력
     const o = smcDcm(S.get(k, c)); if(!o.d && !o.ck && !o.m) return edit();
     const row = (l, v) => v ? `<div class="rd-row"><span>${l}</span><b style="white-space:pre-wrap;">${taxjEsc(v)}</b></div>` : '';
     const hh = hist();
@@ -6539,6 +6551,7 @@ function smcMdPop(btn){
   const S = SMC[s], y = S.year(), hist = () => (S.hist ? S.hist(k, c) : '');
   const ym = n => { const t = new Date(); t.setDate(1); t.setMonth(t.getMonth() + n); return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}`; };
   const view = () => {
+    if(S.hist) return edit();   // [2026.11.17] 결산은 바로 입력
     const o = smcMd(S.get(k, c)); if(!o.mo && !o.m && !o.d) return edit();
     const row = (l, v) => v ? `<div class="rd-row"><span>${l}</span><b>${taxjEsc(v)}</b></div>` : '';
     const hh = hist();
@@ -6609,6 +6622,7 @@ function smcRdPop(btn){
   const place = () => { const pw = pop.offsetWidth, ph = pop.offsetHeight; pop.style.left = Math.max(8, Math.min(window.innerWidth - pw - 8, r.left)) + 'px'; pop.style.top = (r.bottom + ph + 8 > window.innerHeight ? Math.max(8, r.top - ph - 4) : r.bottom + 4) + 'px'; };
   const S = SMC[s], y = S.year(), hist = () => (S.hist ? S.hist(k, c) : '');
   const view = () => {
+    if(S.hist) return edit();   // [2026.11.17] 결산은 바로 입력
     const o = smcRd(S.get(k, c)), nm = o.r ? smcRdName(o.r, y) : '';
     if(!o.r && !o.m && !o.d) return edit();
     const row = (l, v) => v ? `<div class="rd-row"><span>${l}</span><b>${taxjEsc(v)}</b></div>` : '';
