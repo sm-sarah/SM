@@ -5685,7 +5685,7 @@ function closeHistListHtml(cid, colId){
 // 회차 줄의 ✎(그 회차 값을 아래 입력칸에 불러와서 그 회차로 저장) · ×(그 회차 지우기)
 function closeHistWire(pop, fill, redraw){
   const h = pop.querySelector('.cl-hist[data-chc]'); if(!h) return;
-  const cid = h.dataset.chc, colId = h.dataset.chk, sel = h.querySelector('.cl-ch-n');
+  const cid = h.dataset.chc, colId = h.dataset.chk, sel = { set value(x){ const e = pop.querySelector('.cl-ch-n'); if(e) e.value = x; } };   // 회차 고르기는 아래로 옮겨져 있어서 창 전체에서 찾음
   h.querySelectorAll('[data-chedit]').forEach(b => b.onclick = e => { e.stopPropagation(); const n = Number(b.dataset.chedit), en = closeCellHist(cid, colId).find(x => x.n === n); sel.value = String(n); closeRoundPick = n; if(fill && en) fill(en.v); });
   h.querySelectorAll('[data-chdel]').forEach(b => b.onclick = async e => {
     e.stopPropagation(); const n = Number(b.dataset.chdel);
@@ -5738,6 +5738,15 @@ function closePopWire(pop){ const x = pop.querySelector('.cl-pop-x'); if(x) x.on
       if(!row.querySelector('[data-a=close], [data-a=back], [data-a=xclose]')){ const b = document.createElement('button'); b.type = 'button'; b.dataset.a = 'xclose'; b.textContent = '닫기'; b.onclick = e => { e.stopPropagation(); closeDatePopClose(); }; row.insertBefore(b, ok); } } } try{ closeHistWire(pop, v => closeChFill(pop, v)); }catch(e){ console.warn(e); } }
 // [2026.11.16] 회차 ✎ - 그 회차 값을 창의 입력칸에 채움(날짜·월·기간·글자 창 공통, 공통 칸 창은 회차만 고름)
 function closeChFill(pop, v){
+  // [2026.11.17] 기간·월+처리날짜, 날짜+체크+메모(값이 묶음) - ✎를 누르면 칸마다 채움(예전엔 [object Object]가 들어갔음)
+  if(v && typeof v === 'object' && !Array.isArray(v)){
+    const q = c => pop.querySelector(c), set = (c, x) => { const e = q(c); if(e) e.value = x || ''; };
+    if(q('.rd-mo')) set('.rd-mo', v.mo);
+    if(q('.cl-r-a')){ const [a, b] = String(v.r || '').split('~'); set('.cl-r-a', a); set('.cl-r-b', b); }
+    set('.rd-d', v.d); set('.rd-m', v.m); if(q('.rd-ck')) q('.rd-ck').checked = !!v.ck;
+    const m = q('.rd-m'); if(m) m.dispatchEvent(new Event('input'));
+    return;
+  }
   const t = v == null ? '' : String(v), di = pop.querySelector('.cl-pop-date'), ti = pop.querySelector('.cl-pop-text'), ia = pop.querySelector('.cl-r-a'), ib = pop.querySelector('.cl-r-b');
   if(ia && ib){ if(closeIsRange(t)){ const [a, b] = t.split('~'); ia.value = a; ib.value = b; if(ti) ti.value = ''; } else if(ti) ti.value = t; return; }
   if(di && di.type === 'date'){ const o = closeDateMemo(t); di.value = o.d; if(ti) ti.value = o.m; return; }
