@@ -2765,7 +2765,7 @@ let activeTab = 'home';
 function subCur(id){ try{ if(NAV_PARENT[activeTab] && NAV_PARENT[activeTab][0] === id) return NAV_PARENT[activeTab][1]; if(id === 'inner' && activeTab === 'inner') return (INNER_VIEWS.find(x => x[0] === innerView) || [])[1] || null; if(id === 'calc' && activeTab === 'calc') return (CALC_VIEWS.find(x => x[0] === calcView) || [])[1] || null; if(id === 'settings' && activeTab === 'settings') return ((NAV_SUBMENUS.settings || []).find(x => x.anchor === settingsView) || {}).label || null;   // [2026.11.03] 보고 있는 설정 하위메뉴 표시
     return id === 'works' ? ((WORKS_TABS.find(x => x[0] === activeTab) || [])[1] || null) : id === 'manuals' ? (manualCat || '전체') : (id === 'forms' || id === 'laws') ? (LIB[id].sel || '전체') : null; }catch(e){ return null; } }
 // [2026.11.17] "매뉴얼 왼쪽 하위메뉴는 없애고 들어가면 위에 하위메뉴 - 분야가 자꾸 늘어서"(요청) - 이 목록의 메뉴는 하위메뉴를 화면 위 칩으로만(넓은 화면에서도)
-const SM_TOP_SUB = ['manuals'];
+const SM_TOP_SUB = ['manuals', 'forms', 'laws', 'inner'];   // [2026.11.17] 서식·법령·내부도(요청)
 function renderNav(){
   const sb = document.getElementById('sidebarNav');
   sb.innerHTML = TABS.map((t, i) => {
@@ -11089,7 +11089,7 @@ function renderPay(){
    회사 원본은 읽기만. 암호화된 항목은 회사웹에서만 열림 */
 let innerView = 'corp', innerSchedMonth = '';
 const INNER_VIEWS = [['corp','회사정보'], ['team','팀정보']];   // [2026.11.04] 세무일정 하위메뉴 뺌(요청: "필요 없을 것 같아") - 일정 계산(innerTaxMonth)은 홈 세무일정 안내에서 계속 씀
-function setInnerView(v){ innerView = v; if(activeTab !== 'inner') switchTab('inner'); else renderInner(); }
+function setInnerView(v){ innerView = v; if(activeTab !== 'inner') switchTab('inner'); else { renderInner(); try{ updatePageHead(); }catch(e){} } }
 // Tax.J CORP_BASIC_INFO_ORDER와 같음
 const INNER_CORP_ORDER = ['사업자번호','법인등록번호','창립일','대표자','주민등록번호','주소','우편번호','조정반번호','대표번호','대표팩스','폴더 링크'];
 function innerBizNo(raw){ const d = String(raw || '').replace(/[^0-9]/g, ''); return d.length === 10 && d === String(raw || '').trim() ? `${d.slice(0,3)}-${d.slice(3,5)}-${d.slice(5)}` : raw; }
@@ -12378,7 +12378,7 @@ function libCatList(k){
   const extra = [...new Set(libItems(k).map(x => x.cat || '기타'))].filter(g => !cats.includes(g)).sort((a, b) => (a === '기타') - (b === '기타') || a.localeCompare(b, 'ko'));
   return cats.concat(extra);
 }
-function setLibCat(k, c){ LIB[k].sel = c || ''; if(activeTab !== k) switchTab(k); else renderLib(k); }
+function setLibCat(k, c){ LIB[k].sel = c || ''; if(activeTab !== k) switchTab(k); else { renderLib(k); try{ updatePageHead(); }catch(e){} } }
 function libNow(){ const d = new Date(); return `${todayStr()} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`; }
 let libSearch = { forms:'', laws:'' };
 function libOnSearch(k, v){ libSearch[k] = v; renderLib(k); const el = document.getElementById(k + 'Search'); if(el){ el.focus(); el.setSelectionRange(v.length, v.length); } }
