@@ -24,7 +24,7 @@
 - Tax.J → works 방향으로 읽기만 한다. works 때문에 Tax.J 원본 데이터를 쓰거나 바꾸지 않는다.
 - 가져온 데이터의 수정은 works 저장 공간(localStorage / 개인 Google 시트)에서 한다.
 - 현재 가져오기: Tax.J 엑셀 업로드(`importTaxjExcel`), 마스터 시트 가져오기(`importFromMasterSheet` 등). 깨뜨리지 않고 대체 수단으로 유지한다.
-- 목표: Tax.J와 같은 Firebase Firestore(프로젝트 `taxj-a3e01`, 컬렉션 `taxj`)를 실시간으로 읽기.
+- 목표: Tax.J와 같은 Firebase Firestore(프로젝트 `taxj-a3e01`)를 실시간으로 읽기. [2026.11.16~] 원본은 `taxj_records`(한 건·거래처 한 칸씩)와 `taxj_approvals`(결재)이고, `taxj`는 옮기기 직전 보관본(관리자 목록·관리비밀번호·회사명만 원본). 읽는 방법은 Tax.J CLAUDE.md '서버 원본 저장'과 `recsBuild`·sendpush `readRecords` 참고.
   - 필드명·문서 경로는 Tax.J 코드에서 grep으로 확인해 그대로 맞춘다. 짐작하지 않는다.
   - Tax.J는 @ciacc.co.kr Google 계정으로 로그인한다. Firestore 접근 규칙 때문에 works에서도 같은 계정 로그인이 필요할 수 있다.
   - Firebase 보안 규칙·승인 도메인 등 회사 쪽 설정을 바꿔야 하면 먼저 설명하고 확인받는다.
@@ -41,7 +41,8 @@
 ## 3-2. 관리 사이트 링크 자동 반영 (요청하지 않아도 - 2026.10.22)
 - works든 Tax.J든 작업하다 관리 사이트 링크(GitHub·Firebase·Google Cloud·Drive 등)가 새로 생기거나 주소·용도가 바뀌면,
   `SM.html`의 `SM_CLAUDE_LINKS` 목록(설정 › 웹 › 관리 사이트 링크 - 2026.11.05 링크 메뉴 '클로드'에서 옮김)에 `[구분, 이름, 주소, 용도]` 줄을 넣거나 고치고 `SM_CLAUDE_LINKS_AT` 날짜를 바꾼다.
-- 회사웹·타팀웹 구성(저장소·서버·규칙·배포 순서)이 바뀌면 같은 화면의 `SM_WEB_PARTS`·`SM_WEB_DEPLOY` 설명도 같이 고친다.
+- 회사웹·타팀웹 구성(저장소·서버·규칙·배포 순서·저장 방식)이 바뀌면 같은 화면의 `SM_WEB_PARTS`·`SM_WEB_DEPLOY` 설명도 같이 고친다.
+- [2026.11.17] 백업 구조(드라이브 자동백업 간격·보관, Firestore 시점복구·예약백업, 안전장치)가 바뀌면 같은 화면의 `SM_WEB_BACKUP`(백업 구조 표)도 같이 고친다. 사용자 요청: "이런 것들은 수시로 업데이트".
 - 회사웹 실시간 근무현황 캐릭터 멘트(`presMascotHtml`·`clockBubbleMessage`·`taxjWeatherMsgs`)가 바뀌면 설정 › 실시간멘트의 `SM_MENT_DATA`도 같이 고친다.
 - 이 변경은 사용자가 따로 말하지 않아도 이 저장소에 바로 커밋·push한다(이 항목만 예외로 허락받음). 답변에는 추가·변경된 줄만 한 줄씩 알려준다.
 - 새 줄은 목록 맨 아래에 붙인다. 사용자가 넣은 링크(시트의 links)는 건드리지 않는다.
