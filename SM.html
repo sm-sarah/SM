@@ -1294,6 +1294,8 @@ function smTogglePcView(){ try{ localStorage.setItem('sm_pc_view', window.SM_PC_
   [hidden].cl-ch-n, [hidden].cl-ch-lab, [hidden].cl-ch-ed, [hidden].cl-ch-new{ display:none !important; }
   .cl-round-sel.bottom{ margin:8px 0 2px; padding-top:8px; border-top:1px dashed var(--border); }
   .cl-round-sel{ display:flex; align-items:center; gap:6px; margin:6px 0 2px; font-size:11.5px; color:var(--muted); font-weight:700; } .cl-round-sel select{ flex:1; font:inherit; font-size:12px; padding:2px 6px; border:1px solid var(--border); border-radius:7px; background:#fff; }   /* [2026.11.16] 결산 칸 창 - 저장할 차수 */
+  .cl-memo-list{ max-height:260px; } .cl-pop.big .cl-memo-list{ max-height:min(62vh, 640px); } .cl-pop.big .cl-memo-row{ font-size:13.5px !important; line-height:1.6 !important; }
+  .cl-pop-big{ position:absolute; top:4px; right:30px; width:22px; height:22px; border:none; background:none; color:var(--muted); font-size:14px; line-height:1; cursor:pointer; border-radius:6px; } .cl-pop-big:hover{ background:var(--primary-soft); color:var(--primary-dark); }   /* [2026.11.17] 결산 메모 크게 보기 */
   .cl-memo-at{ flex:none; font-size:11px; color:var(--muted-soft); font-weight:600; padding-top:1px; }   /* [2026.11.12] 결산 메모 줄 등록일 */
   .cl-memo-act:hover{ color:var(--primary-dark); }
   @media (hover:none){ .cl-memo-act{ opacity:1; } }   /* 휴대폰처럼 마우스가 없으면 늘 보이게 */
@@ -6920,8 +6922,8 @@ function closeMemoPop(btn){
   // [2026.11.12] "메모 등록한 날짜도 나오면"(요청) - 이 칸 기록(회차 기록 rh: 날짜별 값)에서 그 줄이 처음 나온 날 = 등록일(고치면 고친 날). 기록 전부터 있던 줄은 날짜 없음
   const memoDate = t => { for(const e of closeRowHist(cid)){ if(closeMemoLines(((e && e.v) || {})[col]).includes(t)) return e.at || ''; } return ''; };
   const draw = () => {
-    pop.innerHTML = `${closePopX()}<div style="font-weight:800; font-size:12.5px;">메모 ${items.length ? `<span class="hint" style="margin:0; display:inline;">${items.length}개</span>` : ''}${Date.now() - savedAt < 2500 ? ' <span style="color:#1f9d6b; font-size:11.5px; font-weight:800;">저장됨 ✓</span>' : ''}</div>
-      <div style="max-height:260px; overflow:auto; display:flex; flex-direction:column; gap:4px;">${items.length ? items.map((x, i) => `<div class="cl-memo-row" style="display:flex; gap:6px; align-items:flex-start; font-size:12.5px; line-height:1.45;"><span style="color:var(--muted); font-weight:700; min-width:18px;">${i + 1})</span>${editIdx === i
+    pop.innerHTML = `${closePopX()}<button type="button" class="cl-pop-big" title="${pop.classList.contains('big') ? '작게 보기' : '크게 보기'}" aria-label="크게 보기">${pop.classList.contains('big') ? '⤡' : '⤢'}</button><div style="font-weight:800; font-size:12.5px;">메모 ${items.length ? `<span class="hint" style="margin:0; display:inline;">${items.length}개</span>` : ''}${Date.now() - savedAt < 2500 ? ' <span style="color:#1f9d6b; font-size:11.5px; font-weight:800;">저장됨 ✓</span>' : ''}</div>
+      <div class="cl-memo-list" style="overflow:auto; display:flex; flex-direction:column; gap:4px;">${items.length ? items.map((x, i) => `<div class="cl-memo-row" style="display:flex; gap:6px; align-items:flex-start; font-size:12.5px; line-height:1.45;"><span style="color:var(--muted); font-weight:700; min-width:18px;">${i + 1})</span>${editIdx === i
         ? `<input type="text" class="cl-memo-edit" value="${escapeAttr(x)}" style="flex:1; min-width:0; font:inherit; font-size:12.5px; border:1px solid var(--primary); border-radius:6px; padding:2px 6px;"><button type="button" class="cl-memo-ok" style="font-weight:800; color:var(--primary-dark);">저장</button>`
         : `<span style="flex:1; white-space:pre-wrap; word-break:break-all;">${taxjEsc(x)}</span>${(() => { const d = memoDate(x); return d ? `<span class="cl-memo-at" title="${escapeAttr(d.replace(/-/g, '.'))} 등록">${d.slice(2).replace(/-/g, '.')}</span>` : ''; })()}<button type="button" class="cl-memo-act" data-edit="${i}" title="수정" aria-label="수정">✎</button>`}<button type="button" class="cl-memo-act" data-del="${i}" title="삭제" aria-label="삭제">✕</button></div>`).join('') : '<div class="hint" style="margin:0;">아직 메모가 없어요.</div>'}</div>
       <div class="cl-pop-row" style="flex-wrap:nowrap;"><input type="text" class="cl-pop-text cl-memo-add" placeholder="새 메모 입력 (Enter = 등록)" style="flex:1; min-width:0; font:inherit; font-size:12.5px; border:1px solid var(--border); border-radius:8px; padding:6px 8px;"><button type="button" class="cl-memo-addok" style="font-weight:800; color:var(--primary-dark);">등록</button></div>
@@ -6953,11 +6955,20 @@ function closeMemoPop(btn){
     const t = document.createElement('div'); t.innerHTML = closeMemoBtnHtml(cid, col, items, closeFilesOf(cid, col)); const nb = t.firstElementChild;
     btn.className = nb.className; btn.title = nb.title; btn.innerHTML = nb.innerHTML;   // [2026.11.11] 첨부파일 수도 같이
   };
+  // [2026.11.17] "메모를 크게 보고 싶어 - 내용이 많아"(요청) - 오른쪽 위 ⤢ = 크게(화면 가운데 넓게, 이 기기에 기억) / ⤡ = 원래 크기
+  let big = false; try{ big = localStorage.getItem('sm_memo_big') === '1'; }catch(e){}
+  const place = () => {
+    pop.classList.toggle('big', big); pop.style.width = big ? 'min(680px, calc(100vw - 32px))' : '320px';
+    const r = btn.getBoundingClientRect(), pw = pop.offsetWidth, ph = pop.offsetHeight;
+    if(big){ pop.style.left = Math.max(8, (window.innerWidth - pw) / 2) + 'px'; pop.style.top = Math.max(8, (window.innerHeight - ph) / 2) + 'px'; return; }
+    pop.style.left = Math.max(8, Math.min(window.innerWidth - pw - 8, r.right - pw)) + 'px';
+    pop.style.top = (r.bottom + ph + 8 > window.innerHeight ? Math.max(8, r.top - ph - 4) : r.bottom + 4) + 'px';
+  };
+  pop.addEventListener('click', e => { if(!e.target.closest('.cl-pop-big')) return; e.stopPropagation(); big = !big; try{ localStorage.setItem('sm_memo_big', big ? '1' : ''); }catch(e2){} pop.classList.toggle('big', big); draw(); place(); });
+  pop.classList.toggle('big', big);
   draw();
   document.body.appendChild(pop);
-  const r = btn.getBoundingClientRect(), pw = pop.offsetWidth, ph = pop.offsetHeight;
-  pop.style.left = Math.max(8, Math.min(window.innerWidth - pw - 8, r.right - pw)) + 'px';
-  pop.style.top = (r.bottom + ph + 8 > window.innerHeight ? Math.max(8, r.top - ph - 4) : r.bottom + 4) + 'px';
+  place();
   setTimeout(() => document.addEventListener('mousedown', closeDatePopOutside, true), 0);
 }
 // 한 번만: '비고'와 '메모' 두 항목이 따로 있으면 '비고' 하나(메모(목록))로 합침 - 회차마다 비고 줄 + 메모 줄을 이어 붙임(메모 값은 지우지 않고 남겨 둠)
