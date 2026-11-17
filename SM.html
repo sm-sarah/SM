@@ -1599,6 +1599,27 @@ function smTogglePcView(){ try{ localStorage.setItem('sm_pc_view', window.SM_PC_
   .mn-body .mn-h{ font-size:15.5px; font-weight:800; margin:10px 0 2px; color:var(--primary-dark); }
   .mn-body ul, .mn-body ol{ margin:2px 0; padding-left:22px; }
   .mn-body .mn-gap{ height:8px; }
+  /* [2026.11.17] 서식 편집칸·보기 */
+  .sm-rt{ border:1px solid var(--border); border-radius:12px; background:#fff; text-align:left; }
+  .sm-rt-bar{ display:flex; flex-wrap:wrap; align-items:center; gap:2px; padding:4px 6px; border-bottom:1px solid var(--border); background:var(--bg); border-radius:12px 12px 0 0; position:relative; }
+  .sm-rt-bar > button, .sm-rt-dd > button{ min-width:26px; height:26px; border:none; background:none; border-radius:6px; cursor:pointer; font:inherit; font-size:13px; color:var(--text); padding:0 5px; }
+  .sm-rt-bar > button:hover, .sm-rt-dd > button:hover{ background:var(--primary-soft); }
+  .sm-rt-sep{ width:1px; height:16px; background:var(--border); margin:0 3px; }
+  .sm-rt-dd{ position:relative; display:inline-flex; }
+  .sm-rt-pal{ position:absolute; top:28px; left:0; z-index:5; display:flex; gap:4px; padding:6px; background:#fff; border:1px solid var(--border); border-radius:10px; box-shadow:0 6px 16px rgba(0,0,0,.12); }
+  .sm-rt-pal[hidden]{ display:none; }
+  .sm-rt-pal button{ width:18px; height:18px; border-radius:50%; border:none; cursor:pointer; }
+  .sm-rt-ed{ padding:10px 12px; max-height:52vh; overflow:auto; outline:none; font-size:13.5px; line-height:1.6; color:var(--text); }
+  .sm-rt-ed.empty::before{ content:attr(data-ph); color:var(--muted-soft); pointer-events:none; }
+  .sm-rt-ed table, .sm-rt-view table{ border-collapse:collapse; margin:6px 0; font-size:13px; width:auto; }
+  .sm-rt-ed td, .sm-rt-ed th, .sm-rt-view td, .sm-rt-view th{ border:1px solid var(--border); padding:5px 10px; text-align:left; vertical-align:top; min-width:40px; }
+  .sm-rt-ed th, .sm-rt-view th{ background:var(--primary-soft); font-weight:800; }
+  .sm-rt-ed ul, .sm-rt-ed ol, .sm-rt-view ul, .sm-rt-view ol{ margin:2px 0; padding-left:22px; }
+  .sm-rt-view{ line-height:1.6; overflow-x:auto; }
+  .sm-rt-ed h1, .sm-rt-ed h2, .sm-rt-ed h3, .sm-rt-view h1, .sm-rt-view h2, .sm-rt-view h3{ font-size:15.5px; font-weight:800; margin:10px 0 2px; color:var(--primary-dark); }
+  .sm-rt-ed p, .sm-rt-view p{ margin:4px 0; }
+  .cl-pop .sm-rt-ed{ min-height:80px; max-height:40vh; }
+  .cl-pop .sm-rt-bar{ gap:0; padding:3px 4px; } .cl-pop .sm-rt-bar > button, .cl-pop .sm-rt-dd > button{ min-width:22px; padding:0 3px; } .cl-pop .sm-rt-sep{ margin:0 1px; }
   .mn-tbl-wrap{ overflow-x:auto; margin:6px 0; } .mn-tbl{ border-collapse:collapse; font-size:13px; } .mn-tbl th, .mn-tbl td{ border:1px solid var(--border); padding:5px 10px; text-align:left; vertical-align:top; } .mn-tbl th{ background:var(--primary-soft); font-weight:800; white-space:nowrap; }   /* [2026.11.17] 매뉴얼 표 */
   .mn-body a{ color:var(--primary-dark); }
   .mn-refs{ display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin:-2px 0 14px; }
@@ -5242,7 +5263,7 @@ function vatProgPeriodRanges(){
 // [2026.10.19] "글자로 입력하면 가로 여백이 계속 늘어난다 - 아이콘으로 표시하고 마우스를 올리면 메모가 보이게"(요청) - 입력 방식 '글자(팝업)'
 function vatProgMemoBtn(cid, colId, v){
   const has = v != null && String(v).trim() !== '', F = smAttOf(smAttKey('vp', vatProgKey(), cid, colId));   // [2026.11.11] 첨부파일
-  return `<button type="button" class="cl-dt vp-dt vp-memo${has || F.length ? ' has' : ''}" data-cid="${cid}" data-col="${colId}" title="${escapeAttr((has ? String(v) : F.length ? '' : '메모 입력') + smAttTip(F))}" aria-label="메모" onclick="vatProgMemoPop(this)">${F.length ? ICON_CL_CLIP + (F.length > 1 ? `<span class="vt-ic-n">${F.length}</span>` : '') : ICON_MEMO_DOC}</button>`;
+  return `<button type="button" class="cl-dt vp-dt vp-memo${has || F.length ? ' has' : ''}" data-cid="${cid}" data-col="${colId}" title="${escapeAttr((has ? smRtText(v) : F.length ? '' : '메모 입력') + smAttTip(F))}" aria-label="메모" onclick="vatProgMemoPop(this)">${F.length ? ICON_CL_CLIP + (F.length > 1 ? `<span class="vt-ic-n">${F.length}</span>` : '') : ICON_MEMO_DOC}</button>`;
 }
 function vatProgMemoPop(btn){
   closeDatePopClose();
@@ -5258,10 +5279,11 @@ function vatProgMemoPop(btn){
   pop.style.top = (r.bottom + ph + 8 > window.innerHeight ? Math.max(8, r.top - ph - 4) : r.bottom + 4) + 'px';
   smAttWire(pop, 'vp', vatProgKey(), cid, col, () => { closeDatePopClose(); renderVat(); }, () => renderVat());   // [2026.11.11] 첨부파일(다른 기수 첨부는 보기만)
   const ta = pop.querySelector('textarea');
-  const set = v => { v = String(v).trim(); vatProgSet(cid, col, v); btn.classList.toggle('has', !!v); btn.title = v || '메모 입력'; closeDatePopClose(); };
+  const set = v => { v = String(v).trim(); vatProgSet(cid, col, v); btn.classList.toggle('has', !!v); btn.title = smRtText(v) || '메모 입력'; closeDatePopClose(); };
   pop.querySelectorAll('[data-v]').forEach(b => b.onclick = () => set(b.dataset.v === '__clear' ? '' : ta.value));
-  ta.addEventListener('keydown', e => { if(e.key === 'Enter' && !e.shiftKey && !e.isComposing){ e.preventDefault(); set(ta.value); } if(e.key === 'Escape') closeDatePopClose(); });
-  ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length);
+  // [2026.11.17] 서식 편집칸(Enter = 줄바꿈, Ctrl+Enter = 저장)
+  pop.style.width = '360px'; smRtFromTextarea(ta, 'text'); smRtPlace(pop, btn);
+  ta._rtFocus();
   setTimeout(() => document.addEventListener('mousedown', closeDatePopOutside, true), 0);
 }
 // [2026.10.20] 체크+날짜(요청) - 빈 체크를 누르면 체크 대신 날짜 입력 창(날짜 칸과 같은 창)을 열고, 저장하면 체크. 체크된 걸 누르면 체크·날짜 해제
@@ -6490,6 +6512,7 @@ function smcNeed(col, native, nativeIcon){
 function smcIso(x){ return /^\d{4}-\d{2}-\d{2}$/.test(String(x || '')); }
 function smcFmt(type, v, year){
   if(v == null || v === '' || v === false) return '';
+  if(smRtIs(v)) return smRtText(v).replace(/\s*\n+\s*/g, ' · ');   // [2026.11.17] 서식 메모는 글자만
   const y = String(year || new Date().getFullYear());
   const d = x => smcIso(x) ? `${x.slice(0, 4) === y ? '' : x.slice(2, 4) + '.'}${Number(x.slice(5, 7))}/${Number(x.slice(8))}` : String(x || '');
   if(type === 'date') return d(v);
@@ -6633,7 +6656,7 @@ function smcTd(s, k, col, val, tdCls){
   const has = val != null && val !== '';
   const AF = t === 'memo' ? smAttOf(smAttKey(s === 'close' ? 'close' : s, smcPer(s), k, col.id)) : [];   // [2026.11.11] 글자(팝업) 첨부파일
   const icSub = s === 'close' && has ? smIcShort(t, val, y) : '';   // [2026.11.16] 결산 아이콘 아래 작은 날짜
-  if(smcIsIcon(col)) return `${td}<button type="button" class="cl-dt vp-memo${has || AF.length ? ' has' : ''}${icSub ? ' has-sub' : ''}" ${at} title="${escapeAttr((has ? (t === 'memo' ? String(val) : smcFmt(t, val, y)) : AF.length ? '' : '입력') + smAttTip(AF))}" onclick="smcPop(this)">${AF.length ? ICON_CL_CLIP + (AF.length > 1 ? `<span class="vt-ic-n">${AF.length}</span>` : '') : has ? (/^(date|month|range|rangedate|monthdate)$/.test(t) ? ICON_CL_CAL : ICON_MEMO_DOC) : ''}${icSub ? `<span class="cl-ic-sub">${taxjEsc(icSub)}</span>` : ''}</button></td>`;
+  if(smcIsIcon(col)) return `${td}<button type="button" class="cl-dt vp-memo${has || AF.length ? ' has' : ''}${icSub ? ' has-sub' : ''}" ${at} title="${escapeAttr((has ? (t === 'memo' ? smRtText(val) : smcFmt(t, val, y)) : AF.length ? '' : '입력') + smAttTip(AF))}" onclick="smcPop(this)">${AF.length ? ICON_CL_CLIP + (AF.length > 1 ? `<span class="vt-ic-n">${AF.length}</span>` : '') : has ? (/^(date|month|range|rangedate|monthdate)$/.test(t) ? ICON_CL_CAL : ICON_MEMO_DOC) : ''}${icSub ? `<span class="cl-ic-sub">${taxjEsc(icSub)}</span>` : ''}</button></td>`;
   if(t === 'select'){ const opts = col.opts || [], sv = has ? String(val) : ''; return `<td><select class="vp-in" style="min-width:84px;" ${at} onchange="smcSet(this, this.value)"><option value=""></option>${(sv && !opts.includes(sv) ? [sv] : []).concat(opts).map(o => `<option ${o === sv ? 'selected' : ''}>${taxjEsc(o)}</option>`).join('')}</select></td>`; }
   if(t === 'monthdate' && !smcIsIcon(col)){ const o = smcMd(val), y2 = S.year(); return `${td}<button type="button" class="cl-dt" ${at} title="${escapeAttr(has ? smcFmt(t, val, y2) : '입력')}" onclick="smcPop(this)">${has ? `${smMemoShort([o.mo ? smcFmt('month', o.mo, y2) : ''], o.m)}${o.d ? `<span class="rd-dd">✓${taxjEsc(smcFmt('date', o.d, y2))}</span>` : ''}` : ''}</button></td>`; }   // [2026.11.11] 월+처리날짜
   if(t === 'dcm' && !smcIsIcon(col)){ const o = smcDcm(val); return `${td}<span class="smc-dcm"><input type="checkbox" ${o.ck ? 'checked' : ''} ${at} title="체크" onchange="smcDcmCheck(this)"><button type="button" class="cl-dt" ${at} title="${escapeAttr(has ? smcFmt(t, val, y) : '날짜·메모 입력')}" onclick="smcPop(this)">${o.d ? taxjEsc(smcFmt('date', o.d, y)) : ''}${o.m ? `<span class="smc-dcm-m" title="${escapeAttr(o.m)}">📝</span>` : ''}</button></span></td>`; }   // [2026.11.16] 날짜+체크+메모
@@ -6756,6 +6779,7 @@ function smcPop(btn, as){
   const set = v => { closeDatePopClose(); S.set(k, c, v); };
   closePopWire(pop);
   if(t === 'memo') smAttWire(pop, s0, smcPer(s0), k, c, () => { closeDatePopClose(); S.set(k, c, S.get(k, c)); }, () => S.set(k, c, S.get(k, c)));   // [2026.11.11] 첨부파일 - 다시 그리기는 같은 값 저장으로
+  if(t === 'memo'){ const t0 = pop.querySelector('.cl-pop-memo'); pop.style.width = '360px'; smRtFromTextarea(t0, 'text'); smRtPlace(pop, btn); setTimeout(() => t0._rtFocus && t0._rtFocus(), 0); }   // [2026.11.17] 서식 편집칸
   const di = pop.querySelector('.cl-pop-date'), ti = pop.querySelector('.cl-pop-text'), ia = pop.querySelector('.cl-r-a'), ib = pop.querySelector('.cl-r-b'), ta = pop.querySelector('.cl-pop-memo');
   const save = () => {
     if(t === 'range'){ if([ia, ib].some(i => i.value && !/^\d{4}-/.test(i.value))) return smAlert('날짜를 확인해 주세요', '연도는 4자리로 입력해요.'); return set(ia.value || ib.value ? `${ia.value}~${ib.value}` : ''); }
@@ -12192,6 +12216,101 @@ function renderSettings(){
 // 본문은 글로 적되 간단한 표시를 알아봄: '# 제목', '- 목록', '1. 순서', '**굵게**', 주소(https://…)는 링크. 고칠 때마다 이력이 남음
 let manualCat = '', manualSel = null, manualSearch = '';
 function setManualCat(c){ manualCat = c || ''; manualSel = null; if(activeTab !== 'manuals') switchTab('manuals'); else { renderManuals(); try{ updatePageHead(); }catch(e){} } }
+// [2026.11.17] "붙여넣으면 | | 로 바뀌는 대신 구글(Gmail)처럼 서식 그대로 - 매뉴얼 + 큰 메모칸"(요청)
+//   서식 편집칸(sm-rt): 위 서식 버튼(굵게·기울임·밑줄·취소선·글자색·형광·목록·정렬·표·서식 지우기) + 붙여넣은 표·굵게·색 그대로
+//   저장 = '<!--rt-->' + 정리한 HTML(허용한 태그·스타일만 남김 - 스크립트·이벤트·외부 서식 제거). 예전 글(그냥 글자·# - | 표)은 열 때 서식으로 바꿔 보여 줌
+const SM_RT = '<!--rt-->';
+function smRtIs(v){ return typeof v === 'string' && v.startsWith(SM_RT); }
+const SM_RT_TAGS = new Set(['B','STRONG','I','EM','U','S','STRIKE','SPAN','DIV','P','BR','UL','OL','LI','TABLE','THEAD','TBODY','TFOOT','TR','TH','TD','H1','H2','H3','H4','A','BLOCKQUOTE','HR','SUB','SUP','COL','COLGROUP']);
+const SM_RT_DROP = new Set(['SCRIPT','STYLE','META','LINK','TITLE','HEAD','IFRAME','OBJECT','EMBED','NOSCRIPT','TEMPLATE','SVG','IMG','VIDEO','AUDIO','INPUT','BUTTON','SELECT','TEXTAREA','FORM']);
+const SM_RT_CSS = ['color','background-color','font-weight','font-style','text-decoration','text-decoration-line','text-align'];
+function smRtClean(html){
+  const doc = new DOMParser().parseFromString(`<div>${String(html || '')}</div>`, 'text/html'), root = doc.body.firstChild;
+  const walk = el => { [...el.childNodes].forEach(n => {
+    if(n.nodeType === 8){ n.remove(); return; }
+    if(n.nodeType !== 1) return;
+    const tg = n.tagName.toUpperCase();
+    if(SM_RT_DROP.has(tg)){ n.remove(); return; }
+    walk(n);
+    if(tg === 'FONT' && n.getAttribute('color')){ const sp = doc.createElement('span'); sp.style.color = n.getAttribute('color'); while(n.firstChild) sp.appendChild(n.firstChild); n.replaceWith(sp); return; }
+    if(!SM_RT_TAGS.has(tg)){ const f = doc.createDocumentFragment(); while(n.firstChild) f.appendChild(n.firstChild); if(/^(P|DIV|SECTION|ARTICLE|HEADER|FOOTER|MAIN)$/.test(tg)) f.appendChild(doc.createElement('br')); n.replaceWith(f); return; }
+    const keep = {};
+    if(tg === 'A'){ const h = n.getAttribute('href') || ''; if(/^https?:\/\//i.test(h)) keep.href = h; }
+    if(tg === 'TD' || tg === 'TH'){ ['colspan','rowspan'].forEach(a => { const v = n.getAttribute(a); if(v && /^\d+$/.test(v)) keep[a] = v; }); }
+    const st = n.style, css = SM_RT_CSS.map(k => { const v = st && st.getPropertyValue(k); return v && !/url\(|expression/i.test(v) && !(k === 'font-weight' && /^(normal|400)$/.test(v)) && !(k === 'background-color' && /^(transparent|rgba\(0, 0, 0, 0\)|white|#fff(fff)?|rgb\(255, 255, 255\))$/i.test(v)) && !(k === 'color' && /^(black|#000(000)?|rgb\(0, 0, 0\))$/i.test(v)) ? `${k}:${v}` : ''; }).filter(Boolean).join(';');
+    [...n.attributes].forEach(a => n.removeAttribute(a.name));
+    Object.entries(keep).forEach(([k, v]) => n.setAttribute(k, v));
+    if(tg === 'A'){ n.setAttribute('target', '_blank'); n.setAttribute('rel', 'noopener'); }
+    if(css) n.setAttribute('style', css);
+  }); };
+  walk(root);
+  return root.innerHTML.replace(/(<br>\s*){3,}/g, '<br><br>').trim();
+}
+function smRtText(v){
+  if(!smRtIs(v)) return String(v == null ? '' : v);
+  const d = document.createElement('div'); d.innerHTML = smRtClean(v.slice(SM_RT.length));
+  d.querySelectorAll('br').forEach(b => b.replaceWith('\n'));
+  d.querySelectorAll('p,div,li,tr,h1,h2,h3,h4').forEach(b => b.append('\n'));
+  d.querySelectorAll('td,th').forEach(b => b.append(' '));
+  return d.textContent.replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+}
+function smRtLegacyHtml(v, legacy){ const t = String(v == null ? '' : v); if(legacy !== 'manual') return taxjEsc(t).replace(/\n/g, '<br>');
+  const d = document.createElement('div'); d.innerHTML = manualBodyHtml(t);   // 예전 매뉴얼: # 제목 → 소제목(h3), 빈 줄 → 줄바꿈
+  d.querySelectorAll('.mn-h').forEach(x => { const h = document.createElement('h3'); h.innerHTML = x.innerHTML; x.replaceWith(h); });
+  d.querySelectorAll('.mn-gap').forEach(x => x.replaceWith(document.createElement('br')));
+  return d.innerHTML; }
+function smRtView(v, legacy){ return `<div class="sm-rt-view">${smRtIs(v) ? smRtClean(v.slice(SM_RT.length)) : smRtLegacyHtml(v, legacy)}</div>`; }
+// 글자칸(textarea)을 서식 편집칸으로 바꿈. textarea는 숨겨 두고 값(서식 HTML)을 계속 넣어 둬서 기존 저장 코드가 그대로 동작
+function smRtPlace(pop, btn){ const r = btn.getBoundingClientRect(), pw = pop.offsetWidth, ph = pop.offsetHeight; pop.style.left = Math.max(8, Math.min(window.innerWidth - pw - 8, r.left)) + 'px'; pop.style.top = (r.bottom + ph + 8 > window.innerHeight ? Math.max(8, r.top - ph - 4) : r.bottom + 4) + 'px'; }
+function smRtFromTextarea(ta, legacy){
+  if(!ta || ta._rt) return; ta._rt = true;
+  const orig = ta.value;
+  const box = document.createElement('div'); box.className = 'sm-rt';
+  const C = [['', '기본'], ['#e11d48', '빨강'], ['#2563eb', '파랑'], ['#059669', '초록'], ['#d97706', '주황'], ['#7c3aed', '보라']];
+  const H = [['', '없음'], ['#fff3a3', '노랑'], ['#fde2ec', '분홍'], ['#dbeafe', '하늘'], ['#dcfce7', '연두']];
+  box.innerHTML = `<div class="sm-rt-bar">
+      <button type="button" data-c="bold" title="굵게 (Ctrl+B)"><b>B</b></button><button type="button" data-c="italic" title="기울임 (Ctrl+I)"><i>I</i></button><button type="button" data-c="underline" title="밑줄 (Ctrl+U)"><u>U</u></button><button type="button" data-c="strikeThrough" title="취소선"><s>S</s></button>
+      <span class="sm-rt-sep"></span>
+      <span class="sm-rt-dd"><button type="button" data-dd="c" title="글자색"><span style="border-bottom:3px solid #e11d48; line-height:1;">A</span></button><span class="sm-rt-pal" data-pal="c" hidden>${C.map(([v, n]) => `<button type="button" data-fc="${v}" title="${n}" style="background:${v || '#3f3f46'}"></button>`).join('')}</span></span>
+      <span class="sm-rt-dd"><button type="button" data-dd="h" title="형광펜"><span style="background:#fff3a3; padding:0 3px;">가</span></button><span class="sm-rt-pal" data-pal="h" hidden>${H.map(([v, n]) => `<button type="button" data-hc="${v}" title="${n}" style="background:${v || '#fff'}; ${v ? '' : 'outline:1px solid #ddd;'}"></button>`).join('')}</span></span>
+      <span class="sm-rt-sep"></span>
+      <button type="button" data-c="insertUnorderedList" title="목록">•</button><button type="button" data-c="insertOrderedList" title="번호 목록">1.</button>
+      <button type="button" data-c="justifyLeft" title="왼쪽 맞춤">⇤</button><button type="button" data-c="justifyCenter" title="가운데 맞춤">≡</button>
+      <button type="button" data-tbl="1" title="표 넣기 (3칸×3줄)">▦</button>
+      <button type="button" data-c="removeFormat" title="서식 지우기">⌫</button>
+    </div><div class="sm-rt-ed" contenteditable="true" spellcheck="false"></div>`;
+  ta.insertAdjacentElement('beforebegin', box); ta.style.display = 'none';
+  const ed = box.querySelector('.sm-rt-ed');
+  ed.innerHTML = smRtIs(orig) ? smRtClean(orig.slice(SM_RT.length)) : smRtLegacyHtml(orig, legacy);
+  if(ta.placeholder) ed.dataset.ph = ta.placeholder.split('\n')[0];
+  const rows = Number(ta.getAttribute('rows')) || 4; ed.style.minHeight = Math.max(70, rows * 20) + 'px';
+  const sync = () => { const h = smRtClean(ed.innerHTML), txt = ed.textContent.trim(); ta.value = txt || /<table/i.test(h) ? SM_RT + h : ''; ed.classList.toggle('empty', !txt && !/<table|<li/i.test(h)); };
+  ed.classList.toggle('empty', !ed.textContent.trim());
+  ed.addEventListener('input', sync);
+  const exec = (c, v) => { ed.focus(); try{ document.execCommand('styleWithCSS', false, true); }catch(e){} document.execCommand(c, false, v); sync(); };
+  box.querySelector('.sm-rt-bar').addEventListener('mousedown', e => { if(e.target.closest('button')) e.preventDefault(); });   // 누를 때 고른 글자가 풀리지 않게
+  box.querySelectorAll('[data-c]').forEach(b => b.onclick = () => exec(b.dataset.c));
+  box.querySelectorAll('[data-dd]').forEach(b => b.onclick = () => { const p = box.querySelector(`[data-pal="${b.dataset.dd}"]`); const open = p.hidden; box.querySelectorAll('[data-pal]').forEach(x => x.hidden = true); p.hidden = !open; });
+  box.querySelectorAll('[data-fc]').forEach(b => b.onclick = () => { box.querySelectorAll('[data-pal]').forEach(x => x.hidden = true); exec('foreColor', b.dataset.fc || '#3f3f46'); });
+  box.querySelectorAll('[data-hc]').forEach(b => b.onclick = () => { box.querySelectorAll('[data-pal]').forEach(x => x.hidden = true); exec('hiliteColor', b.dataset.hc || 'transparent'); });
+  box.querySelector('[data-tbl]').onclick = () => exec('insertHTML', `<table><tbody>${[0, 1, 2].map(r => `<tr>${[0, 1, 2].map(() => r ? '<td><br></td>' : '<th><br></th>').join('')}</tr>`).join('')}</tbody></table><br>`);
+  ed.addEventListener('paste', e => {
+    const cd = e.clipboardData; if(!cd) return;
+    if(cd.files && cd.files.length && !cd.getData('text/html')) return;   // 캡처·파일은 첨부 쪽에서
+    e.preventDefault();
+    const html = cd.getData('text/html');
+    if(html){ exec('insertHTML', smRtClean(html.replace(/^[\s\S]*<!--StartFragment-->|<!--EndFragment-->[\s\S]*$/g, ''))); return; }
+    const t = cd.getData('text/plain') || '', L = t.replace(/\r/g, '').split('\n');
+    if(L.filter(l => l.includes('\t')).length >= 2){ exec('insertHTML', `<table><tbody>${L.filter(l => l.length).map(l => `<tr>${l.split('\t').map(c => `<td>${taxjEsc(c)}</td>`).join('')}</tr>`).join('')}</tbody></table><br>`); return; }   // 엑셀 칸
+    exec('insertHTML', taxjEsc(t).replace(/\n/g, '<br>'));
+  });
+  ed.addEventListener('keydown', e => {
+    if(e.key === 'Enter' && (e.ctrlKey || e.metaKey)){ e.preventDefault(); sync(); const p = ta.closest('.cl-pop, .sm-modal'); const ok = p && p.querySelector('[data-a=ok], [data-v=__ok], .sm-modal-ok'); if(ok) ok.click(); }
+    if(e.key === 'Tab'){ e.preventDefault(); exec('insertHTML', '&nbsp;&nbsp;&nbsp;&nbsp;'); }
+  });
+  ta._rtFocus = () => { ed.focus(); const r = document.createRange(); r.selectNodeContents(ed); r.collapse(false); const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r); };
+  return ed;
+}
 function manualBodyHtml(t){
   const inline = x => taxjEsc(x).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>');
   const out = []; let list = null, tbl = null;
@@ -12217,7 +12336,7 @@ function manualFields(x){
     { label:'분야', options: cats, value: x.cat || manualCat || cats[0] },
     { label:'제목', value:x.title || '', placeholder:'예: 원천세 반기 신고 순서' },
     { label:'참고 사이트 (이름은 비워도 돼요)', type:'refs', value:(x.refs || []).map(r => r.name && r.name !== r.url ? `${r.name} | ${r.url}` : r.url).join('\n') },
-    { label:'내용 (# 제목, - 목록, 1. 순서, **굵게**, | 표 | · 표는 복사해 붙여넣기 · Ctrl+Enter 저장)', type:'textarea', value:x.body || '', rows:16, placeholder:'# 준비물\n- 급여대장\n- 지급명세서\n\n# 순서\n1. 홈택스 로그인\n2. 원천세 신고 메뉴' },
+    { label:'내용 (서식 버튼·붙여넣기 그대로 · Ctrl+Enter 저장)', type:'textarea', rich:'manual', value:x.body || '', rows:16, placeholder:'# 준비물\n- 급여대장\n- 지급명세서\n\n# 순서\n1. 홈택스 로그인\n2. 원천세 신고 메뉴' },
   ];
 }
 // 참고 사이트 칸: 한 줄에 하나, "이름 | 주소" 또는 주소만
@@ -12293,7 +12412,7 @@ function manualHistory(id){
   const fmt = iso => { const d = new Date(iso); return isNaN(d) ? '' : `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`; };
   const h = m.history || [];
   smDialog({ title:`${m.title} · 예전 내용`, icon:'⟲', cancelText:null, okText:'닫기', wide:true,
-    html: h.length ? h.map(x => `<details style="text-align:left; margin:6px 0;"><summary style="cursor:pointer; font-weight:700;">${fmt(x.at)} 까지의 내용 <span class="hint" style="margin:0;">${taxjEsc(x.cat)} · ${taxjEsc(x.title)}</span></summary><div class="mn-body" style="margin-top:6px;">${manualBodyHtml(x.body)}</div></details>`).join('')
+    html: h.length ? h.map(x => `<details style="text-align:left; margin:6px 0;"><summary style="cursor:pointer; font-weight:700;">${fmt(x.at)} 까지의 내용 <span class="hint" style="margin:0;">${taxjEsc(x.cat)} · ${taxjEsc(x.title)}</span></summary><div class="mn-body" style="margin-top:6px;">${smRtView(x.body, 'manual')}</div></details>`).join('')
       : '<div class="hint">아직 고친 적이 없어요.</div>' });
 }
 // [2026.11.17] "결산처럼 매뉴얼에도 캡처 붙여넣기 첨부"(요청) - 매뉴얼 화면에서 고른 매뉴얼이 있고 글자 입력 중이 아니면 Ctrl+V 파일·캡처를 그 매뉴얼에 첨부
@@ -12372,7 +12491,7 @@ function renderManuals(){
   if(qRaw) smFileContentSearch(qRaw, () => { if(manualSearch.trim() === qRaw && activeTab === 'manuals' && document.activeElement?.id !== 'manualSearch') renderManuals(); else if(manualSearch.trim() === qRaw && activeTab === 'manuals') manualOnSearch(manualSearch); });
   const hits = smFileHits[qRaw] instanceof Set ? smFileHits[qRaw] : null;
   const inFile = m => !!hits && (m.files || []).some(f => hits.has(f.id));
-  const textHit = m => [m.title, m.body, m.cat, ...(m.refs || []).map(r => r.name + ' ' + r.url), ...(m.files || []).map(f => f.name)].some(v => String(v || '').toLowerCase().includes(q));
+  const textHit = m => [m.title, smRtText(m.body), m.cat, ...(m.refs || []).map(r => r.name + ' ' + r.url), ...(m.files || []).map(f => f.name)].some(v => String(v || '').toLowerCase().includes(q));
   const list = manuals.filter(m => (!manualCat || m.cat === manualCat) && (!q || textHit(m) || inFile(m)))
     .sort((a, b) => manualCats.indexOf(a.cat) - manualCats.indexOf(b.cat) || String(a.title).localeCompare(String(b.title), 'ko'));
   if(!list.some(m => m.id === manualSel)) manualSel = list.length ? list[0].id : null;
@@ -12413,7 +12532,7 @@ function renderManuals(){
             ${(sel.refs || []).length ? `<div class="mn-refs"><span class="mn-refs-l">참고 사이트</span>${sel.refs.map(r => `<a class="mn-ref" href="${escapeAttr(linkHref(r.url))}" target="_blank" rel="noopener" title="${escapeAttr(r.url)}">${taxjEsc(r.name)} ↗</a>`).join('')}</div>` : ''}
             <!-- [2026.10.22] "매뉴얼에 첨부파일 올리고 싶어"(요청) - 참고 사이트 줄과 같은 모양의 첨부 줄. 링크·서식처럼 내 드라이브 'SM_첨부파일'에 올림(여러 개·끌어다 놓기 가능) -->
             <div class="mn-refs att-list" ondragover="if(Array.from(event.dataTransfer.types||[]).includes('Files')) event.preventDefault();" ondrop="manualUpTarget=${sel.id}; smDropFiles(event, manualUploadFiles);"><span class="mn-refs-l">첨부</span>${smFilesHtml(sel.files, f => `manualRemoveFile(${sel.id}, '${f.id}')`)}${sel._uploading ? `<span class="hint" style="margin:0;">올리는 중… (${sel._uploading})</span>` : `<button class="att-add" onclick="manualPickFiles(${sel.id})" title="파일 첨부 (여러 개 선택하거나 여기로 끌어다 놓기)">＋ 파일</button>`}</div>
-            <div class="mn-body">${sel.body.trim() ? manualBodyHtml(sel.body) : '<div class="hint">내용이 비어 있어요. 연필 아이콘으로 적어 주세요.</div>'}</div>`
+            <div class="mn-body">${smRtText(sel.body).trim() || /<table/i.test(sel.body) ? smRtView(sel.body, 'manual') : '<div class="hint">내용이 비어 있어요. 연필 아이콘으로 적어 주세요.</div>'}</div>`
           : '<div class="empty">왼쪽에서 매뉴얼을 골라 주세요.</div>'}
         </div>
       </div>
@@ -13942,7 +14061,7 @@ function smDialog(opts){
           <label class="sm-modal-field"><span>${esc(f.label)}</span>
             ${f.options ? `<select data-i="${i}">${f.options.map(op => `<option ${op === f.value ? 'selected' : ''}>${esc(op)}</option>`).join('')}</select>`
               : f.type === 'refs' ? `<div class="sm-refs" data-refs="${i}"><div class="sm-refs-rows"></div><button type="button" class="sm-refs-add">+ 사이트 추가</button><input type="hidden" data-i="${i}" value="${esc(f.value)}"></div>`   // [2026.11.03] 이름·주소 칸 따로(요청)
-              : f.type === 'textarea' ? `<textarea data-i="${i}" rows="${f.rows || 3}" placeholder="${esc(f.placeholder)}">${esc(f.value)}</textarea>`
+              : f.type === 'textarea' ? `<textarea data-i="${i}" rows="${f.rows || 3}" placeholder="${esc(f.placeholder)}"${f.rich ? ` data-rich="${esc(f.rich)}"` : ''}>${esc(f.value)}</textarea>`
               : `<input type="${f.type || 'text'}" data-i="${i}" value="${esc(f.value)}" placeholder="${esc(f.placeholder)}">`}</label>`).join('')}</div>` : ''}
         <div class="sm-modal-btns">
           ${o.cancelText ? `<button type="button" class="sm-modal-cancel">${esc(o.cancelText)}</button>` : ''}
@@ -13951,7 +14070,8 @@ function smDialog(opts){
       </div>`;
     document.body.appendChild(wrap);
     requestAnimationFrame(() => wrap.classList.add('show'));
-    const inputs = Array.from(wrap.querySelectorAll('[data-i]')).sort((a, b) => a.dataset.i - b.dataset.i);   // [2026.11.03] 칸마다 하나씩(이름·주소 줄 칸 등 안쪽 입력칸은 빼고)
+    const inputs = Array.from(wrap.querySelectorAll('[data-i]')).sort((a, b) => a.dataset.i - b.dataset.i);
+    wrap.querySelectorAll('textarea[data-rich]').forEach(ta => smRtFromTextarea(ta, ta.dataset.rich));   // [2026.11.17] 서식 편집칸   // [2026.11.03] 칸마다 하나씩(이름·주소 줄 칸 등 안쪽 입력칸은 빼고)
     // [2026.11.03] 참고 사이트 칸: [이름][주소][✕] 줄을 더하고 빼며 적음 → 숨은 칸에 "이름 | 주소" 줄로 모아 둠(예전 저장 형식 그대로)
     wrap.querySelectorAll('.sm-refs').forEach(box => {
       const hid = box.querySelector('input[type=hidden]'), rowsEl = box.querySelector('.sm-refs-rows');
@@ -13977,7 +14097,7 @@ function smDialog(opts){
       if(e.key === 'Escape'){ e.preventDefault(); e.stopPropagation(); done(o.closeX ? 'x' : false); }
       else if(e.key === 'Enter' && !e.isComposing){
         // 여러 줄 입력칸(메모)에서는 Enter = 줄바꿈, Ctrl/Cmd+Enter = 저장
-        if(e.target && e.target.tagName === 'TEXTAREA' && !(e.ctrlKey || e.metaKey)) return;
+        if(e.target && (e.target.tagName === 'TEXTAREA' || (e.target.closest && e.target.closest('.sm-rt-ed'))) && !(e.ctrlKey || e.metaKey)) return;
         e.preventDefault(); e.stopPropagation(); done(true);
       }
     };
