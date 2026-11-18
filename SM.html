@@ -3570,6 +3570,10 @@ function worklistDayLabel(dateStr){
 }
 
 function renderWorklist(){
+  // [2026.11.18] "이 할 일만 완료 체크가 안 됨"(요청) - 같은 번호(id)를 가진 할 일이 둘 있으면 누른 것 대신 다른 것이 바뀌었음(두 기기에서 같은 번호로 추가된 경우 등) → 겹치는 번호는 새 번호로 바꿈
+  { const seen = new Set(); let fixed = false, mx = tasks.reduce((m, t) => Math.max(m, Math.floor(Number(t.id)) || 0), 0);
+    tasks.forEach(t => { if(t.id == null || seen.has(t.id)){ t.id = ++mx; fixed = true; } seen.add(t.id); });
+    if(fixed){ if(typeof nextTaskId !== 'undefined' && nextTaskId <= mx) nextTaskId = mx + 1; scheduleGoogleSave(); } }
   const el = document.getElementById('tab-worklist');
   const monthNum = k => { const n = parseInt(k, 10); return isNaN(n) ? 99 : n; };
   const months = Array.from(new Set([...Object.keys(worklistChecklist), ...Object.keys(worklistSchedule)]))
