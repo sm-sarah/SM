@@ -1622,7 +1622,10 @@ function smTogglePcView(){ try{ localStorage.setItem('sm_pc_view', window.SM_PC_
   .sm-rt-ed td, .sm-rt-ed th, .sm-rt-view td, .sm-rt-view th{ border:1px solid var(--border); padding:5px 10px; text-align:left; vertical-align:top; min-width:40px; }
   .sm-rt-ed th, .sm-rt-view th{ background:var(--primary-soft); font-weight:800; }
   .sm-rt-ed ul, .sm-rt-ed ol, .sm-rt-view ul, .sm-rt-view ol{ margin:2px 0; padding-left:22px; }
-  .sm-rt-view{ line-height:1.6; overflow-x:auto; }
+  .sm-rt-view{ line-height:1.6; }
+  .sm-rt-tw{ overflow-x:auto; max-width:100%; margin:6px 0; } .sm-rt-tw > table{ margin:0; max-width:none; }
+  .sm-rt-view td, .sm-rt-view th, .sm-rt-ed td, .sm-rt-ed th{ white-space:normal; word-break:keep-all; } .sm-rt-view th, .sm-rt-ed th{ white-space:nowrap; }
+  .sm-rt-view td{ min-width:56px; } .sm-rt-view td:not(:only-child){ max-width:520px; }
   .sm-rt-ed h1, .sm-rt-ed h2, .sm-rt-ed h3, .sm-rt-view h1, .sm-rt-view h2, .sm-rt-view h3{ font-size:15.5px; font-weight:800; margin:10px 0 2px; color:var(--primary-dark); }
   .sm-rt-ed p, .sm-rt-view p{ margin:4px 0; }
   .cl-pop .sm-rt-ed{ min-height:80px; max-height:40vh; }
@@ -12277,7 +12280,8 @@ function smRtLegacyHtml(v, legacy){ const t = String(v == null ? '' : v); if(leg
   d.querySelectorAll('.mn-h').forEach(x => { const h = document.createElement('h3'); h.innerHTML = x.innerHTML; x.replaceWith(h); });
   d.querySelectorAll('.mn-gap').forEach(x => x.replaceWith(document.createElement('br')));
   return d.innerHTML; }
-function smRtView(v, legacy){ return `<div class="sm-rt-view">${smRtIs(v) ? smRtClean(v.slice(SM_RT.length)) : smRtLegacyHtml(v, legacy)}</div>`; }
+// [2026.11.18] "표가 넓으면 맨 아래까지 내려가야 가로 스크롤이 있어 불편"(요청) - 표마다 바로 아래에 가로 스크롤(표 감싸기), 칸 글자는 줄바꿈해서 되도록 화면 폭 안에
+function smRtView(v, legacy){ const h = smRtIs(v) ? smRtClean(v.slice(SM_RT.length)) : smRtLegacyHtml(v, legacy); return `<div class="sm-rt-view">${h.replace(/<table/g, '<div class="sm-rt-tw"><table').replace(/<\/table>/g, '</table></div>')}</div>`; }
 // 글자칸(textarea)을 서식 편집칸으로 바꿈. textarea는 숨겨 두고 값(서식 HTML)을 계속 넣어 둬서 기존 저장 코드가 그대로 동작
 function smRtPlace(pop, btn){ const r = btn.getBoundingClientRect(), pw = pop.offsetWidth, ph = pop.offsetHeight; pop.style.left = Math.max(8, Math.min(window.innerWidth - pw - 8, r.left)) + 'px'; pop.style.top = (r.bottom + ph + 8 > window.innerHeight ? Math.max(8, r.top - ph - 4) : r.bottom + 4) + 'px'; }
 function smRtFromTextarea(ta, legacy){
