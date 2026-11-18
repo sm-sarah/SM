@@ -833,6 +833,11 @@ function smTogglePcView(){ try{ localStorage.setItem('sm_pc_view', window.SM_PC_
   .sm-modal-backdrop.show .sm-modal{ transform:none; }
   /* [2026.10.15] 항목 수정 창 닫기(X) 버튼(요청: "닫기버튼 만들어줘") - 삭제 버튼만 있어서 그냥 닫을 수가 없었음 */
   .sm-modal{ position:relative; }
+  .sm-modal.xl, .sm-modal.wide.xl{ width:min(1000px, calc(100vw - 32px)); height:min(860px, calc(100vh - 32px)); max-height:calc(100vh - 24px); max-width:calc(100vw - 24px) !important; resize:both; overflow:auto; display:flex; flex-direction:column; min-width:420px; min-height:420px; }   /* [2026.11.18] 매뉴얼 창 크게·크기 조절 */
+  .sm-modal.xl .sm-modal-fields{ flex:1; display:flex; flex-direction:column; min-height:0; }
+  .sm-modal.xl .sm-modal-field:has(.sm-rt){ flex:1; display:flex; flex-direction:column; min-height:0; }
+  .sm-modal.xl .sm-rt{ flex:1; display:flex; flex-direction:column; min-height:200px; }
+  .sm-modal.xl .sm-rt-ed{ flex:1; max-height:none; min-height:160px; }
   .sm-modal-x{ position:absolute; top:12px; right:12px; width:30px; height:30px; border:none; border-radius:50%; background:transparent; color:var(--muted); font-size:20px; line-height:1; cursor:pointer; }
   .sm-modal-x:hover{ background:#f3eef1; color:var(--text); }
   /* [2026.10.16] "팝업 위 아이콘 전체적으로 조금 작게"(요청) 52→40px */
@@ -1611,7 +1616,7 @@ function smTogglePcView(){ try{ localStorage.setItem('sm_pc_view', window.SM_PC_
   .sm-rt-pal{ position:absolute; top:28px; left:0; z-index:5; display:flex; gap:4px; padding:6px; background:#fff; border:1px solid var(--border); border-radius:10px; box-shadow:0 6px 16px rgba(0,0,0,.12); }
   .sm-rt-pal[hidden]{ display:none; }
   .sm-rt-pal button{ width:18px; height:18px; border-radius:50%; border:none; cursor:pointer; }
-  .sm-rt-ed{ padding:10px 12px; max-height:52vh; overflow:auto; outline:none; font-size:13.5px; line-height:1.6; color:var(--text); }
+  .sm-rt-ed{ text-align:left; padding:10px 12px; max-height:52vh; overflow:auto; outline:none; font-size:13.5px; line-height:1.6; color:var(--text); }
   .sm-rt-ed.empty::before{ content:attr(data-ph); color:var(--muted-soft); pointer-events:none; }
   .sm-rt-ed table, .sm-rt-view table{ border-collapse:collapse; margin:6px 0; font-size:13px; width:auto; }
   .sm-rt-ed td, .sm-rt-ed th, .sm-rt-view td, .sm-rt-view th{ border:1px solid var(--border); padding:5px 10px; text-align:left; vertical-align:top; min-width:40px; }
@@ -12349,7 +12354,7 @@ function manualFields(x){
     { label:'분야', options: cats, value: x.cat || manualCat || cats[0] },
     { label:'제목', value:x.title || '', placeholder:'예: 원천세 반기 신고 순서' },
     { label:'참고 사이트 (이름은 비워도 돼요)', type:'refs', value:(x.refs || []).map(r => r.name && r.name !== r.url ? `${r.name} | ${r.url}` : r.url).join('\n') },
-    { label:'내용 (서식 버튼·붙여넣기 그대로 · Ctrl+Enter 저장)', type:'textarea', rich:'manual', value:x.body || '', rows:16, placeholder:'# 준비물\n- 급여대장\n- 지급명세서\n\n# 순서\n1. 홈택스 로그인\n2. 원천세 신고 메뉴' },
+    { label:'내용 (서식 버튼·붙여넣기 그대로 · Ctrl+Enter 저장)', type:'textarea', rich:'manual', value:x.body || '', rows:16, placeholder:'내용을 적거나 복사해 붙여넣으세요 (표·굵게·색 그대로)' },
   ];
 }
 // 참고 사이트 칸: 한 줄에 하나, "이름 | 주소" 또는 주소만
@@ -12361,7 +12366,7 @@ function manualParseRefs(t){
   }).filter(Boolean);
 }
 async function manualAdd(){
-  const r = await smForm('매뉴얼 추가', manualFields(), { okText:'추가', wide:true });
+  const r = await smForm('매뉴얼 추가', manualFields(), { okText:'추가', wide:true, xl:true });
   if(!r || !(r[1] || '').trim()) return;
   const m = { id: nextManualId++, cat: r[0], title: r[1].trim(), refs: manualParseRefs(r[2]), body: r[3] || '', at: new Date().toISOString(), history: [] };
   manuals.push(m); manualSel = m.id; manualCat = manualCat && manualCat !== m.cat ? m.cat : manualCat;
@@ -12370,7 +12375,7 @@ async function manualAdd(){
 async function manualEdit(id){
   const m = manuals.find(x => x.id === id);
   if(!m) return;
-  const r = await smForm('매뉴얼 수정', manualFields(m), { okText:'저장', icon:'✎', wide:true });
+  const r = await smForm('매뉴얼 수정', manualFields(m), { okText:'저장', icon:'✎', wide:true, xl:true });
   if(!r || !(r[1] || '').trim()) return;
   const refs = manualParseRefs(r[2]);
   if(r[0] === m.cat && r[1].trim() === m.title && (r[3] || '') === m.body && JSON.stringify(refs) === JSON.stringify(m.refs || [])) return;
@@ -14065,7 +14070,7 @@ function smDialog(opts){
     wrap.className = 'sm-modal-backdrop';
     const esc = v => String(v == null ? '' : v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
     wrap.innerHTML = `
-      <div class="sm-modal ${o.tone} ${o.wide ? 'wide' : ''}" role="dialog" aria-modal="true">
+      <div class="sm-modal ${o.tone} ${o.wide ? 'wide' : ''} ${o.xl ? 'xl' : ''}" role="dialog" aria-modal="true">
         ${o.closeX === false ? '' : '<button type="button" class="sm-modal-x" title="닫기" aria-label="닫기">×</button>'}
         <div class="sm-modal-ic">${esc(o.icon)}</div>
         ${o.title ? `<div class="sm-modal-title">${esc(o.title)}</div>` : ''}
@@ -14084,7 +14089,11 @@ function smDialog(opts){
     document.body.appendChild(wrap);
     requestAnimationFrame(() => wrap.classList.add('show'));
     const inputs = Array.from(wrap.querySelectorAll('[data-i]')).sort((a, b) => a.dataset.i - b.dataset.i);
-    wrap.querySelectorAll('textarea[data-rich]').forEach(ta => smRtFromTextarea(ta, ta.dataset.rich));   // [2026.11.17] 서식 편집칸   // [2026.11.03] 칸마다 하나씩(이름·주소 줄 칸 등 안쪽 입력칸은 빼고)
+    wrap.querySelectorAll('textarea[data-rich]').forEach(ta => smRtFromTextarea(ta, ta.dataset.rich));   // [2026.11.17] 서식 편집칸
+    // [2026.11.18] "매뉴얼 창이 너무 작아 - 크기 조절, 기본도 크게"(요청) - xl 창: 기본 넓게, 오른쪽 아래 모서리를 끌어 크기 조절(이 기기에 기억)
+    if(o.xl){ const md = wrap.querySelector('.sm-modal');
+      try{ const sz = JSON.parse(localStorage.getItem('sm_dlg_xl') || 'null'); if(sz && sz.w > 400 && sz.h > 400){ md.style.width = Math.min(sz.w, window.innerWidth - 24) + 'px'; md.style.height = Math.min(sz.h, window.innerHeight - 24) + 'px'; } }catch(e){}
+      let t0, first = true; new ResizeObserver(() => { if(first){ first = false; return; } clearTimeout(t0); t0 = setTimeout(() => { if(!document.body.contains(md) || !wrap.classList.contains('show')) return; try{ localStorage.setItem('sm_dlg_xl', JSON.stringify({ w: md.offsetWidth, h: md.offsetHeight })); }catch(e){} }, 400); }).observe(md); }   // [2026.11.03] 칸마다 하나씩(이름·주소 줄 칸 등 안쪽 입력칸은 빼고)
     // [2026.11.03] 참고 사이트 칸: [이름][주소][✕] 줄을 더하고 빼며 적음 → 숨은 칸에 "이름 | 주소" 줄로 모아 둠(예전 저장 형식 그대로)
     wrap.querySelectorAll('.sm-refs').forEach(box => {
       const hid = box.querySelector('input[type=hidden]'), rowsEl = box.querySelector('.sm-refs-rows');
