@@ -3911,7 +3911,10 @@ document.addEventListener('contextmenu', e => {
   window[fn] = function(){ const r = f.apply(this, arguments); try{ smOrdApplyTab(tab); if(activeTab === tab) updatePageHead(); }catch(e){ console.warn(e); } return r; };
 });
 { const _rm = renderWlMemo; renderWlMemo = function(){ const r = _rm.apply(this, arguments); try{ smFabAddX(); }catch(e){} return r; }; }
-{ const _rw = renderWorklist; renderWorklist = function(){ if(smFabHome){ smFabHome.mark.remove(); smFabHome = null; } const r = _rw.apply(this, arguments); try{ smFabSync(); }catch(e){ console.warn(e); } return r; }; }
+// [2026.11.18] "수정하고 완료하면 스크롤이 위로 올라감"(요청) - 다시 그리기 전에 Today 목록(홈·플로팅 창) 스크롤 위치를 적어 두고, 다 그린 뒤 되돌림
+function smWlScrollKeep(){ const g = sel => [...document.querySelectorAll(sel)].map(a => a.scrollTop); const k = { fab: g('#smFabPop .wl-agenda, #smFabPop .wl-sched-list'), home: g('#tab-worklist .wl-agenda, #tab-worklist .wl-sched-list') };
+  return () => { const put = (sel, L) => document.querySelectorAll(sel).forEach((a, i) => { if(L[i]) a.scrollTop = L[i]; }); const go = () => { put('#smFabPop .wl-agenda, #smFabPop .wl-sched-list', k.fab); put('#tab-worklist .wl-agenda, #tab-worklist .wl-sched-list', k.home); }; go(); requestAnimationFrame(go); }; }
+{ const _rw = renderWorklist; renderWorklist = function(){ const back = smWlScrollKeep(); if(smFabHome){ smFabHome.mark.remove(); smFabHome = null; } const r = _rw.apply(this, arguments); try{ smFabSync(); }catch(e){ console.warn(e); } try{ back(); }catch(e){} return r; }; }
 { const _st = switchTab; switchTab = function(){ const r = _st.apply(this, arguments); try{ smFabSync(); }catch(e){} return r; }; }
 
 /* ----- 날짜별 할 일: 하루씩 보기 / 검색 / 미완료 넘기기 ----- */
