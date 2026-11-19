@@ -1908,6 +1908,8 @@ function smTogglePcView(){ try{ localStorage.setItem('sm_pc_view', window.SM_PC_
   table.cl-table td.cl-na, table.cl-table td.cl-na *{ color:#d4c6cd !important; font-weight:400 !important; }
   table.cl-table td.cl-off{ background:#faf6f8; color:#d9cdd3 !important; }
   table.cl-table td.cl-off *{ color:#d9cdd3 !important; }
+  #tab-acctitles table.cl-table{ width:100%; } #tab-acctitles table.cl-table td{ white-space:normal; word-break:keep-all; vertical-align:top; } #tab-acctitles table.cl-table td:last-child{ width:1%; white-space:nowrap; }   /* [2026.11.19] 계정과목 표 */
+  #tab-acctitles tr.acct-same td{ border-top-color:transparent; }
   table.cl-table tbody tr:hover td{ background:rgba(236,123,166,.06); }
   /* [2026.10.26] "개인웹도 마우스를 올린 줄에 음영"(요청) - 모든 메뉴 표. 칸의 원래 배경색은 그대로 두고 그 위에 연한 핑크를 덧씌움 */
   .tab .table-scroll tbody tr:hover > td{ background-image:linear-gradient(rgba(236,123,166,.08), rgba(236,123,166,.08)); }
@@ -2007,6 +2009,7 @@ function smTogglePcView(){ try{ localStorage.setItem('sm_pc_view', window.SM_PC_
     <div id="tab-clients" class="tab"></div>
     <div id="tab-review" class="tab"></div>
     <div id="tab-calc" class="tab"></div>
+    <div id="tab-acctitles" class="tab"></div>
     <div id="tab-taxj" class="tab"></div>
     <div id="tab-settings" class="tab"></div>
   </main>
@@ -2313,6 +2316,7 @@ let worklistSchedule = {};   // 실제 데이터는 Google 시트(SM_data)에서
 let trashBin = [];   // 삭제한 거래처/할 일/체크리스트를 임시 보관 (복구 가능)
 let nextTrashId = 1;
 // 계정 보관함(아래 '계정' 부분 참고) - 다른 데이터와 같이 처음부터 선언해 둠
+let acctItems = [], nextAcctItemId = 1;   // [2026.11.19] 계정과목 메뉴: [{ id, acct(계정과목), desc(내용), alt(대체가능 계정과목), client(거래처), at }]
 let manuals = [], nextManualId = 1, manualCats = ['개인','회사','신고'];   // [2026.10.08] 매뉴얼 메뉴: [{id, cat, title, body, at, history}]
 let forms = [], nextFormId = 1, formCats = [], laws = [], nextLawId = 1, lawCats = [];   // [2026.10.16] 서식·법령 [{id, cat, title, ..., versions:[{v, at, note, files}]}]
 function libSetVar(k, v){ switch(k){ case 'forms': forms = v; break; case 'nextFormId': nextFormId = v; break; case 'formCats': formCats = v; break; case 'laws': laws = v; break; case 'nextLawId': nextLawId = v; break; case 'lawCats': lawCats = v; break; } }
@@ -2639,6 +2643,7 @@ function pill(text, kind){ return `<span class="pill ${kind}">${text}</span>`; }
 const ICONS = {
   home: '<path d="M4 11.5 12 4l8 7.5"/><path d="M6 10v9a1 1 0 0 0 1 1h3.2v-6h3.6v6H17a1 1 0 0 0 1-1v-9"/>',
   worklist: '<rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18"/><path d="M8 3v4"/><path d="M16 3v4"/>',
+  acctitles: '<path d="M4 4h16v16H4z"/><path d="M4 9h16M10 9v11"/><path d="M13 13h4M13 16.5h3"/>',
   manuals: '<path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5z"/><path d="M4 20.5A2.5 2.5 0 0 0 6.5 23H20v-5"/><path d="M8.5 8h7M8.5 11.5h5"/>',
   forms: '<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h4"/>',
   laws: '<path d="M12 3v18"/><path d="M5 21h14"/><path d="M4 8h16"/><path d="M7 8l-3 7a3 3 0 0 0 6 0z"/><path d="M17 8l-3 7a3 3 0 0 0 6 0z"/><path d="M10 4.5h4"/>',
@@ -2673,6 +2678,7 @@ const TABS = [
   //   계정·검토표 화면(tab-accounts·tab-review)과 법령 자료는 그대로 두고 왼쪽 메뉴 자리만 옮김(NAV_PARENT). c = 아이콘 색(옮기기 전 자리 색 그대로)
   {id:'links',    label:'링크', c:2},
   {id:'manuals',  label:'매뉴얼', c:3},
+  {id:'acctitles', label:'계정과목', c:5},   // [2026.11.19] "매뉴얼 밑에 계정과목 대메뉴 - 계정과목 / 내용(+대체가능 계정과목) / 거래처"(요청)
   {id:'forms',    label:'서식', c:4},   // [2026.10.16] 서식·법령 대메뉴(요청)
   {id:'inner',    label:'내부', c:0},
   {id:'attend',   label:'근태경비', c:1},
@@ -2704,6 +2710,7 @@ function worksHeadHtml(){
 const TAB_TITLES = {
   home:['홈','오늘 기준으로 챙겨야 할 신고 기한과 현황을 한눈에 봅니다.'],
   worklist:['To do',''],
+  acctitles:['계정과목','어떤 내용을 어느 계정과목으로 처리하는지(대체가능 계정과목·거래처까지) 정리해요.'],
   manuals:['매뉴얼','업무하면서 필요한 방법·절차를 분야별로 정리해요.'],
   links:['링크','자주 쓰는 사이트를 모아 두고 바로 열어요.'],
   forms:['서식','자주 쓰는 양식 파일을 분야별로 올려 두고, 바뀔 때마다 새 버전으로 올려 이력을 남겨요.'],
@@ -7997,6 +8004,7 @@ const GOOGLE_DATA_KEYS = [
   'links','nextLinkId','linkCats',
   'forms','nextFormId','formCats','laws','nextLawId','lawCats',   // [2026.10.16] 서식·법령
   'manuals','nextManualId','manualCats',
+  'acctItems','nextAcctItemId',   // [2026.11.19] 계정과목
   'submitMine',     // [2026.10.12] 제출 탭 내 확인·메모
   'attendMine',     // [2026.10.12] 근태경비 탭 내 확인·메모
   'payColsBy','payCustomVals',   // [2026.10.13] 원천세 신고현황 내가 만든 항목 ([2026.11.02] 항목은 귀속월마다 따로 - 예전 'payCustomCols')
@@ -8026,7 +8034,7 @@ function collectGoogleSnapshot(){
     clientsOther, clientsTerminated,
     trashBin, nextTrashId,
     links, nextLinkId, linkCats, forms, nextFormId, formCats, laws, nextLawId, lawCats,
-    manuals, nextManualId, manualCats,
+    manuals, nextManualId, manualCats, acctItems, nextAcctItemId,
     accountVault, submitMine, attendMine, payColsBy: smColsPrune(payColsBy), payCustomVals, vatCustomCols, vatCustomVals, vatProgColsBy: smColsPrune(vatProgColsBy), vatProg, vatProgView, closeColsBy: smColsPrune(closeColsBy), closeData,
     taxColsBy: { corp: smColsPrune(taxColsBy.corp), indiv: smColsPrune(taxColsBy.indiv) }, taxColVals, smColOrders, taxPlan, calcSaves: calcSaves || {}, cellFiles: cellFiles || {}, starLog: starLog || {}, myEvents: myEvents || [], quickMemos, nextMemoId, menuNotes,
   };
@@ -8128,6 +8136,8 @@ async function loadFromGoogleSheet(guard){
     if(map.manuals)       manuals      = JSON.parse(map.manuals);
     if(map.nextManualId)  nextManualId = JSON.parse(map.nextManualId);
     if(map.manualCats)    manualCats   = JSON.parse(map.manualCats);
+    if(map.acctItems)     acctItems    = JSON.parse(map.acctItems) || [];
+    if(map.nextAcctItemId) nextAcctItemId = JSON.parse(map.nextAcctItemId);
     if(map.manualCats)    try{ renderNav(); }catch(e){}   // 매뉴얼 분야 하위메뉴 갱신
   } catch(e){
     console.error('시트 데이터 파싱 실패', e);
@@ -8521,7 +8531,7 @@ function smMergeSnap(b, l, r){
   const out = {};
   GOOGLE_DATA_KEYS.forEach(k => { const v = smMerge3(b[k], l[k], r[k], 0); if(v !== undefined) out[k] = v; });
   // 다음 번호가 목록 안 가장 큰 번호보다 작지 않게
-  [['tasks','nextTaskId'], ['clients','nextClientId'], ['events','nextEventId'], ['links','nextLinkId'], ['manuals','nextManualId'], ['quickMemos','nextMemoId'], ['forms','nextFormId'], ['laws','nextLawId'], ['trashBin','nextTrashId']].forEach(([a, n]) => {
+  [['tasks','nextTaskId'], ['clients','nextClientId'], ['events','nextEventId'], ['links','nextLinkId'], ['manuals','nextManualId'], ['acctItems','nextAcctItemId'], ['quickMemos','nextMemoId'], ['forms','nextFormId'], ['laws','nextLawId'], ['trashBin','nextTrashId']].forEach(([a, n]) => {
     const ids = (Array.isArray(out[a]) ? out[a] : []).map(x => Number(x && x.id)).filter(x => !isNaN(x));
     if(ids.length && typeof out[n] === 'number') out[n] = Math.max(out[n], Math.max(...ids) + 1);
   });
@@ -8590,6 +8600,8 @@ function applySnapshot(o){
   if(o.manuals) manuals = o.manuals;
   if(o.nextManualId) nextManualId = o.nextManualId;
   if(o.manualCats) manualCats = o.manualCats;
+  if(o.acctItems) acctItems = o.acctItems;
+  if(o.nextAcctItemId) nextAcctItemId = o.nextAcctItemId;
   if(o.clients) clients = o.clients;
   if(o.tasks) tasks = o.tasks;
   if(o.vatData) vatData = o.vatData;
@@ -9227,7 +9239,7 @@ async function resetAllData(){
   clients = [];
   tasks = [];
   vatData = {}; payData = {}; corpData = {}; indivData = {};
-  submitMine = {}; attendMine = {}; payColsBy = {}; payCustomVals = {}; quickMemos = []; nextMemoId = 1; vatCustomCols = []; vatCustomVals = {}; vatProgColsBy = {}; vatProg = {}; closeColsBy = {}; closeData = {}; taxColsBy = { corp:{}, indiv:{} }; taxColVals = { corp:{}, indiv:{} }; smColOrders = {}; taxPlan = { lead:{}, off:{}, custom:[] }; menuNotes = {};
+  submitMine = {}; attendMine = {}; payColsBy = {}; payCustomVals = {}; quickMemos = []; nextMemoId = 1; acctItems = []; nextAcctItemId = 1; vatCustomCols = []; vatCustomVals = {}; vatProgColsBy = {}; vatProg = {}; closeColsBy = {}; closeData = {}; taxColsBy = { corp:{}, indiv:{} }; taxColVals = { corp:{}, indiv:{} }; smColOrders = {}; taxPlan = { lead:{}, off:{}, custom:[] }; menuNotes = {};
   worklistChecklist = {}; worklistSchedule = {};
   events = [];
   clientsOther = []; clientsTerminated = [];
@@ -12756,6 +12768,60 @@ function renderManuals(){
     </div>`;
 }
 
+// ===== 계정과목 =====
+// 요청 배경(2026.11.19): "매뉴얼 밑에 계정과목 대메뉴. 계정과목(잡손실) / 내용(위약금·단수차이 등, 대체가능 계정과목도 함께) / 거래처(주로 어느 거래처 비용은 이 계정)"
+//   표 한 장: 계정과목 · 내용 · 대체가능 계정과목 · 거래처. 같은 계정과목끼리 모여 보이게 계정과목 가나다순. 검색은 모든 칸
+let acctSearch = '';
+function acctItemFields(x){
+  x = x || {};
+  return [
+    { label:'계정과목', value: x.acct || '', placeholder:'예: 잡손실' },
+    { label:'내용 (여러 개면 쉼표로)', type:'textarea', rows:3, value: x.desc || '', placeholder:'예: 위약금, 단수차이' },
+    { label:'대체가능 계정과목 (비워도 돼요)', value: x.alt || '', placeholder:'예: 지급수수료' },
+    { label:'거래처 (비워도 돼요)', value: x.client || '', placeholder:'예: 주로 ○○상사 비용' },
+  ];
+}
+async function acctItemAdd(){
+  const r = await smForm('계정과목 추가', acctItemFields(), { okText:'추가', wide:true });
+  if(!r || !String(r[0] || '').trim()) return;
+  acctItems.push({ id: nextAcctItemId++, acct: r[0].trim(), desc: String(r[1] || '').trim(), alt: String(r[2] || '').trim(), client: String(r[3] || '').trim(), at: new Date().toISOString() });
+  renderAll();
+}
+async function acctItemEdit(id){
+  const x = acctItems.find(a => a.id === id); if(!x) return;
+  const r = await smForm('계정과목 수정', acctItemFields(x), { okText:'저장', icon:'✎', wide:true });
+  if(!r || !String(r[0] || '').trim()) return;
+  Object.assign(x, { acct: r[0].trim(), desc: String(r[1] || '').trim(), alt: String(r[2] || '').trim(), client: String(r[3] || '').trim(), at: new Date().toISOString() });
+  renderAll();
+}
+async function acctItemDelete(id){
+  const x = acctItems.find(a => a.id === id); if(!x) return;
+  if(!(await smConfirm('이 줄을 삭제할까요?', `${x.acct}${x.desc ? ' · ' + x.desc.slice(0, 40) : ''}`, { tone:'danger', icon:'!', okText:'삭제' }))) return;
+  acctItems = acctItems.filter(a => a.id !== id); renderAll();
+}
+function acctOnSearch(v){ acctSearch = v; renderAcctItems(); const el = document.getElementById('acctSearch'); if(el){ el.focus(); el.setSelectionRange(v.length, v.length); } }
+function renderAcctItems(){
+  const el = document.getElementById('tab-acctitles'); if(!el) return;
+  const q = acctSearch.trim().toLowerCase();
+  const list = acctItems.filter(x => !q || [x.acct, x.desc, x.alt, x.client].some(v => String(v || '').toLowerCase().includes(q)))
+    .sort((a, b) => String(a.acct).localeCompare(String(b.acct), 'ko') || a.id - b.id);
+  const cell = t => taxjEsc(t || '').replace(/\n/g, '<br>') || '<span class="cl-na">-</span>';
+  el.innerHTML = `
+    <div class="card">
+      <div class="cl-head">
+        <input type="text" id="acctSearch" class="search-input" style="max-width:280px;" placeholder="계정과목·내용·거래처 검색" value="${escapeAttr(acctSearch)}" oninput="acctOnSearch(this.value)" onkeydown="if(event.key==='Escape'){ this.value=''; acctOnSearch(''); }">
+        <button class="btn primary xs" onclick="acctItemAdd()">계정과목 추가</button>
+      </div>
+      ${list.length ? `<div class="table-scroll"><table class="cl-table acct-tbl">
+        <thead><tr><th>계정과목</th><th>내용</th><th>대체가능 계정과목</th><th>거래처</th><th></th></tr></thead>
+        <tbody>${list.map((x, i) => `<tr${i && list[i - 1].acct === x.acct ? ' class="acct-same"' : ''}>
+          <td><b>${i && list[i - 1].acct === x.acct ? '' : taxjEsc(x.acct)}</b></td><td>${cell(x.desc)}</td><td>${cell(x.alt)}</td><td>${cell(x.client)}</td>
+          <td><span class="row-actions" style="display:inline-flex; gap:2px;"><button class="icon-btn" onclick="acctItemEdit(${x.id})" title="수정" aria-label="수정">${ICON_EDIT}</button><button class="icon-btn danger" onclick="acctItemDelete(${x.id})" title="삭제" aria-label="삭제">${ICON_TRASH}</button></span></td>
+        </tr>`).join('')}</tbody></table></div>`
+      : `<div class="empty">${acctItems.length ? '검색과 맞는 계정과목이 없어요.' : "아직 정리한 계정과목이 없어요. '계정과목 추가'로 적어 보세요."}</div>`}
+    </div>`;
+}
+
 // ===== 서식 · 법령 =====
 // 요청 배경(2026.10.16): "서식 = 내가 쓰는 양식들을 올려서 관리, 업데이트될 수 있어 기존·업데이트 이력 모두 관리 / 법령 = 세법 법령·공문을 첨부해서 올림. 분야관리는 꼭 필요"
 // 두 메뉴는 같은 짜임: 분야(관리 창으로 추가·이름 바꾸기·순서·삭제) + 목록. 파일은 링크 첨부와 같이 내 Google 드라이브 'SM_첨부파일' 폴더에 올리고 {id,name,url}만 저장.
@@ -14045,10 +14111,10 @@ function renderAllNoSave(){
   try{ ensurePayMonths(); ensureTaxRows(); generateRecurringTasks(); }catch(e){ console.warn(e); }
   // [2026.11.11] "보이는 화면만 다시 그리기"(요청 - 속도) - 예전엔 값 하나만 바꿔도 거래처·결산·부가세 등 모든 화면을 다시 그렸음 → 지금 보는 화면만.
   //   다른 화면은 메뉴를 눌러 옮길 때(switchTab → renderAll) 그때 최신으로 그림. 문제가 생기면 SM_RENDER_ALL = true로 예전처럼
-  const R = { home: () => { renderHome(); renderWorklist(); }, worklist: () => { renderHome(); renderWorklist(); }, accounts: renderAccounts, links: renderLinks, manuals: renderManuals,
+  const R = { home: () => { renderHome(); renderWorklist(); }, worklist: () => { renderHome(); renderWorklist(); }, accounts: renderAccounts, links: renderLinks, manuals: renderManuals, acctitles: renderAcctItems,
     forms: () => renderLib('forms'), laws: () => renderLib('laws'), vat: renderVat, close: renderClose, pay: renderPay, corp: renderCorp, indiv: renderIndiv, clients: renderClients, settings: renderSettings,
     review: renderReview, calc: renderCalc, taxj: renderTaxjFull, attend: renderAttend, inner: renderInner };
-  if(SM_RENDER_ALL || !R[activeTab]){ renderHome(); renderWorklist(); renderAccounts(); renderLinks(); renderManuals(); renderLib('forms'); renderLib('laws'); renderVat(); renderClose(); renderPay(); renderCorp(); renderIndiv(); renderClients(); renderSettings(); if(R[activeTab] && !['home','worklist','accounts','links','manuals','forms','laws','vat','close','pay','corp','indiv','clients','settings'].includes(activeTab)) R[activeTab](); return; }
+  if(SM_RENDER_ALL || !R[activeTab]){ renderHome(); renderWorklist(); renderAccounts(); renderLinks(); renderManuals(); renderAcctItems(); renderLib('forms'); renderLib('laws'); renderVat(); renderClose(); renderPay(); renderCorp(); renderIndiv(); renderClients(); renderSettings(); if(R[activeTab] && !['home','worklist','accounts','links','manuals','acctitles','forms','laws','vat','close','pay','corp','indiv','clients','settings'].includes(activeTab)) R[activeTab](); return; }
   try{ R[activeTab](); }catch(e){ console.error('화면 그리기 실패', activeTab, e); }
   // [2026.11.12] "플로팅 Today에서 고쳤는데 바로 반영이 안 됨"(요청) - 플로팅 창(체크리스트·Today·Memo)은 홈 카드를 빌려 와 보여 주는데, 보이는 화면만 그리면서 홈 카드는 안 그려 옛 내용이 남았음 → 창이 열려 있으면 홈 카드도 같이
   if(!SM_RENDER_ALL && smFabOpenK && activeTab !== 'home' && activeTab !== 'worklist'){ try{ renderWorklist(); }catch(e){ console.error('플로팅 창 그리기 실패', e); } }
