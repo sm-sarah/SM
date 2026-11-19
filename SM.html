@@ -1011,6 +1011,10 @@ function smTogglePcView(){ try{ localStorage.setItem('sm_pc_view', window.SM_PC_
   /* [2026.10.15] 홈 빠른 메모 */
   .wl-memo-new{ display:flex; gap:8px; align-items:flex-end; margin-top:8px; }
   .wl-memo-new textarea{ flex:1; font:inherit; font-size:13px; border:1px solid var(--border); border-radius:var(--radius-sm); padding:8px 10px; resize:vertical; background:#fff; color:var(--text); box-sizing:border-box; min-height:44px; }
+  .wl-memo-fields{ flex:1; display:flex; flex-direction:column; gap:6px; min-width:0; }   /* [2026.11.19] 메모 제목 칸 */
+  .wl-memo-new input#wlMemoTitle{ font:inherit; font-size:13px; border:1px solid var(--border); border-radius:var(--radius-sm); padding:7px 10px; background:#fff; color:var(--text); box-sizing:border-box; }
+  .wl-memo-new input#wlMemoTitle:focus{ outline:2px solid var(--primary-soft); border-color:var(--primary); }
+  .wl-memo-title{ font-size:13.5px; font-weight:800; margin-bottom:2px; word-break:break-word; }
   .wl-memo-new textarea:focus{ outline:2px solid var(--primary-soft); border-color:var(--primary); }
   .wl-memo-list{ margin-top:8px; max-height:240px; overflow-y:auto; }
   .wl-memo-item{ padding:6px 2px 8px; border-bottom:1px solid var(--border); }
@@ -4167,37 +4171,39 @@ function wlMemoNow(){ const d = new Date(); return `${todayStr()} ${pad2(d.getHo
 function wlMemoAdd(){
   const ta = document.getElementById('wlMemoInput'); if(!ta) return;
   const text = ta.value.trim(); if(!text) return;
-  quickMemos.unshift({ id: nextMemoId++, text, at: wlMemoNow() });
-  ta.value = ''; renderWlMemo(); scheduleGoogleSave();
+  const tt = document.getElementById('wlMemoTitle'), title = tt ? tt.value.trim() : '';   // [2026.11.19] "메모에도 제목을 달 수 있으면"(요청) - 제목은 비워도 됨
+  quickMemos.unshift(Object.assign({ id: nextMemoId++, text, at: wlMemoNow() }, title ? { title } : {}));
+  ta.value = ''; if(tt) tt.value = ''; renderWlMemo(); scheduleGoogleSave();
   const t = document.getElementById('wlMemoInput'); if(t) t.focus();
 }
 async function wlMemoEdit(id){
   const m = quickMemos.find(x => x.id === id); if(!m) return;
-  const r = await smForm('메모 수정', [{ label:'내용 (Ctrl+Enter 저장)', type:'textarea', rows:6, value: m.text }], { okText:'저장', icon:'✎', wide:true });
-  if(!r || !r[0].trim()) return;
-  m.text = r[0].trim(); m.edited = wlMemoNow(); renderWlMemo(); scheduleGoogleSave();
+  const r = await smForm('메모 수정', [{ label:'제목 (비워도 돼요)', value: m.title || '' }, { label:'내용 (Ctrl+Enter 저장)', type:'textarea', rows:6, value: m.text }], { okText:'저장', icon:'✎', wide:true });   // [2026.11.19] 제목 칸
+  if(!r || !r[1].trim()) return;
+  if(r[0].trim()) m.title = r[0].trim(); else delete m.title;
+  m.text = r[1].trim(); m.edited = wlMemoNow(); renderWlMemo(); scheduleGoogleSave();
 }
 async function wlMemoDelete(id){
   const m = quickMemos.find(x => x.id === id); if(!m) return;
-  if(!(await smConfirm('이 메모를 삭제할까요?', m.text.slice(0, 60), { tone:'danger', icon:'!', okText:'삭제' }))) return;
+  if(!(await smConfirm('이 메모를 삭제할까요?', (m.title || m.text).slice(0, 60), { tone:'danger', icon:'!', okText:'삭제' }))) return;
   quickMemos = quickMemos.filter(x => x.id !== id); renderWlMemo(); scheduleGoogleSave();
 }
 function wlMemoOnSearch(v){ wlMemoSearch = v; renderWlMemo(); const s = document.getElementById('wlMemoSearch'); if(s){ s.focus(); s.setSelectionRange(v.length, v.length); } }
 function renderWlMemo(){
   const el = document.getElementById('wlMemo'); if(!el) return;
-  const keep = document.getElementById('wlMemoInput'), draft = keep ? keep.value : '';
+  const keep = document.getElementById('wlMemoInput'), draft = keep ? keep.value : '', keepT = document.getElementById('wlMemoTitle'), draftT = keepT ? keepT.value : '';
   const q = wlMemoSearch.trim().toLowerCase();
-  const list = quickMemos.filter(m => !q || m.text.toLowerCase().includes(q) || String(m.at).includes(q));
+  const list = quickMemos.filter(m => !q || m.text.toLowerCase().includes(q) || String(m.title || '').toLowerCase().includes(q) || String(m.at).includes(q));
   const hl = t => { const e = taxjEsc(t); if(!q) return e; const i = t.toLowerCase().indexOf(q); return i < 0 ? e : taxjEsc(t.slice(0, i)) + `<mark>${taxjEsc(t.slice(i, i + q.length))}</mark>` + taxjEsc(t.slice(i + q.length)); };
   el.classList.toggle('wl-memo-closed', !wlMemoOpen);
   el.innerHTML = `
     <div class="notice-top"><span></span><div class="today-title" onclick="wlMemoOpen=!wlMemoOpen; renderWlMemo();" style="cursor:pointer;" title="${wlMemoOpen ? '접기' : '펼치기'}">Memo</div>
       <div class="search-wrap open" style="justify-self:end;"><input type="text" id="wlMemoSearch" class="search-input" placeholder="메모 검색" value="${escapeAttr(wlMemoSearch)}" oninput="wlMemoOnSearch(this.value)" onkeydown="if(event.key==='Escape'){ this.value=''; wlMemoOnSearch(''); }"><span class="search-icon static" aria-hidden="true">${SEARCH_SVG}</span></div></div>
-    ${!wlMemoOpen ? '' : `<div class="wl-memo-new"><textarea id="wlMemoInput" rows="2" placeholder="급하게 적어 둘 메모 (Ctrl+Enter로 저장)" onkeydown="if(event.key==='Enter' && (event.ctrlKey || event.metaKey) && !event.isComposing){ event.preventDefault(); wlMemoAdd(); }">${taxjEsc(draft)}</textarea><button class="btn primary xs" onclick="wlMemoAdd()">저장</button></div>
+    ${!wlMemoOpen ? '' : `<div class="wl-memo-new"><div class="wl-memo-fields"><input type="text" id="wlMemoTitle" placeholder="제목 (비워도 돼요)" value="${escapeAttr(draftT)}" onkeydown="if(event.key==='Enter' && !event.isComposing){ event.preventDefault(); if(event.ctrlKey || event.metaKey) wlMemoAdd(); else { const t = document.getElementById('wlMemoInput'); if(t) t.focus(); } }"><textarea id="wlMemoInput" rows="2" placeholder="급하게 적어 둘 메모 (Ctrl+Enter로 저장)" onkeydown="if(event.key==='Enter' && (event.ctrlKey || event.metaKey) && !event.isComposing){ event.preventDefault(); wlMemoAdd(); }">${taxjEsc(draft)}</textarea></div><button class="btn primary xs" onclick="wlMemoAdd()">저장</button></div>
     <div class="wl-memo-list">${list.length ? wlMemoGroups(list).map(([day, ms]) => { const open = wlMemoDayIsOpen(day, !!q); return `<div class="wl-memo-day${open ? '' : ' shut'}" onclick="wlMemoToggleDay('${day}')" title="${open ? '접기' : '펼치기'}"><span class="wl-memo-caret">${open ? '▾' : '▸'}</span>${taxjEsc(worklistDayLabel(day))}<span>${ms.length}</span></div>`
         + (!open ? '' : ms.map(m => `<div class="wl-memo-item">
         <div class="wl-memo-meta"><span>${taxjEsc(String(m.at).slice(11))}${m.edited ? ` · 수정 ${taxjEsc(m.edited.slice(0,10) === day ? m.edited.slice(11) : m.edited)}` : ''}</span><span class="row-actions" style="display:inline-flex; gap:2px;"><button class="icon-btn" onclick="wlMemoEdit(${m.id})" title="수정" aria-label="수정">${ICON_EDIT}</button><button class="icon-btn danger" onclick="wlMemoDelete(${m.id})" title="삭제" aria-label="삭제">${ICON_TRASH}</button></span></div>
-        <div class="wl-memo-text">${hl(m.text)}</div></div>`).join('')); }).join('')
+        ${m.title ? `<div class="wl-memo-title">${hl(m.title)}</div>` : ''}<div class="wl-memo-text">${hl(m.text)}</div></div>`).join('')); }).join('')
       : `<div class="empty" style="padding:10px 0;">${q ? '검색과 맞는 메모가 없어요.' : '아직 메모가 없어요.'}</div>`}</div>`}`;
 }
 // [2026.11.02] "메모도 지난 날짜는 자동으로 접히게"(요청) - 오늘 메모만 펼치고 지난 날짜는 접음(날짜 제목을 누르면 펼치기·접기, 이 창에서만 기억). 검색할 때는 모두 펼침
