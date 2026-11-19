@@ -1623,6 +1623,7 @@ function smTogglePcView(){ try{ localStorage.setItem('sm_pc_view', window.SM_PC_
   .sm-rt-ed th, .sm-rt-view th{ background:var(--primary-soft); font-weight:800; }
   .sm-rt-ed ul, .sm-rt-ed ol, .sm-rt-view ul, .sm-rt-view ol{ margin:2px 0; padding-left:22px; }
   .sm-rt-view{ line-height:1.6; }
+  .sm-rt-ed img, .sm-rt-view img{ max-width:100%; height:auto; }   /* [2026.11.19] 붙여넣은 그림이 칸 밖으로 넘치지 않게 */
   .sm-rt-tw{ overflow-x:auto; max-width:100%; margin:6px 0; } .sm-rt-tw > table{ margin:0; max-width:none; }
   .sm-rt-view td, .sm-rt-view th, .sm-rt-ed td, .sm-rt-ed th{ white-space:normal; word-break:keep-all; } .sm-rt-view th, .sm-rt-ed th{ white-space:nowrap; }
   .sm-rt-view td{ min-width:56px; } .sm-rt-view td:not(:only-child){ max-width:520px; }
@@ -12249,8 +12250,8 @@ function setManualCat(c){ manualCat = c || ''; manualSel = null; if(activeTab !=
 //   저장 = '<!--rt-->' + 정리한 HTML(허용한 태그·스타일만 남김 - 스크립트·이벤트·외부 서식 제거). 예전 글(그냥 글자·# - | 표)은 열 때 서식으로 바꿔 보여 줌
 const SM_RT = '<!--rt-->';
 function smRtIs(v){ return typeof v === 'string' && v.startsWith(SM_RT); }
-const SM_RT_TAGS = new Set(['B','STRONG','I','EM','U','S','STRIKE','SPAN','DIV','P','BR','UL','OL','LI','TABLE','THEAD','TBODY','TFOOT','TR','TH','TD','H1','H2','H3','H4','A','BLOCKQUOTE','HR','SUB','SUP','COL','COLGROUP']);
-const SM_RT_DROP = new Set(['SCRIPT','STYLE','META','LINK','TITLE','HEAD','IFRAME','OBJECT','EMBED','NOSCRIPT','TEMPLATE','SVG','IMG','VIDEO','AUDIO','INPUT','BUTTON','SELECT','TEXTAREA','FORM']);
+const SM_RT_TAGS = new Set(['B','STRONG','I','EM','U','S','STRIKE','SPAN','DIV','P','BR','UL','OL','LI','TABLE','THEAD','TBODY','TFOOT','TR','TH','TD','H1','H2','H3','H4','A','BLOCKQUOTE','HR','SUB','SUP','COL','COLGROUP','IMG']);   // [2026.11.19] IMG: 그림 붙여넣기(아래 smRtImg 참고)
+const SM_RT_DROP = new Set(['SCRIPT','STYLE','META','LINK','TITLE','HEAD','IFRAME','OBJECT','EMBED','NOSCRIPT','TEMPLATE','SVG','VIDEO','AUDIO','INPUT','BUTTON','SELECT','TEXTAREA','FORM']);
 const SM_RT_CSS = ['color','background-color','font-weight','font-style','text-decoration','text-decoration-line','text-align'];
 function smRtClean(html){
   const doc = new DOMParser().parseFromString(`<div>${String(html || '')}</div>`, 'text/html'), root = doc.body.firstChild;
@@ -12264,6 +12265,8 @@ function smRtClean(html){
     if(!SM_RT_TAGS.has(tg)){ const f = doc.createDocumentFragment(); while(n.firstChild) f.appendChild(n.firstChild); if(/^(P|DIV|SECTION|ARTICLE|HEADER|FOOTER|MAIN)$/.test(tg)) f.appendChild(doc.createElement('br')); n.replaceWith(f); return; }
     const keep = {};
     if(tg === 'A'){ const h = n.getAttribute('href') || ''; if(/^https?:\/\//i.test(h)) keep.href = h; }
+    if(tg === 'IMG'){ const id = n.getAttribute('data-smimg') || '', src = n.getAttribute('src') || '';   // [2026.11.19] 드라이브에 올린 그림은 파일 id만, 아니면 https 주소·data 그림만 남김
+      if(/^[\w-]{10,}$/.test(id)) keep['data-smimg'] = id; else if(/^https:\/\//i.test(src) || /^data:image\/(png|jpe?g|gif|webp);base64,/i.test(src)) keep.src = src; else { n.remove(); return; } }
     if(tg === 'TD' || tg === 'TH'){ ['colspan','rowspan'].forEach(a => { const v = n.getAttribute(a); if(v && /^\d+$/.test(v)) keep[a] = v; }); }
     const st = n.style, css = SM_RT_CSS.map(k => { const v = st && st.getPropertyValue(k); return v && !/url\(|expression/i.test(v) && !(k === 'font-weight' && /^(normal|400)$/.test(v)) && !(k === 'background-color' && /^(transparent|rgba\(0, 0, 0, 0\)|white|#fff(fff)?|rgb\(255, 255, 255\))$/i.test(v)) && !(k === 'color' && /^(black|#000(000)?|rgb\(0, 0, 0\))$/i.test(v)) ? `${k}:${v}` : ''; }).filter(Boolean).join(';');
     [...n.attributes].forEach(a => n.removeAttribute(a.name));
@@ -12313,7 +12316,7 @@ function smRtFromTextarea(ta, legacy){
   ed.innerHTML = smRtIs(orig) ? smRtClean(orig.slice(SM_RT.length)) : smRtLegacyHtml(orig, legacy);
   if(ta.placeholder) ed.dataset.ph = ta.placeholder.split('\n')[0];
   const rows = Number(ta.getAttribute('rows')) || 4; ed.style.minHeight = Math.max(70, rows * 20) + 'px';
-  const sync = () => { const h = smRtClean(ed.innerHTML), txt = ed.textContent.trim(); ta.value = txt || /<table/i.test(h) ? SM_RT + h : ''; ed.classList.toggle('empty', !txt && !/<table|<li/i.test(h)); };
+  const sync = () => { const h = smRtClean(ed.innerHTML), txt = ed.textContent.trim(); ta.value = txt || /<table|<img/i.test(h) ? SM_RT + h : ''; ed.classList.toggle('empty', !txt && !/<table|<li|<img/i.test(h)); };
   ed.classList.toggle('empty', !ed.textContent.trim());
   ed.addEventListener('input', sync);
   const exec = (c, v) => { ed.focus(); try{ document.execCommand('styleWithCSS', false, true); }catch(e){} document.execCommand(c, false, v); sync(); };
@@ -12325,6 +12328,8 @@ function smRtFromTextarea(ta, legacy){
   box.querySelector('[data-tbl]').onclick = () => exec('insertHTML', `<table><tbody>${[0, 1, 2].map(r => `<tr>${[0, 1, 2].map(() => r ? '<td><br></td>' : '<th><br></th>').join('')}</tr>`).join('')}</tbody></table><br>`);
   ed.addEventListener('paste', e => {
     const cd = e.clipboardData; if(!cd) return;
+    const pics = [...(cd.files || [])].filter(f => /^image\//.test(f.type));
+    if(pics.length && !cd.getData('text/html')){ e.preventDefault(); pics.forEach(f => smRtAddImg(f, ed, exec, sync)); return; }   // [2026.11.19] "캡처해서 붙여넣은 그림이 저장하면 사라져"(요청) - 캡처 그림은 본문에 넣고 저장되게
     if(cd.files && cd.files.length && !cd.getData('text/html')) return;   // 캡처·파일은 첨부 쪽에서
     e.preventDefault();
     const html = cd.getData('text/html');
@@ -12340,6 +12345,41 @@ function smRtFromTextarea(ta, legacy){
   ta._rtFocus = () => { ed.focus(); const r = document.createRange(); r.selectNodeContents(ed); r.collapse(false); const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r); };
   return ed;
 }
+// [2026.11.19] "매뉴얼에 캡처 그림 붙여넣으면 저장해도 안 남아"(요청) - 예전엔 저장할 때 그림(IMG)을 지웠음.
+//   붙여넣은 그림은 줄여서(긴 쪽 1600px) 우선 본문에 바로 넣고(그 자리에서 보이고, 연결 전에 저장해도 남음), Google 연결돼 있으면 내 드라이브 첨부 폴더에 올린 뒤
+//   본문에는 파일 id(data-smimg)만 저장 - 시트·기기 저장 용량을 아끼려고. 볼 때는 드라이브에서 받아 보여 줌(아래 smRtImgLoad)
+async function smRtImgShrink(f){
+  if(/gif/i.test(f.type)) return f;
+  const bmp = await createImageBitmap(f), k = Math.min(1, 1600 / Math.max(bmp.width, bmp.height));
+  const c = document.createElement('canvas'); c.width = Math.round(bmp.width * k); c.height = Math.round(bmp.height * k);
+  c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
+  const b = await new Promise(r => c.toBlob(r, 'image/webp', 0.9));
+  return b && b.size < f.size ? b : f;
+}
+const smRtImgCache = {}, smRtImgWait = {};
+async function smRtAddImg(f, ed, exec, sync){
+  let b = f; try{ b = await smRtImgShrink(f); }catch(e){}
+  const data = await new Promise(r => { const fr = new FileReader(); fr.onload = () => r(fr.result); fr.readAsDataURL(b); });
+  const key = 'u' + Date.now() + Math.random().toString(36).slice(2, 7);
+  exec('insertHTML', `<img src="${data}" data-up="${key}"><br>`);
+  const img = ed.querySelector(`img[data-up="${key}"]`); if(img) img.removeAttribute('data-up');
+  if(!img || !googleAccessToken || !smTokenHasDrive()) return;   // 연결 전이면 그림을 본문에 그대로 저장
+  try{
+    const ext = (b.type.split('/')[1] || 'png').replace('jpeg', 'jpg');
+    const u = await smDriveUpload(new File([b], `매뉴얼그림_${todayStr()}_${key}.${ext}`, { type: b.type || 'image/png' }));
+    if(u && u.id){ smRtImgCache[u.id] = data; img.setAttribute('data-smimg', u.id); sync(); }
+  }catch(e){ console.warn('그림 드라이브 올리기 실패 - 본문에 그대로 저장', e); }
+}
+function smRtImgLoad(img){
+  const id = img.getAttribute('data-smimg'); if(!id) return;
+  if(smRtImgCache[id]){ img.src = smRtImgCache[id]; return; }
+  if(!googleAccessToken){ img.alt = '(그림 - Google 연결 후 보여요)'; return; }
+  (smRtImgWait[id] = smRtImgWait[id] || fetch(`https://www.googleapis.com/drive/v3/files/${id}?alt=media`, { headers:{ Authorization:'Bearer ' + googleAccessToken } })
+    .then(r => r.ok ? r.blob() : Promise.reject(r.status)).then(bl => (smRtImgCache[id] = URL.createObjectURL(bl))))
+    .then(u => { img.src = u; }, e => { delete smRtImgWait[id]; img.alt = '(그림을 불러오지 못했어요)'; console.warn('그림 불러오기 실패', id, e); });
+}
+// 화면 어디서든(매뉴얼 본문·편집칸·이전 내용) 드라이브 그림이 그려지면 받아서 보여 줌
+new MutationObserver(() => { if(smRtImgLoad._t) return; smRtImgLoad._t = requestAnimationFrame(() => { smRtImgLoad._t = 0; document.querySelectorAll('img[data-smimg]:not([src])').forEach(smRtImgLoad); }); }).observe(document.documentElement, { childList:true, subtree:true });
 function manualBodyHtml(t){
   const inline = x => taxjEsc(x).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>');
   const out = []; let list = null, tbl = null;
@@ -12561,7 +12601,7 @@ function renderManuals(){
             ${(sel.refs || []).length ? `<div class="mn-refs"><span class="mn-refs-l">참고 사이트</span>${sel.refs.map(r => `<a class="mn-ref" href="${escapeAttr(linkHref(r.url))}" target="_blank" rel="noopener" title="${escapeAttr(r.url)}">${taxjEsc(r.name)} ↗</a>`).join('')}</div>` : ''}
             <!-- [2026.10.22] "매뉴얼에 첨부파일 올리고 싶어"(요청) - 참고 사이트 줄과 같은 모양의 첨부 줄. 링크·서식처럼 내 드라이브 'SM_첨부파일'에 올림(여러 개·끌어다 놓기 가능) -->
             <div class="mn-refs att-list" ondragover="if(Array.from(event.dataTransfer.types||[]).includes('Files')) event.preventDefault();" ondrop="manualUpTarget=${sel.id}; smDropFiles(event, manualUploadFiles);"><span class="mn-refs-l">첨부</span>${smFilesHtml(sel.files, f => `manualRemoveFile(${sel.id}, '${f.id}')`)}${sel._uploading ? `<span class="hint" style="margin:0;">올리는 중… (${sel._uploading})</span>` : `<button class="att-add" onclick="manualPickFiles(${sel.id})" title="파일 첨부 (여러 개 선택하거나 여기로 끌어다 놓기)">＋ 파일</button>`}</div>
-            <div class="mn-body">${smRtText(sel.body).trim() || /<table/i.test(sel.body) ? smRtView(sel.body, 'manual') : '<div class="hint">내용이 비어 있어요. 연필 아이콘으로 적어 주세요.</div>'}</div>`
+            <div class="mn-body">${smRtText(sel.body).trim() || /<table|<img/i.test(sel.body) ? smRtView(sel.body, 'manual') : '<div class="hint">내용이 비어 있어요. 연필 아이콘으로 적어 주세요.</div>'}</div>`
           : '<div class="empty">왼쪽에서 매뉴얼을 골라 주세요.</div>'}
         </div>
       </div>
