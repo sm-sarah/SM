@@ -12310,6 +12310,7 @@ function smRtFromTextarea(ta, legacy){
       <button type="button" data-c="justifyLeft" title="왼쪽 맞춤">⇤</button><button type="button" data-c="justifyCenter" title="가운데 맞춤">≡</button>
       <button type="button" data-tbl="1" title="표 넣기 (3칸×3줄)">▦</button>
       <button type="button" data-c="removeFormat" title="서식 지우기">⌫</button>
+      <span class="sm-rt-sep"></span><button type="button" data-clr="1" title="내용 전부 지우기 (Ctrl+Z로 되돌리기)">초기화</button>
     </div><div class="sm-rt-ed" contenteditable="true" spellcheck="false"></div>`;
   ta.insertAdjacentElement('beforebegin', box); ta.style.display = 'none';
   const ed = box.querySelector('.sm-rt-ed');
@@ -12325,6 +12326,8 @@ function smRtFromTextarea(ta, legacy){
   box.querySelectorAll('[data-dd]').forEach(b => b.onclick = () => { const p = box.querySelector(`[data-pal="${b.dataset.dd}"]`); const open = p.hidden; box.querySelectorAll('[data-pal]').forEach(x => x.hidden = true); p.hidden = !open; });
   box.querySelectorAll('[data-fc]').forEach(b => b.onclick = () => { box.querySelectorAll('[data-pal]').forEach(x => x.hidden = true); exec('foreColor', b.dataset.fc || '#3f3f46'); });
   box.querySelectorAll('[data-hc]').forEach(b => b.onclick = () => { box.querySelectorAll('[data-pal]').forEach(x => x.hidden = true); exec('hiliteColor', b.dataset.hc || 'transparent'); });
+  // [2026.11.19] "여기 내용 초기화 버튼 있으면 좋겠어"(요청) - 편집칸 내용을 한 번에 비움. 전체 선택 후 지우기라 Ctrl+Z로 되돌릴 수 있음(저장 전이면 취소해도 원래대로)
+  box.querySelector('[data-clr]').onclick = () => { ed.focus(); document.execCommand('selectAll'); document.execCommand('delete'); sync(); smToast('내용을 비웠어요. 되돌리려면 Ctrl+Z (저장 전이면 취소해도 원래대로)'); };
   box.querySelector('[data-tbl]').onclick = () => exec('insertHTML', `<table><tbody>${[0, 1, 2].map(r => `<tr>${[0, 1, 2].map(() => r ? '<td><br></td>' : '<th><br></th>').join('')}</tr>`).join('')}</tbody></table><br>`);
   ed.addEventListener('paste', e => {
     const cd = e.clipboardData; if(!cd) return;
