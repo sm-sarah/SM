@@ -2007,6 +2007,7 @@ function smTogglePcView(){ try{ localStorage.setItem('sm_pc_view', window.SM_PC_
     <div id="tab-corp" class="tab"></div>
     <div id="tab-indiv" class="tab"></div>
     <div id="tab-clients" class="tab"></div>
+    <div id="tab-pclients" class="tab"></div>
     <div id="tab-review" class="tab"></div>
     <div id="tab-calc" class="tab"></div>
     <div id="tab-acctitles" class="tab"></div>
@@ -2302,6 +2303,10 @@ async function tryResumeSavedLogin(){
    ========================================================= */
 
 let clients = [];   // 실제 데이터는 Google 시트(SM_data)에서 불러옴
+// [2026.11.23] 개인거래처(요청) - 회사(Tax.J)와 상관없이 내가 따로 맡은 거래처. works 저장 공간에만 둠
+//   pClients = [{ id, seq, taxType, type, name, biz, corpNo, ceo, addr, fee, contractDate, start, memo, taxes:['close','pay','vat','corp'|'indiv'] }]
+//   pData = { cols:{ 메뉴:{ 기간:[항목] } }, vals:{ 메뉴:{ 기간:{ 거래처id:{ 항목id: 값 } } } } · 기간 = 결산·법인세·종소세 '연도', 원천세 'YYYY-MM', 부가세 '연도-1기예정'
+let pClients = [], nextPClientId = 1, pData = { cols:{}, vals:{} };
 let nextClientId = 1;
 
 let tasks = [];   // 실제 데이터는 Google 시트(SM_data)에서 불러옴
@@ -2385,7 +2390,7 @@ function smColDragClear(){ document.querySelectorAll('.sm-drop-l, .sm-drop-r, .s
 //   칸 키: 내 항목 = 'c:항목id', 묶음 머리글 = 'g:이름', 나머지 = 't:머리글 글자'. 순번·체크박스·왼쪽 고정(상호) 칸은 그 자리에 고정
 let smColOrders = {};
 let taxPlan = { lead:{}, off:{}, custom:[] };   // [2026.11.03] 세무일정 안내 - 아래 smTaxMonth 참고
-const SM_ORD_VIEW = { pay: () => payView, vat: () => vatView, clients: () => clientsView, close: () => '', corp: () => '', indiv: () => '' };
+const SM_ORD_VIEW = { pay: () => payView, vat: () => vatView, clients: () => clientsView, close: () => '', corp: () => '', indiv: () => '', pclients: () => pView };
 function smOrdKeyOf(th){
   if(th.dataset.ordk) return th.dataset.ordk;
   if(th.dataset.smcol) return 'c:' + th.dataset.smcol;
@@ -2691,7 +2696,9 @@ const TABS = [
 ];
 // 다른 대메뉴의 하위메뉴로 옮긴 화면: 화면 id → [대메뉴 id, 하위메뉴 이름]
 const NAV_PARENT = { accounts:['inner','개인계정'], review:['settings','검토표 계산식'] };
-const WORKS_TABS = [['clients','거래처'], ['close','결산'], ['pay','원천세'], ['vat','부가세'], ['corp','법인세'], ['indiv','종소세']];
+const WORKS_TABS = [['clients','거래처'], ['close','결산'], ['pay','원천세'], ['vat','부가세'], ['corp','법인세'], ['indiv','종소세'], ['pclients','개인거래처']];   // [2026.11.23] 개인거래처(요청 - 회사와 상관없이 내가 따로 맡은 거래처, 회사 메뉴와 같은 구성)
+const P_VIEWS = [['list','거래처현황'], ['close','결산'], ['pay','원천세'], ['vat','부가세'], ['corp','법인세'], ['indiv','종소세']];   // [2026.11.23] 개인거래처 하위메뉴 - 회사 works 메뉴와 같은 구성(요청)
+let pView = 'list';
 function isWorksTab(id){ return WORKS_TABS.some(x => x[0] === id); }
 let worksLast = (() => { try{ const v = localStorage.getItem('sm_works_last'); return isWorksTab(v) ? v : 'clients'; }catch(e){ return 'clients'; } })();
 // 지금 하위메뉴(원천세·부가세·거래처) - 고르면 그 화면으로
@@ -2700,6 +2707,7 @@ function worksSubCur(id, sub){
   if(id === 'pay') return k === payView;
   if(id === 'vat') return k === vatView;
   if(id === 'clients') return k === clientsView;
+  if(id === 'pclients') return k === pView;
   return false;
 }
 function worksHeadHtml(){
@@ -2725,6 +2733,7 @@ const TAB_TITLES = {
   attend:['근태경비','회사웹 출퇴근·휴가·재택·경비 기록을 실시간으로 보고, 내 확인·메모를 더해요.'],
   submit:['제출','회사웹 지급명세서 제출현황(매월·반기·연간)을 실시간으로 보고, 내 확인·메모를 더해요.'],
   clients:['거래처','모든 신고 탭이 참조하는 기준정보입니다.'],
+  pclients:['개인거래처','회사와 상관없이 내가 따로 맡은 거래처를 회사 메뉴와 같은 구성으로 관리해요.'],
   review:['검토표','Tax.J 원천세 검토표 계산식을 조회해요.'],
   calc:['계산기',''],
   taxj:['Tax.J','회사웹(Tax.J) 데이터를 받아 내 데이터로 보관해요.'],
@@ -2769,6 +2778,8 @@ const NAV_SUBMENUS = {
     {js:"setVatView('overview')", label:'총괄'},
     {js:"setVatView('prog')",     label:'진행'},
   ],
+  // [2026.11.23] 개인거래처 - 회사 works 메뉴(거래처·결산·원천세·부가세·법인세·종소세)와 같은 구성(요청)
+  pclients: P_VIEWS.map(([k, l]) => ({ js:`setPView('${k}')`, label:l })),
   clients: [
     {js:"setClientsView('regular')",    label:'기장거래처'},
     {js:"setClientsView('accounts')",   label:'계정정보'},   // [2026.10.14] 거래처별 계정정보(요청)
@@ -2867,6 +2878,7 @@ function pageSubtitle(){
       case 'inner': return pick(INNER_VIEWS, innerView);
       case 'attend': return pick(ATTEND_VIEWS, attendView);
       case 'clients': return nav(clientsView);
+      case 'pclients': return (P_VIEWS.find(x => x[0] === pView) || [])[1] || '';
       case 'taxj': return nav(taxjFullView);
       case 'calc': return (CALC_VIEWS.find(x => x[0] === calcView) || [])[1] || '';
       case 'manuals': return manualCat || '전체';
@@ -2923,7 +2935,7 @@ function formatTrashDate(iso){
     return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())} ${pad2(d.getHours())}:${pad2(d.getMinutes())} 삭제`;
   }catch(e){ return ''; }
 }
-const TRASH_KIND_LABEL = { client:'거래처', task:'할 일', checklist:'체크리스트' };
+const TRASH_KIND_LABEL = { client:'거래처', pclient:'개인거래처', task:'할 일', checklist:'체크리스트' };
 function trashListHtml(){
   if(!trashBin.length) return '<div class="empty" style="padding:20px 0;">휴지통이 비어 있어요.</div>';
   return `
@@ -2957,6 +2969,8 @@ function restoreFromTrash(trashId){
   const item = trashBin[idx];
   if(item.kind === 'client'){
     if(!clients.some(c => c.id === item.data.id)) clients.push(item.data);
+  } else if(item.kind === 'pclient'){   // [2026.11.23] 개인거래처
+    if(!pClients.some(c => c.id === item.data.id)) pClients.push(item.data);
   } else if(item.kind === 'task'){
     if(!tasks.some(t => t.id === item.data.id)) tasks.push(item.data);
   } else if(item.kind === 'checklist'){
@@ -7790,15 +7804,7 @@ function renderClients(){
         </div>
       </div>
       ${clientsView !== 'regular' ? renderReadonlyClientTable(clientsView === 'other' ? clientsOther : clientsTerminated, clientsView === 'terminated') : `
-      <div class="toolbar">
-        <input type="text" id="newClientName" placeholder="거래처명">
-        <select id="newClientType">
-          <option>법인</option>
-          <option>개인</option>
-        </select>
-        <input type="text" id="newClientBiz" placeholder="사업자번호 (예시)">
-        <button class="btn primary" onclick="addClient()">거래처 추가</button>
-      </div>
+      <!-- [2026.11.23] 거래처 추가 입력칸은 개인거래처 › 거래처현황으로 옮김(요청 - "회사 거래처랑 섞여 있는 것 같아서") -->
       <div class="table-scroll">
       <table class="cl-table">
         <thead><tr><th>순번</th><th>수임구분</th><th>사업자구분</th><th class="cl-name-th">상호명</th><th>사업자번호</th><th>법인등록번호</th><th>대표자</th><th>사업장 주소</th><th>수임료</th><th>계약일</th><th>수임시작일</th><th>회사 메모</th><th style="text-align:center;">관리</th></tr></thead>
@@ -7837,6 +7843,266 @@ function renderClients(){
     </div>
     ${settings.taxjImportedAt ? `<div class="cl-last-imp">마지막 가져오기: ${taxjEsc(settings.taxjImportedAt)}</div>` : ''}
   `;
+}
+
+/* =========================================================
+   [2026.11.23] 개인거래처(요청: "회사랑 관련없이 내가 따로 관리하는 거래처를 등록 … 따로 개인거래처 메뉴 만들어서 기존 회사거래처랑 메뉴구성이나 기능은 동일하게")
+   - 회사 works 메뉴와 같은 하위메뉴: 거래처현황 · 결산 · 원천세 · 부가세 · 법인세 · 종소세
+   - 회사 화면은 회사웹(Tax.J) 자료를 읽어 보여주지만 개인거래처는 회사웹 자료가 없어서, 모든 칸을 직접 입력(works 공통 칸 smcTd · 항목 추가/수정/삭제/일괄 변경 · 칸 끌어 옮기기 그대로)
+   - 신고 메뉴에 나오는 거래처 = 거래처현황 '맡은 세목'을 켠 거래처(법인세는 법인, 종소세는 개인만). 처음엔 결산·원천세·부가세 + 법인세(법인)/종소세(개인)
+   - 항목은 기간마다 따로(회사 화면과 같음). 처음 여는 기간은 바로 앞 기간 항목을 이어받고(내용은 안 넘김), 앞 기간도 없으면 기본 항목
+   - 기장거래처에 직접 추가했던 거래처(출처 없음)는 개인거래처로 옮김(pMoveManualClients) - 회사 거래처를 한 번이라도 불러온 뒤에만
+   ========================================================= */
+const P_TAX = { close:'결산', pay:'원천세', vat:'부가세', corp:'법인세', indiv:'종소세' };
+const P_DEF_COLS = {
+  close: [['자료 수령','checkdate'], ['결산 완료','checkdate'], ['메모','memo']],
+  pay:   [['자료 수령','checkdate'], ['신고','checkdate'], ['납부세액','num'], ['납부','checkdate'], ['메모','memo']],
+  vat:   [['자료 요청','date'], ['자료 수령','checkdate'], ['신고','checkdate'], ['납부세액','num'], ['납부','checkdate'], ['메모','memo']],
+  corp:  [['결산','checkdate'], ['신고','checkdate'], ['납부세액','num'], ['납부','checkdate'], ['메모','memo']],
+  indiv: [['성실신고','check'], ['자료 수령','checkdate'], ['신고','checkdate'], ['납부세액','num'], ['납부','checkdate'], ['메모','memo']],
+};
+let pQuery = '', pPer = { close:'', pay:'', vat:'', corp:'', indiv:'' };
+function setPView(v){ pView = v; if(activeTab !== 'pclients') switchTab('pclients'); else renderPClients(); }
+function pDefPer(kind){
+  if(kind === 'pay'){ const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - 1); return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}`; }   // 원천세 = 지난달 귀속(이번 달 신고)
+  if(kind === 'vat'){ try{ const f = vatTFocus(null); return `${f.year}-${f.period}`; }catch(e){ return `${new Date().getFullYear()}-1기예정`; } }
+  return smFocusYear(kind);
+}
+function pPerOf(kind){ return pPer[kind] || (pPer[kind] = pDefPer(kind)); }
+function pPerLabel(kind, p){
+  p = String(p || '');
+  if(kind === 'pay'){ const [y, m] = p.split('-'); return m ? `${y}년 ${Number(m)}월` : p; }
+  if(kind === 'vat') return `${p.slice(0, 4)}년 ${VAT_T_LABEL[p.slice(5)] || p.slice(5)}`;
+  return `${p}년${kind === 'close' ? '' : ' 귀속'}`;
+}
+function pSetPer(kind, v){ if(!v) return; pPer[kind] = v; renderPClients(); }
+function pSetVatPart(part, v){ const p = pPerOf('vat'), y = p.slice(0, 4), h = p.slice(5, 6), k = p.slice(7); pSetPer('vat', `${part === 'y' ? v : y}-${part === 'h' ? v : h}기${part === 'k' ? v : k}`); }
+// 항목: pData.cols[메뉴][기간]. 그 기간에 항목이 한 번도 없었으면 바로 앞 기간 항목을 이어받음(없으면 기본 항목). 일부러 다 지운 빈 목록([])은 그대로 둠
+function pColsMap(kind){ const C = pData.cols = pData.cols || {}; return C[kind] = C[kind] || {}; }
+function pCols(kind){
+  const M = pColsMap(kind), per = pPerOf(kind);
+  if(!Array.isArray(M[per])){
+    const prev = Object.keys(M).filter(k => k < per && Array.isArray(M[k])).sort().pop();
+    M[per] = prev ? smColsCopy(M[prev]) : P_DEF_COLS[kind].map(([label, type], i) => ({ id: 'd' + (i + 1), label, type, pos:'end' }));
+  }
+  return M[per];
+}
+function pGet(kind, cid, colId){ return ((((pData.vals || {})[kind] || {})[pPerOf(kind)] || {})[cid] || {})[colId]; }
+function pSetVal(kind, cid, colId, v){
+  const V = pData.vals = pData.vals || {}, K = V[kind] = V[kind] || {}, per = pPerOf(kind), P = K[per] = K[per] || {}, r = P[cid] = P[cid] || {};
+  if(v === '' || v === false || v == null) delete r[colId]; else r[colId] = v;
+  if(!Object.keys(r).length) delete P[cid];
+  if(!Object.keys(P).length) delete K[per];
+  renderPClients(); scheduleGoogleSave();
+}
+Object.keys(P_TAX).forEach(kind => { SMC['p-' + kind] = { per: () => pPerOf(kind), perLabel: p => pPerLabel(kind, p), get: (k, c) => pGet(kind, k, c), set: (k, c, v) => pSetVal(kind, k, c, v), year: () => String(pPerOf(kind)).slice(0, 4), col: id => pCols(kind).find(x => x.id === id) }; });
+// 거래처
+function pDefTaxes(type){ return ['close', 'pay', 'vat', type === '개인' ? 'indiv' : 'corp']; }
+function pTaxesOf(c){ return Array.isArray(c.taxes) ? c.taxes : pDefTaxes(c.type); }
+function pSorted(){
+  const n = v => { const x = parseInt(String(v || '').replace(/\D/g, ''), 10); return isNaN(x) ? Infinity : x; };
+  return [...pClients].sort((a, b) => n(a.seq) - n(b.seq) || (a.type === '개인' ? 1 : 0) - (b.type === '개인' ? 1 : 0) || String(a.name).localeCompare(String(b.name), 'ko'));
+}
+function pRowsOf(kind){ return pSorted().filter(c => pTaxesOf(c).includes(kind) && (kind !== 'corp' || c.type !== '개인') && (kind !== 'indiv' || c.type === '개인')); }
+function pMoveManualClients(){
+  if(!clients.some(c => c.source === 'taxj')) return false;   // 회사 거래처를 아직 안 불러왔으면(모두 직접 넣은 것일 수 있음) 그대로 둠
+  const isSample = c => typeof c.id === 'number' && c.id <= 8 && /^(110-81|220-11)-\d{5}$/.test(c.biz || '');
+  const mv = clients.filter(c => !c.source && !isSample(c));
+  if(!mv.length) return false;
+  mv.forEach(c => {
+    if(pClients.some(p => p.name === c.name && String(p.biz || '') === String(c.biz || ''))) return;
+    const pick = k => c[k] == null ? '' : c[k];
+    pClients.push({ id: nextPClientId++, seq: pick('seq'), taxType: pick('taxType'), type: c.type || '법인', name: c.name, biz: pick('biz'), corpNo: pick('corpNo'), ceo: pick('ceo'), addr: pick('addr'), fee: pick('fee'), contractDate: pick('contractDate'), start: pick('start'), memo:'',
+      history: (c.history || []).concat([{ at: new Date().toISOString(), kind:'기장거래처에서 옮김', changes:[] }]) });
+  });
+  clients = clients.filter(c => !mv.includes(c));
+  return true;
+}
+function pAddClient(){
+  const nameEl = document.getElementById('pNewName'), typeEl = document.getElementById('pNewType'), bizEl = document.getElementById('pNewBiz');
+  if(!nameEl || !nameEl.value.trim()) return;
+  pClients.push({ id: nextPClientId++, name: nameEl.value.trim(), type: typeEl.value, biz: bizEl.value.trim(), history:[{ at: new Date().toISOString(), kind:'직접 추가', changes:[] }] });
+  nameEl.value = ''; bizEl.value = '';
+  renderAll();
+}
+const P_FIELDS = [
+  { key:'seq', label:'순번' },
+  { key:'taxType', label:'수임구분', options:['','기장대행','신고대리','기타'] },
+  { key:'type', label:'사업자구분', options:['법인','개인'] },
+  { key:'name', label:'상호명' },
+  { key:'biz', label:'사업자번호', placeholder:'000-00-00000' },
+  { key:'corpNo', label:'법인등록번호', placeholder:'000000-0000000' },
+  { key:'ceo', label:'대표자' },
+  { key:'addr', label:'사업장 주소' },
+  { key:'fee', label:'수임료' },
+  { key:'contractDate', label:'계약일', type:'date' },
+  { key:'start', label:'수임시작일', type:'date' },
+  { key:'memo', label:'메모' },
+];
+async function pEditClient(id){
+  const c = pClients.find(x => x.id === id); if(!c) return;
+  const r = await smForm(`${c.name} 수정`, P_FIELDS.map(f => ({ ...f, value: c[f.key] || '' })), { okText:'저장', icon:'✎', wide:true });
+  if(!r) return;
+  const changes = [];
+  P_FIELDS.forEach((f, i) => { const to = String(r[i] || '').trim(), from = c[f.key] || ''; if(to !== from){ changes.push({ field:f.key, label:f.label, from, to }); c[f.key] = to; } });
+  if(!changes.length) return;
+  if(!c.name) c.name = (changes.find(x => x.field === 'name') || {}).from || '(이름 없음)';
+  c.history = (c.history || []).concat([{ at: new Date().toISOString(), kind:'직접 수정', changes }]);
+  renderAll();
+}
+function pShowHistory(id){
+  const c = pClients.find(x => x.id === id); if(!c) return;
+  const esc = v => String(v == null ? '' : v).replace(/&/g,'&amp;').replace(/</g,'&lt;');
+  const fmt = iso => { const d = new Date(iso); return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`; };
+  const hist = (c.history || []).slice().reverse();
+  smDialog({ title:`${c.name} 이력`, icon:'🕘', cancelText:null, okText:'닫기', wide:true, html:`<div class="cl-hist"><div class="cl-hist-meta">개인거래처 (works에만 저장)</div>${hist.length ? hist.map(h => `
+    <div class="cl-hist-item"><div class="cl-hist-head"><b>${esc(h.kind)}</b><span>${fmt(h.at)}</span></div>
+      ${(h.changes || []).map(x => `<div class="cl-hist-chg">${esc(x.label)}: <s>${esc(x.from || '(빈칸)')}</s> → <b>${esc(x.to || '(빈칸)')}</b></div>`).join('')}</div>`).join('') : '<div class="cl-hist-empty">아직 기록된 이력이 없어요.</div>'}</div>` });
+}
+async function pDeleteClient(id){
+  const c = pClients.find(x => x.id === id); if(!c) return;
+  if(!(await smConfirm('이 개인거래처를 삭제할까요?', '휴지통에서 되살릴 수 있어요. 결산·원천세·부가세 등에 적은 내용은 지우지 않고 두어서, 되살리면 다시 보여요.', { tone:'danger', icon:'!', okText:'삭제' }))) return;
+  moveToTrash('pclient', c.name, c);
+  pClients = pClients.filter(x => x.id !== id);
+  renderAll();
+}
+function pToggleTax(id, kind){
+  const c = pClients.find(x => x.id === id); if(!c) return;
+  const t = pTaxesOf(c).slice(), i = t.indexOf(kind);
+  if(i >= 0) t.splice(i, 1); else t.push(kind);
+  c.taxes = t;
+  renderAll();
+}
+function pListHtml(){
+  const e = taxjEsc, q = pQuery.trim().toLowerCase(), qd = q.replace(/\D/g, '');
+  const list = pSorted().filter(c => !q || String(c.name || '').toLowerCase().includes(q) || (qd && String(c.biz || '').replace(/\D/g, '').includes(qd)));
+  const rows = list.map((c, i) => {
+    const ec = c.type === '법인' ? '#0b5a78' : c.type === '개인' ? '#be185d' : 'inherit';
+    const na = v => String(v == null ? '' : v).trim() ? '' : ' cl-na', V = v => String(v == null ? '' : v).trim() ? e(v) : '-';
+    const fee = c.fee && !isNaN(Number(String(c.fee).replace(/,/g, ''))) ? Number(String(c.fee).replace(/,/g, '')).toLocaleString() : c.fee;
+    const tx = pTaxesOf(c), kinds = Object.keys(P_TAX).filter(k => (k !== 'corp' || c.type !== '개인') && (k !== 'indiv' || c.type === '개인'));
+    return `<tr>
+      <td class="${na(c.seq)}">${c.seq ? e(c.seq) : i + 1}</td>
+      <td class="cl-taxtype ${c.taxType === '기장대행' ? 'kj' : c.taxType === '신고대리' ? 'sd' : ''}${na(c.taxType)}">${V(c.taxType)}</td>
+      <td style="color:${ec}; font-weight:800;">${V(c.type)}</td>
+      <td class="cl-name-cell" onclick="pEditClient(${c.id})" title="눌러서 수정" style="color:${ec}; font-weight:800;">${V(c.name)}</td>
+      <td class="${na(c.biz)}">${V(c.biz)}</td>
+      <td class="${c.type === '개인' ? 'cl-off' : na(c.corpNo)}">${V(c.corpNo)}</td>
+      <td class="${na(c.ceo)}">${V(c.ceo)}</td>
+      <td class="${na(c.addr)}">${V(c.addr)}</td>
+      <td class="num ${c.taxType === '신고대리' ? 'cl-off' : na(fee)}">${V(fee)}</td>
+      <td class="${na(c.contractDate)}">${V(c.contractDate)}</td>
+      <td class="${na(c.start)}">${V(c.start)}</td>
+      <td><div class="steps" style="justify-content:center; flex-wrap:nowrap; gap:3px;">${kinds.map(k => `<span class="step-chip ${tx.includes(k) ? 'done tone-indiv' : ''}" style="padding:2px 7px; font-size:11px;" onclick="pToggleTax(${c.id},'${k}')" title="${tx.includes(k) ? `${P_TAX[k]} 메뉴에 나와요 · 누르면 빼기` : `누르면 ${P_TAX[k]} 메뉴에 넣기`}">${P_TAX[k]}</span>`).join('')}</div></td>
+      <td class="${na(c.memo)}" style="max-width:220px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${escapeAttr(c.memo || '')}">${V(c.memo)}</td>
+      <td class="cl-actions">
+        <button class="icon-btn" onclick="pEditClient(${c.id})" title="수정" aria-label="수정">${ICON_EDIT}</button>
+        <button class="icon-btn" onclick="pShowHistory(${c.id})" title="이력" aria-label="이력">${ICON_HISTORY}</button>
+        <button class="icon-btn danger" onclick="pDeleteClient(${c.id})" title="삭제" aria-label="삭제">${ICON_TRASH}</button>
+      </td></tr>`;
+  }).join('');
+  return `<div class="toolbar">
+      <input type="text" id="pNewName" placeholder="거래처명" onkeydown="if(event.key==='Enter') pAddClient()">
+      <select id="pNewType"><option>법인</option><option>개인</option></select>
+      <input type="text" id="pNewBiz" placeholder="사업자번호 (예시)" onkeydown="if(event.key==='Enter') pAddClient()">
+      <button class="btn primary" onclick="pAddClient()">거래처 추가</button>
+      <div class="spacer"></div>
+      ${pSearchHtml()}
+    </div>
+    <div class="table-scroll">
+    <table class="cl-table">
+      <thead><tr><th>순번</th><th>수임구분</th><th>사업자구분</th><th class="cl-name-th">상호명</th><th>사업자번호</th><th>법인등록번호</th><th>대표자</th><th>사업장 주소</th><th>수임료</th><th>계약일</th><th>수임시작일</th><th title="켜 둔 세목 메뉴에 이 거래처가 나와요">맡은 세목</th><th>메모</th><th style="text-align:center;">관리</th></tr></thead>
+      <tbody>${rows || `<tr><td colspan="14"><div class="empty" style="padding:18px;">${q ? '검색 결과가 없어요.' : '아직 개인거래처가 없어요. 위에서 거래처명을 넣고 \'거래처 추가\'를 눌러 주세요.'}</div></td></tr>`}</tbody>
+    </table>
+    </div>`;
+}
+function pSearchHtml(){
+  return `<input type="text" placeholder="거래처 검색" value="${escapeAttr(pQuery)}" oninput="pQuery=this.value; clearTimeout(window._pQT); window._pQT=setTimeout(()=>{ renderPClients(); const s=document.querySelector('#tab-pclients input[placeholder=&quot;거래처 검색&quot;]'); if(s){ s.focus(); s.setSelectionRange(s.value.length, s.value.length); } }, 250);">`;
+}
+function pPerPickHtml(kind){
+  const p = pPerOf(kind), nowY = new Date().getFullYear();
+  const years = cur => { const s = new Set([String(cur)]); for(let y = nowY + 1; y >= nowY - 4; y--) s.add(String(y)); Object.keys(pColsMap(kind)).forEach(k => s.add(k.slice(0, 4))); return [...s].sort((a, b) => b - a); };
+  if(kind === 'pay') return `<input type="month" value="${escapeAttr(p)}" onchange="pSetPer('pay', this.value)">`;
+  if(kind === 'vat'){
+    const y = p.slice(0, 4), h = p.slice(5, 6), k = p.slice(7);
+    return `<select onchange="pSetVatPart('y', this.value)">${years(y).map(v => `<option value="${v}" ${v === y ? 'selected' : ''}>${v}년</option>`).join('')}</select>
+      <select onchange="pSetVatPart('h', this.value)"><option value="1" ${h === '1' ? 'selected' : ''}>1기</option><option value="2" ${h === '2' ? 'selected' : ''}>2기</option></select>
+      <select onchange="pSetVatPart('k', this.value)"><option value="예정" ${k === '예정' ? 'selected' : ''}>예정</option><option value="확정" ${k === '확정' ? 'selected' : ''}>확정</option></select>`;
+  }
+  return `<select onchange="pSetPer('${kind}', this.value)">${years(p).map(v => `<option value="${v}" ${v === p ? 'selected' : ''}>${v}년${kind === 'close' ? '' : ' 귀속'}</option>`).join('')}</select>`;
+}
+function pTaxHtml(kind){
+  const s = 'p-' + kind, cols = pCols(kind), q = pQuery.trim().toLowerCase(), qd = q.replace(/\D/g, '');
+  const all = pRowsOf(kind), rows = all.filter(c => !q || String(c.name || '').toLowerCase().includes(q) || (qd && String(c.biz || '').replace(/\D/g, '').includes(qd)));
+  const doneCol = cols.find(c => (c.label === '신고' || c.label === '결산 완료') && /check|date|dcm/.test(c.type));
+  const done = doneCol ? all.filter(c => { const v = pGet(kind, c.id, doneCol.id); return v != null && v !== '' && v !== false && !SM_QUICK_VALS.includes(v); }).length : null;
+  const head = cols.map(c => `<th data-smcol="${escapeAttr(c.id)}" title="끌어서 위치 옮기기"><button class="btn ghost xs" onclick="pEditCol('${kind}','${escapeAttr(c.id)}')" title="눌러서 이름·입력 방식 수정 또는 삭제 · 끌어서 위치 옮기기" style="font-weight:800; position:relative;">${taxjEsc(c.label)}${ICON_COL_GEAR}</button></th>`).join('');
+  const body = rows.map((c, i) => `<tr>
+      <td class="tx-seq">${c.seq ? taxjEsc(c.seq) : i + 1}</td>
+      <td class="tx-type"><span class="tag ${c.type === '법인' ? 'tag-corp-type' : 'tag-indiv-type'}">${taxjEsc(c.type || '')}</span></td>
+      <td class="tx-name"><a class="cl-name" style="${smEntCss(c.type)}" onclick="pEditClient(${c.id})">${taxjEsc(c.name)}</a></td>
+      <td style="white-space:nowrap;">${taxjEsc(c.biz || '-')}</td>
+      ${cols.map(col => smcTd(s, c.id, col, pGet(kind, c.id, col.id))).join('')}</tr>`).join('');
+  const empty = !all.length ? `거래처현황에서 개인거래처를 추가하고 '맡은 세목'에서 ${P_TAX[kind]}을(를) 켜면 여기에 나와요.` : '검색 결과가 없어요.';
+  return `<div class="toolbar" style="display:grid; grid-template-columns:1fr auto 1fr; align-items:center;">
+      <div></div>
+      <div style="display:flex; align-items:center; gap:10px;">${pPerPickHtml(kind)}${pSearchHtml()}</div>
+      <div style="display:flex; align-items:center; justify-content:flex-end; gap:6px;">
+        <button class="sm-tool-ic" onclick="pAddCol('${kind}')" title="항목 추가" aria-label="항목 추가">${ICON_PLUS}</button>
+        <button class="sm-tool-ic" onclick="pBulkCols('${kind}')" title="항목 일괄 변경 - 여러 항목을 골라 입력 방식·칸 표시를 한 번에 바꿔요" aria-label="항목 일괄 변경">${ICON_COLS_BULK}</button>
+      </div>
+    </div>
+    <div class="summary-row">
+      <div class="stat tone-violet"><div class="n">${all.length}</div><div class="label">대상 거래처</div></div>
+      ${doneCol ? `<div class="stat tone-violet"><div class="n">${done}</div><div class="label">${taxjEsc(doneCol.label)} 완료</div></div>` : ''}
+    </div>
+    <div class="table-scroll" style="margin-top:16px;">
+    <table>
+      <thead><tr><th class="tx-seq">순번</th><th class="tx-type">구분</th><th>상호명</th><th>사업자번호</th>${head}</tr></thead>
+      <tbody>${body || `<tr><td colspan="${4 + cols.length}"><div class="empty" style="padding:18px;">${empty}</div></td></tr>`}</tbody>
+    </table>
+    </div>
+    <div class="hint" style="margin-top:10px; text-align:center;">${taxjEsc(pPerLabel(kind, pPerOf(kind)))} · 항목은 기간마다 따로 두고, 처음 여는 기간은 바로 앞 기간 항목을 이어받아요(적은 내용은 안 넘어가요).</div>`;
+}
+async function pAddCol(kind){
+  const r = await smForm(`${P_TAX[kind]} 항목 추가`, [{ label:'항목 이름', placeholder:'예: 자료 요청' }, { label:'입력 방식', options: SM_COL_TYPES.map(x => x[1]), value:'날짜' }, smViewField()], { okText:'추가' });
+  if(!r || !r[0].trim()) return;
+  const col = { id: 'p' + Date.now().toString(36), label: r[0].trim(), type: smTypeOf(r[1]), view: smViewOf(r[2]), pos:'end' };
+  if(col.type === 'select' && !(await vatProgEditOpts(col))) return;
+  pCols(kind).push(col);
+  renderPClients(); scheduleGoogleSave();
+}
+async function pEditCol(kind, id){
+  const per = pPerOf(kind), col = pCols(kind).find(c => c.id === id); if(!col) return;
+  const r = await smForm('항목 수정', [{ label:'항목 이름', value: col.label }, { label:'입력 방식', options: SM_COL_TYPES.map(x => x[1]), value: smTypeLabel(col.type) }, smViewField(col)], { okText:'저장', cancelText:'삭제', icon:'✎', closeX:true });
+  if(r === undefined) return;
+  if(r === null){
+    const a = await smColDelAsk(col.label, pPerLabel(kind, per), '모든 기간');
+    if(!a) return;
+    const M = pColsMap(kind), hit = smColDelApply(M, a.every ? Object.keys(M) : [per], col, a.what);
+    if(a.what !== 'col') Object.entries(hit).forEach(([k, ids]) => Object.values((((pData.vals || {})[kind] || {})[k]) || {}).forEach(v => ids.forEach(i => { delete v[i]; })));
+  }else{
+    if(r[0].trim()) col.label = r[0].trim();
+    col.type = smTypeOf(r[1]); col.view = smViewOf(r[2]);
+    if(col.type === 'select') await vatProgEditOpts(col);
+  }
+  renderPClients(); scheduleGoogleSave();
+}
+function pBulkCols(kind){ return smBulkCols({ cols: pCols(kind), types: SM_COL_TYPES, done: renderPClients }); }
+function renderPClients(){
+  const el = document.getElementById('tab-pclients');
+  if(!el) return;
+  const a = document.activeElement;
+  if(a && el.contains(a) && a.classList && a.classList.contains('vp-in')){
+    if(!a._pDefer){ a._pDefer = true; a.addEventListener('blur', () => setTimeout(renderPClients, 0), { once:true }); }
+    return;
+  }
+  const sig = `${pView}|${pView === 'list' ? '' : pPerOf(pView)}`;
+  const keep = el._pSig === sig ? [...el.querySelectorAll('.table-scroll')].map(x => [x.scrollLeft, x.scrollTop]) : [];
+  el.innerHTML = `<div class="card">${pView === 'list' ? pListHtml() : pTaxHtml(pView)}</div>`;
+  el._pSig = sig;
+  if(keep.length) [...el.querySelectorAll('.table-scroll')].forEach((x, i) => { if(keep[i]){ x.scrollLeft = keep[i][0]; x.scrollTop = keep[i][1]; } });
+  try{ smOrdApplyTab('pclients'); if(activeTab === 'pclients') updatePageHead(); }catch(e){ console.warn(e); }
 }
 
 /* =========================================================
@@ -8012,6 +8278,7 @@ const GOOGLE_DATA_KEYS = [
   'vatProgColsBy','vatProg','vatProgView',   // [2026.10.14] 부가세 진행표 ([2026.11.02] 항목은 기수마다 따로 - 예전 'vatProgCols')
   'closeColsBy','closeData',   // [2026.10.14] 결산 ([2026.11.02] 항목은 회차마다 따로 - 예전 'closeCols')
   'taxColsBy','taxColVals',   // [2026.11.02] 법인세·종소세 내 항목
+  'pClients','nextPClientId','pData',   // [2026.11.23] 개인거래처
   'smColOrders',   // [2026.11.02] works 표 칸 순서(끌어서 옮긴 대로)
   'myEvents',   // [2026.11.11] 개인캘린더에 내가 따로 넣은 개인 일정 [{ id, date, title, start, end, memo }] (회사웹에는 안 올라감)
   'starLog',   // [2026.11.12] ★ 확인 필요 지난 기록(체크·삭제·수정해도 남음)
@@ -8036,7 +8303,7 @@ function collectGoogleSnapshot(){
     links, nextLinkId, linkCats, forms, nextFormId, formCats, laws, nextLawId, lawCats,
     manuals, nextManualId, manualCats, acctItems, nextAcctItemId, acctSeeded,
     accountVault, submitMine, attendMine, payColsBy: smColsPrune(payColsBy), payCustomVals, vatCustomCols, vatCustomVals, vatProgColsBy: smColsPrune(vatProgColsBy), vatProg, vatProgView, closeColsBy: smColsPrune(closeColsBy), closeData,
-    taxColsBy: { corp: smColsPrune(taxColsBy.corp), indiv: smColsPrune(taxColsBy.indiv) }, taxColVals, smColOrders, taxPlan, calcSaves: calcSaves || {}, cellFiles: cellFiles || {}, starLog: starLog || {}, myEvents: myEvents || [], quickMemos, nextMemoId, menuNotes,
+    taxColsBy: { corp: smColsPrune(taxColsBy.corp), indiv: smColsPrune(taxColsBy.indiv) }, taxColVals, pClients, nextPClientId, pData, smColOrders, taxPlan, calcSaves: calcSaves || {}, cellFiles: cellFiles || {}, starLog: starLog || {}, myEvents: myEvents || [], quickMemos, nextMemoId, menuNotes,
   };
 }
 
@@ -8120,6 +8387,9 @@ async function loadFromGoogleSheet(guard){
     if(map.closeData) closeData = JSON.parse(map.closeData);
     if(map.taxColsBy) taxColsBy = Object.assign({ corp:{}, indiv:{} }, JSON.parse(map.taxColsBy));
     if(map.taxColVals) taxColVals = Object.assign({ corp:{}, indiv:{} }, JSON.parse(map.taxColVals));
+    if(map.pClients) pClients = JSON.parse(map.pClients) || [];   // [2026.11.23] 개인거래처
+    if(map.nextPClientId) nextPClientId = JSON.parse(map.nextPClientId) || 1;
+    if(map.pData) pData = Object.assign({ cols:{}, vals:{} }, JSON.parse(map.pData));
     if(map.smColOrders) smColOrders = JSON.parse(map.smColOrders) || {};
     if(map.taxPlan) taxPlan = JSON.parse(map.taxPlan) || {};
     if(map.calcSaves) calcSaves = JSON.parse(map.calcSaves) || {};
@@ -8532,7 +8802,7 @@ function smMergeSnap(b, l, r){
   const out = {};
   GOOGLE_DATA_KEYS.forEach(k => { const v = smMerge3(b[k], l[k], r[k], 0); if(v !== undefined) out[k] = v; });
   // 다음 번호가 목록 안 가장 큰 번호보다 작지 않게
-  [['tasks','nextTaskId'], ['clients','nextClientId'], ['events','nextEventId'], ['links','nextLinkId'], ['manuals','nextManualId'], ['acctItems','nextAcctItemId'], ['quickMemos','nextMemoId'], ['forms','nextFormId'], ['laws','nextLawId'], ['trashBin','nextTrashId']].forEach(([a, n]) => {
+  [['tasks','nextTaskId'], ['clients','nextClientId'], ['pClients','nextPClientId'], ['events','nextEventId'], ['links','nextLinkId'], ['manuals','nextManualId'], ['acctItems','nextAcctItemId'], ['quickMemos','nextMemoId'], ['forms','nextFormId'], ['laws','nextLawId'], ['trashBin','nextTrashId']].forEach(([a, n]) => {
     const ids = (Array.isArray(out[a]) ? out[a] : []).map(x => Number(x && x.id)).filter(x => !isNaN(x));
     if(ids.length && typeof out[n] === 'number') out[n] = Math.max(out[n], Math.max(...ids) + 1);
   });
@@ -8587,6 +8857,9 @@ function applySnapshot(o){
   if(o.closeData) closeData = o.closeData;
   if(o.taxColsBy) taxColsBy = Object.assign({ corp:{}, indiv:{} }, o.taxColsBy);
   if(o.taxColVals) taxColVals = Object.assign({ corp:{}, indiv:{} }, o.taxColVals);
+  if(o.pClients) pClients = o.pClients;   // [2026.11.23] 개인거래처
+  if(o.nextPClientId != null) nextPClientId = o.nextPClientId;
+  if(o.pData) pData = Object.assign({ cols:{}, vals:{} }, o.pData);
   if(o.smColOrders) smColOrders = o.smColOrders;
   if(o.taxPlan) taxPlan = o.taxPlan;
   if(o.calcSaves) calcSaves = o.calcSaves;
@@ -9241,7 +9514,7 @@ async function resetAllData(){
   clients = [];
   tasks = [];
   vatData = {}; payData = {}; corpData = {}; indivData = {};
-  submitMine = {}; attendMine = {}; payColsBy = {}; payCustomVals = {}; quickMemos = []; nextMemoId = 1; acctItems = []; nextAcctItemId = 1; acctSeeded = false; vatCustomCols = []; vatCustomVals = {}; vatProgColsBy = {}; vatProg = {}; closeColsBy = {}; closeData = {}; taxColsBy = { corp:{}, indiv:{} }; taxColVals = { corp:{}, indiv:{} }; smColOrders = {}; taxPlan = { lead:{}, off:{}, custom:[] }; menuNotes = {};
+  submitMine = {}; attendMine = {}; payColsBy = {}; payCustomVals = {}; quickMemos = []; nextMemoId = 1; acctItems = []; nextAcctItemId = 1; acctSeeded = false; vatCustomCols = []; vatCustomVals = {}; vatProgColsBy = {}; vatProg = {}; closeColsBy = {}; closeData = {}; taxColsBy = { corp:{}, indiv:{} }; taxColVals = { corp:{}, indiv:{} }; pClients = []; nextPClientId = 1; pData = { cols:{}, vals:{} }; smColOrders = {}; taxPlan = { lead:{}, off:{}, custom:[] }; menuNotes = {};
   worklistChecklist = {}; worklistSchedule = {};
   events = [];
   clientsOther = []; clientsTerminated = [];
@@ -14169,10 +14442,11 @@ function menuNoteMount(k){
 function renderAllNoSave(){
   if(smMemoStore.length > 5000) smMemoStore.length = 0;
   try{ ensurePayMonths(); ensureTaxRows(); generateRecurringTasks(); }catch(e){ console.warn(e); }
+  try{ if(pMoveManualClients()) scheduleGoogleSave(); }catch(e){ console.warn('개인거래처 옮기기', e); }   // [2026.11.23] 기장거래처에 직접 추가했던 거래처 → 개인거래처
   // [2026.11.11] "보이는 화면만 다시 그리기"(요청 - 속도) - 예전엔 값 하나만 바꿔도 거래처·결산·부가세 등 모든 화면을 다시 그렸음 → 지금 보는 화면만.
   //   다른 화면은 메뉴를 눌러 옮길 때(switchTab → renderAll) 그때 최신으로 그림. 문제가 생기면 SM_RENDER_ALL = true로 예전처럼
   const R = { home: () => { renderHome(); renderWorklist(); }, worklist: () => { renderHome(); renderWorklist(); }, accounts: renderAccounts, links: renderLinks, manuals: renderManuals, acctitles: renderAcctItems,
-    forms: () => renderLib('forms'), laws: () => renderLib('laws'), vat: renderVat, close: renderClose, pay: renderPay, corp: renderCorp, indiv: renderIndiv, clients: renderClients, settings: renderSettings,
+    forms: () => renderLib('forms'), laws: () => renderLib('laws'), vat: renderVat, close: renderClose, pay: renderPay, corp: renderCorp, indiv: renderIndiv, clients: renderClients, pclients: renderPClients, settings: renderSettings,
     review: renderReview, calc: renderCalc, taxj: renderTaxjFull, attend: renderAttend, inner: renderInner };
   if(SM_RENDER_ALL || !R[activeTab]){ renderHome(); renderWorklist(); renderAccounts(); renderLinks(); renderManuals(); renderAcctItems(); renderLib('forms'); renderLib('laws'); renderVat(); renderClose(); renderPay(); renderCorp(); renderIndiv(); renderClients(); renderSettings(); if(R[activeTab] && !['home','worklist','accounts','links','manuals','acctitles','forms','laws','vat','close','pay','corp','indiv','clients','settings'].includes(activeTab)) R[activeTab](); return; }
   try{ R[activeTab](); }catch(e){ console.error('화면 그리기 실패', activeTab, e); }
