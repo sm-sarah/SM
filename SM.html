@@ -1897,9 +1897,9 @@ function smTogglePcView(){ try{ localStorage.setItem('sm_pc_view', window.SM_PC_
   table.cl-table{ width:auto; }
   /* [2026.11.02] "대메뉴 안 하위메뉴끼리 폭이 같게"(요청) - works(거래처~종소세)·근태경비는 카드를 본문 폭 전체로, 표도 카드 폭에 맞게 늘림(넓은 표는 그대로 가로 스크롤).
      그래서 같은 대메뉴 안에서 하위메뉴를 옮겨 다녀도 카드 테두리가 같은 자리 */
-  :is(#tab-clients, #tab-pay, #tab-vat, #tab-close, #tab-corp, #tab-indiv, #tab-attend) > .card:has(.table-scroll){ width:auto; }
-  :is(#tab-clients, #tab-pay, #tab-vat, #tab-close, #tab-corp, #tab-indiv, #tab-attend) .table-scroll > table,
-  :is(#tab-clients, #tab-pay, #tab-vat, #tab-close, #tab-corp, #tab-indiv, #tab-attend) table.cl-table{ width:100%; }
+  :is(#tab-clients, #tab-pay, #tab-vat, #tab-close, #tab-corp, #tab-indiv, #tab-pclients, #tab-attend) > .card:has(.table-scroll){ width:auto; }
+  :is(#tab-clients, #tab-pay, #tab-vat, #tab-close, #tab-corp, #tab-indiv, #tab-pclients, #tab-attend) .table-scroll > table,
+  :is(#tab-clients, #tab-pay, #tab-vat, #tab-close, #tab-corp, #tab-indiv, #tab-pclients, #tab-attend) table.cl-table{ width:100%; }   /* [2026.11.24] #tab-pclients 추가 - 개인거래처 표가 왼쪽으로 치우침(요청) */
   table.cl-table th, table.cl-table td{ padding:8px 12px; font-size:13px; white-space:nowrap; }
   /* [2026.11.24] 개인거래처 거래처현황 - 칸이 많아 화면이 좁으면 오른쪽 '관리'(수정·이력·삭제)가 잘려 안 보이던 것: 칸 여백을 줄이고 관리 칸은 오른쪽에 붙여 둠 */
   table.cl-table.p-list th, table.cl-table.p-list td{ padding:8px 8px; }
