@@ -8022,7 +8022,11 @@ function pSearchHtml(){
 function pPerPickHtml(kind){
   const p = pPerOf(kind), nowY = new Date().getFullYear();
   const years = cur => { const s = new Set([String(cur)]); for(let y = nowY + 1; y >= nowY - 4; y--) s.add(String(y)); Object.keys(pColsMap(kind)).forEach(k => s.add(k.slice(0, 4))); return [...s].sort((a, b) => b - a); };
-  if(kind === 'pay') return `<input type="month" value="${escapeAttr(p)}" onchange="pSetPer('pay', this.value)">`;
+  if(kind === 'pay'){   // [2026.11.24] 날짜 입력칸(type=month) 대신 연도·월 선택상자 - 부가세·연도 선택과 같은 모양(요청 "월선택박스 스타일 이상하고")
+    const y = p.slice(0, 4), m = p.slice(5, 7);
+    return `<select onchange="pSetPer('pay', this.value + '-${m}')">${years(y).map(v => `<option value="${v}" ${v === y ? 'selected' : ''}>${v}년</option>`).join('')}</select>
+      <select onchange="pSetPer('pay', '${y}-' + this.value)">${Array.from({ length:12 }, (_, i) => pad2(i + 1)).map(v => `<option value="${v}" ${v === m ? 'selected' : ''}>${Number(v)}월 귀속</option>`).join('')}</select>`;
+  }
   if(kind === 'vat'){
     const y = p.slice(0, 4), h = p.slice(5, 6), k = p.slice(7);
     return `<select onchange="pSetVatPart('y', this.value)">${years(y).map(v => `<option value="${v}" ${v === y ? 'selected' : ''}>${v}년</option>`).join('')}</select>
@@ -8057,7 +8061,7 @@ function pTaxHtml(kind){
       ${doneCol ? `<div class="stat tone-violet"><div class="n">${done}</div><div class="label">${taxjEsc(doneCol.label)} 완료</div></div>` : ''}
     </div>
     <div class="table-scroll" style="margin-top:16px;">
-    <table>
+    <table style="width:100%;">   <!-- [2026.11.24] 표가 왼쪽에 몰려 보여서 카드 너비에 맞춤(요청) -->
       <thead><tr><th class="tx-seq">순번</th><th class="tx-type">구분</th><th>상호명</th><th>사업자번호</th>${head}</tr></thead>
       <tbody>${body || `<tr><td colspan="${4 + cols.length}"><div class="empty" style="padding:18px;">${empty}</div></td></tr>`}</tbody>
     </table>
