@@ -8294,7 +8294,13 @@ function pItCycleBtn(c, ym, lane){
   const lab = base === '미등록' || base === '미대상' ? `<span style="color:var(--muted);">${base}</span>` : payCycleLabelHtml(base, lane || '');
   return `<button class="btn ghost xs" style="font-weight:700; white-space:nowrap;" onclick="pEditPayCycle(${c.id})" title="눌러서 신고구분(대상·미대상, 매월·반기)·시작 귀속월·지급시기 등록/변경">${lab}</button>`;
 }
-function pItNameTd(c, span){ return `<td class="tx-name"${span || ''}><a class="cl-name" style="${smEntCss(c.type)}" onclick="pEditClient(${c.id})" title="눌러서 거래처 정보 수정">${taxjEsc(c.name)}</a></td>`; }
+// [2026.11.24] "모든 신고에 검증이 다 있어야지 회사웹이랑 같은"(요청) - 회사웹처럼 상호명 옆 검증 아이콘(계산기+돋보기)을 원천세 모든 화면·모든 줄(반기 포함)에
+const P_ICON_RV = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="2" width="13" height="18" rx="2"/><line x1="6" y1="6" x2="13" y2="6"/><polyline points="6 11 8 13 12 9"/><circle cx="17.5" cy="17.5" r="3.5"/><line x1="20" y1="20" x2="22.5" y2="22.5"/></svg>';
+function pItNameTd(c, span, rvYm, rvLane){
+  const st = rvYm ? (() => { const m = Number(rvYm.slice(5, 7)), end = pItHalf(c, rvYm) ? (m <= 6 ? 6 : 12) : m; return pRvMonthState(c, rvLane || pItLanes(c, rvYm)[0] || 'sameMonth', rvYm.slice(0, 4), end); })() : '';
+  const tone = st === 'bad' ? 'color:#ef4444; border-color:#fecaca;' : st === 'ok' ? 'color:#10b981; border-color:#bbf7d0;' : st === 'manual' ? 'color:#f59e0b; border-color:#fde68a;' : '';
+  return `<td class="tx-name"${span || ''}><span style="display:inline-flex; align-items:center; gap:6px;"><a class="cl-name" style="${smEntCss(c.type)}" onclick="pEditClient(${c.id})" title="눌러서 거래처 정보 수정">${taxjEsc(c.name)}</a>${rvYm ? `<button type="button" class="sm-tool-ic" style="width:24px; height:24px; ${tone}" onclick="event.stopPropagation(); pRvOpen(${c.id}, '${rvYm}'${rvLane ? `, '${rvLane}'` : ''})" title="원천세 검증 (급여검증·납부세액검증)${st === 'ok' ? ' · 일치' : st === 'bad' ? ' · 불일치 있음' : st === 'manual' ? ' · 수기검증' : ''}" aria-label="원천세 검증">${P_ICON_RV}</button>` : ''}</span></td>`;
+}
 function pItKindsHtml(arr){ arr = arr || []; return arr.length ? arr.map(k => `<span class="step-chip ${k === '없음' ? '' : 'done tone-indiv'}" style="padding:1px 7px; font-size:11px;">${taxjEsc(pKindLab(k))}</span>`).join(' ') : '<span style="color:#d4c6cd;">선택</span>'; }
 
 // ── 1. 총괄 ── 회사웹 원천세 › 총괄과 같은 칸(바로 고쳐 씀)
@@ -8317,7 +8323,7 @@ function pItOverviewHtml(){
     const e = pItOv(c.id), rs = pPayRecs(c), last = rs.length ? rs[rs.length - 1] : null, off = !!last && !payRecApp(last);
     const notes = String(e.note || '').split('\n').filter(Boolean);
     return `<tr${off ? ' style="opacity:.45;"' : ''}>
-      <td class="tx-seq">${c.seq ? taxjEsc(c.seq) : i + 1}</td>${pItNameTd(c)}
+      <td class="tx-seq">${c.seq ? taxjEsc(c.seq) : i + 1}</td>${pItNameTd(c, '', pItMonth())}
       <td>${pItCycleBtn(c, now, pItDualYear(c, now.slice(0, 4)) ? '' : '')}</td>
       <td>${sel(c.id, 'reportPayDay', P_ITO_PAYDAY, e.reportPayDay, '신고 지급일', true)}</td>
       <td>${sel(c.id, 'actualPayDay', P_ITO_PAYDAY, e.actualPayDay, '실 급여일', true)}</td>
@@ -8446,7 +8452,7 @@ function pItPayrollHtml(){
     const lanes = pItDualYear(c, y) ? ['sameMonth','nextMonth'] : [''];
     const span = lanes.length > 1 ? ` rowspan="${lanes.length}"` : '';
     n++;
-    return lanes.map((lane, li) => `<tr${lanes.length > 1 ? ` class="${li ? 'pay-lane-2' : 'pay-lane-1'}"` : ''}>${li ? '' : `<td class="tx-seq"${span}>${n}</td>${pItNameTd(c, span)}`}<td>${pItCycleBtn(c, months.includes(cur) ? cur : months[11], lane)}</td>`
+    return lanes.map((lane, li) => `<tr${lanes.length > 1 ? ` class="${li ? 'pay-lane-2' : 'pay-lane-1'}"` : ''}>${li ? '' : `<td class="tx-seq"${span}>${n}</td>${pItNameTd(c, span, months.includes(cur) ? cur : months[11])}`}<td>${pItCycleBtn(c, months.includes(cur) ? cur : months[11], lane)}</td>`
       + months.map(ym => {
         const x = pItCell(c, ym, lane), cc = ym === cur ? ' pay-yr-cur' : '', on = `onclick="pItEdit(${c.id}, '${ym}'${lane ? `, '${lane}'` : ''})" style="cursor:pointer;"`;
         if(x.locked) return `<td class="pay-yr${cc}" title="원천세 신고구분상 신고 대상이 아닌 달"><span style="color:#ece4e8;">·</span></td>`;
@@ -8480,17 +8486,17 @@ function pItStatusHtml(){
       const v = E[ln] || {}, k = dual ? `${c.id}|${ln}` : String(c.id), on = f => `onclick="pItEdit(${c.id}, '${ym}', '${ln}')" style="cursor:pointer;" title="눌러서 ${f} 입력 · 오른쪽 클릭: - / 미해당 / 미확인 / 진행중 / ★"`;
       const q = f => ` data-pitq="${c.id}|${ym}|${ln}|${f}"`;
       const chk = (f, l) => `<td ${on(l)}${q(f)}>${E.transfer ? '<span class="pay-yr-tr">이관</span>' : pItStageHtml(v[f])}</td>`;
-      const rv = pRvMonthState(c, ln, ym.slice(0, 4), mm);
+      const rv = pRvMonthState(c, ln, ym.slice(0, 4), ho ? (mm <= 6 ? 6 : 12) : mm);   // 반기 중간 달은 그 반기(6·12월) 검증 결과
       const tax = (a, b, l) => ho ? `<td colspan="2"><span class="hint" style="margin:0;" title="반기 신고 - ${mm <= 6 ? 6 : 12}월 귀속에 ${l}">반기</span></td>` : chk(a, l) + chk(b, l);
       const memo = String(v.memo || '').trim();
       R.push(`<tr${dual ? ` class="${li ? 'pay-lane-2' : 'pay-lane-1'}"` : ''}>
-        ${li ? '' : `<td class="tx-seq"${span}>${no}</td>${pItNameTd(c, span)}`}
+        ${li ? '' : `<td class="tx-seq"${span}>${no}</td>${pItNameTd(c, span, ym, ln)}`}
         <td style="white-space:nowrap;">${pItCycleBtn(c, ym, dual ? ln : '')}</td>
         ${li ? '' : `<td style="white-space:nowrap;"${span}>${ov.actualPayDay ? taxjEsc(ov.actualPayDay) : PAY_NA}</td>`}
         <td ${on('급여종류')}>${pItKindsHtml(v.payKinds)}</td>
         <td ${on('급여명세서 전달')}${q('payslip')}>${pItSlipSkip(c.id, v) ? '<span class="hint" style="margin:0;">미해당</span>' : E.transfer ? '<span class="pay-yr-tr">이관</span>' : pItStageHtml(v.payslip)}</td>
         ${chk('payroll', '급여마감')}${tax('returnClose', 'returnCloseLocal', '신고서 마감')}${tax('national', 'local', '신고')}
-        <td onclick="pRvOpen(${c.id}, '${ym}', '${ln}')" style="cursor:pointer;" title="원천세 검증(급여·신고서 금액 비교) 열기${rv === 'ok' ? ' · 일치' : rv === 'bad' ? ' · 불일치 있음' : rv === 'manual' ? ' · 수기검증' : ''}">${rv && rv !== '-' ? pRvChip(rv) : rv === '-' ? '<span class="hint" style="margin:0;">반기</span>' : '<button class="btn ghost xs" style="font-weight:700;">검증</button>'}</td>
+        <td onclick="pRvOpen(${c.id}, '${ym}', '${ln}')" style="cursor:pointer;" title="원천세 검증(급여·신고서 금액 비교) 열기${rv === 'ok' ? ' · 일치' : rv === 'bad' ? ' · 불일치 있음' : rv === 'manual' ? ' · 수기검증' : ''}">${rv && rv !== '-' ? pRvChip(rv) : '<button class="btn ghost xs" style="font-weight:700;">검증</button>'}${ho ? `<div style="font-size:10.5px; color:var(--muted); font-weight:700;">${mm <= 6 ? '1~6월' : '7~12월'}</div>` : ''}</td>
         ${cols.map(col => smcTd(s, k, col, pGet('pay', k, col.id))).join('')}
         <td ${on('메모')}>${memo ? `<span class="sm-tool-ic vt-ic" title="${escapeAttr(memo)}">${ICON_MEMO_DOC}</span>` : PAY_NA}</td></tr>`);
     });
@@ -8537,7 +8543,7 @@ function pItSubmitHtml(){
   pSubInit();
   const items = SUBMIT_ITEMS[pSubMode], key = pSubKey(), ms = pSubMonths(), nowY = new Date().getFullYear();
   const list = pRowsOf('pay').filter(c => ms.some(ym => !pItLocked(c, ym)));
-  const rows = list.map((c, i) => `<tr><td class="tx-seq">${i + 1}</td>${pItNameTd(c)}${items.map(([it, lab]) => {
+  const rows = list.map((c, i) => `<tr><td class="tx-seq">${i + 1}</td>${pItNameTd(c, '', ms[ms.length - 1])}${items.map(([it, lab]) => {
     const v = (((pIt().sub[key] || {})[c.id]) || {})[it];
     let h;
     if(v && v.s === '제출완료') h = `<span class="pay-chk" title="제출 ${escapeAttr(v.d || '')}">✓</span>${v.d ? `<div style="font-size:11px; color:var(--muted);">${Number(v.d.slice(5, 7))}/${Number(v.d.slice(8))}</div>` : ''}`;
