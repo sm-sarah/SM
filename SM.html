@@ -7926,7 +7926,7 @@ function pDefPer(kind){
 function pPerOf(kind){ return pPer[kind] || (pPer[kind] = pDefPer(kind)); }
 function pPerLabel(kind, p){
   p = String(p || '');
-  if(kind === 'pay'){ const [y, m] = p.split('-'); return m ? `${y}년 ${Number(m)}월` : p; }
+  if(kind === 'pay'){ const [y, m] = p.split('-'); return m === 'H1' ? `${y}년 상반기(1~6월)` : m === 'H2' ? `${y}년 하반기(7~12월)` : m ? `${y}년 ${Number(m)}월` : p; }
   if(kind === 'vat') return `${p.slice(0, 4)}년 ${VAT_T_LABEL[p.slice(5)] || p.slice(5)}`;
   return `${p}년${kind === 'close' ? '' : ' 귀속'}`;
 }
@@ -8104,7 +8104,8 @@ function pPerPickHtml(kind){
   if(kind === 'pay'){   // [2026.11.24] 날짜 입력칸(type=month) 대신 연도·월 선택상자 - 부가세·연도 선택과 같은 모양(요청 "월선택박스 스타일 이상하고")
     const y = p.slice(0, 4), m = p.slice(5, 7);
     return `<select onchange="pSetPer('pay', this.value + '-${m}')">${years(y).map(v => `<option value="${v}" ${v === y ? 'selected' : ''}>${v}년</option>`).join('')}</select>
-      <select onchange="pSetPer('pay', '${y}-' + this.value)">${Array.from({ length:12 }, (_, i) => pad2(i + 1)).map(v => `<option value="${v}" ${v === m ? 'selected' : ''}>${Number(v)}월 귀속</option>`).join('')}</select>`;
+      <select onchange="pSetPer('pay', '${y}-' + this.value)">${Array.from({ length:12 }, (_, i) => pad2(i + 1)).map(v => `<option value="${v}" ${v === m ? 'selected' : ''}>${Number(v)}월 귀속</option>`).join('')}
+        <optgroup label="반기 거래처">${[['H1','상반기 (1~6월) 귀속'], ['H2','하반기 (7~12월) 귀속']].map(([v, l]) => `<option value="${v}" ${v === m ? 'selected' : ''}>${l}</option>`).join('')}</optgroup></select>`;   // [2026.11.24] 반기 귀속 선택지(요청 "반기면 귀속을 1월~6월 이런 식으로 … 선택지가 있어야")
   }
   if(kind === 'vat'){
     const y = p.slice(0, 4), h = p.slice(5, 6), k = p.slice(7);
@@ -8121,19 +8122,24 @@ function pPerPickHtml(kind){
 //   기록이 없는 거래처는 '미등록'으로 보여서 바로 등록할 수 있게 함
 function pPayRecs(c){ return (c.payCycles || []).filter(r => r && r.effectiveFrom).slice().sort((x, y) => x.effectiveFrom.localeCompare(y.effectiveFrom)); }
 function pPayRecAt(c, per){ const rs = pPayRecs(c); let cur = null; for(const r of rs){ if(r.effectiveFrom <= per) cur = r; else break; } return cur || rs[0] || null; }
+// [2026.11.24] 반기 귀속(요청 "반기면 귀속을 1월~6월 이런 식으로 … 선택지가 있어야") - 기간 선택에 상반기(1~6월)·하반기(7~12월) 귀속을 따로 둠(기간 키 'YYYY-H1'/'YYYY-H2')
+//   월 화면 = 그 달 신고구분이 매월(또는 미등록)인 거래처만 · 반기 화면 = 반기 끝 달(6·12월) 신고구분이 반기인 거래처만(회사웹 반기 신고와 같음)
+function pPayIsHalfPer(per){ return /-H[12]$/.test(String(per)); }
 function pPayState(c, per){
+  const half = pPayIsHalfPer(per), at = half ? `${per.slice(0, 4)}-${per.slice(-1) === '1' ? '06' : '12'}` : per;
   const rs = pPayRecs(c);
-  if(!rs.length) return { show:true, base:'미등록', half:false, from:'', pay:'' };
-  const r = pPayRecAt(c, per);
-  if(per < rs[0].effectiveFrom || !payRecApp(r)) return { show:false };
+  if(!rs.length) return half ? { show:false } : { show:true, base:'미등록', from:'', pay:'' };
+  const r = pPayRecAt(c, at);
+  if(at < rs[0].effectiveFrom || !payRecApp(r)) return { show:false };
+  const cyc = r.cycle || '매월';
+  if(half ? cyc !== '반기' : cyc === '반기') return { show:false, halfHere: !half };
   let from = '';   // 원천 시작 = 지금 이어지는 '원천세 있음' 구간이 시작된 달
-  rs.forEach((x, i) => { if(x.effectiveFrom > per) return; if(payRecApp(x) && (i === 0 || !payRecApp(rs[i - 1]))) from = x.effectiveFrom; });
-  const cyc = r.cycle || '매월', mm = Number(per.slice(5));
-  return { show:true, base:cyc, half: cyc === '반기' && mm !== 6 && mm !== 12, from, pay: r.pay || '' };
+  rs.forEach((x, i) => { if(x.effectiveFrom > at) return; if(payRecApp(x) && (i === 0 || !payRecApp(rs[i - 1]))) from = x.effectiveFrom; });
+  return { show:true, base:cyc, from, pay: r.pay || '' };
 }
 async function pEditPayCycle(id){
   const c = pClients.find(x => x.id === id); if(!c) return;
-  const per = pPerOf('pay'), rs = pPayRecs(c), cur = pPayRecAt(c, per);
+  const per0 = pPerOf('pay'), per = pPayIsHalfPer(per0) ? `${per0.slice(0, 4)}-${per0.slice(-1) === '1' ? '01' : '07'}` : per0, rs = pPayRecs(c), cur = pPayRecAt(c, per);
   const ym = v => `${v.slice(0, 4)}.${v.slice(5)}`;
   const hist = rs.length ? `<div class="hint" style="margin:0 0 6px; text-align:left;"><b>지금까지 기록</b> (적용 시작월부터 바뀔 때까지 적용)</div>${rs.map(r => `<div style="display:flex; gap:10px; padding:3px 0; font-size:13px;"><b style="min-width:62px;">${ym(r.effectiveFrom)}~</b><span>${payRecApp(r) ? taxjEsc((r.cycle || '매월') + (r.pay ? ' · ' + r.pay + '지급' : '')) : '<span style="color:var(--muted);">원천세 없음</span>'}</span></div>`).join('')}` : '<div class="hint" style="margin:0;">아직 기록이 없어요. 원천세가 시작된 귀속월부터 적어 주세요.</div>';
   const r = await smForm(`${c.name} · 원천세 신고구분`, [
@@ -8151,9 +8157,9 @@ async function pEditPayCycle(id){
 function pTaxHtml(kind){
   const s = 'p-' + kind, cols = pCols(kind), q = pQuery.trim().toLowerCase(), qd = q.replace(/\D/g, ''), per = pPerOf(kind), isPay = kind === 'pay';
   const hit = c => !q || String(c.name || '').toLowerCase().includes(q) || (qd && String(c.biz || '').replace(/\D/g, '').includes(qd));
-  let all = pRowsOf(kind), halfAll = [];
-  if(isPay){ const st = c => pPayState(c, per); halfAll = all.filter(c => { const x = st(c); return x.show && x.half; }); all = all.filter(c => { const x = st(c); return x.show && !x.half; }); }
-  const rows = all.filter(hit), halfRows = halfAll.filter(hit);
+  let all = pRowsOf(kind), halfN = 0;
+  if(isPay){ halfN = all.filter(c => pPayState(c, per).halfHere).length; all = all.filter(c => pPayState(c, per).show); }
+  const rows = all.filter(hit), isHalf = isPay && pPayIsHalfPer(per);
   const doneCol = cols.find(c => (c.label === '신고' || c.label === '결산 완료') && /check|date|dcm/.test(c.type));
   const done = doneCol ? all.filter(c => { const v = pGet(kind, c.id, doneCol.id); return v != null && v !== '' && v !== false && !SM_QUICK_VALS.includes(v); }).length : null;
   const head = cols.map(c => `<th data-smcol="${escapeAttr(c.id)}" title="끌어서 위치 옮기기"><button class="btn ghost xs" onclick="pEditCol('${kind}','${escapeAttr(c.id)}')" title="눌러서 이름·입력 방식 수정 또는 삭제 · 끌어서 위치 옮기기" style="font-weight:800; position:relative;">${taxjEsc(c.label)}${ICON_COL_GEAR}</button></th>`).join('');
@@ -8177,7 +8183,7 @@ function pTaxHtml(kind){
       </td></tr>`;
   const nCol = 5 + cols.length + (isPay ? 2 : 0);
   const thead = `<thead><tr><th class="tx-seq">순번</th><th class="tx-type">구분</th><th>상호명</th><th>사업자번호</th>${isPay ? '<th title="회사웹과 같이 신고구분 이력으로 정해요 · 눌러서 등록/변경">신고구분</th><th title="지금 이어지는 원천세가 시작된 귀속월">원천 시작</th>' : ''}${head}<th style="text-align:center;">관리</th></tr></thead>`;
-  const empty = !all.length && !halfAll.length ? `아직 ${pPerLabel(kind, per)} ${P_TAX[kind]} 대상 개인거래처가 없어요. 왼쪽 위 '거래처 추가'로 등록해 주세요.` : !all.length && !q ? '이번 달 신고할 거래처가 없어요.' : '검색 결과가 없어요.';
+  const empty = q && all.length ? '검색 결과가 없어요.' : isHalf ? `${pPerLabel(kind, per)} 귀속 반기 거래처가 없어요. 신고구분을 '반기'로 등록한 거래처가 여기 나와요.` : `아직 ${pPerLabel(kind, per)} ${P_TAX[kind]} 대상 개인거래처가 없어요. 왼쪽 위 '거래처 추가'로 등록해 주세요.`;
   return `<div class="toolbar" style="display:grid; grid-template-columns:1fr auto 1fr; align-items:center;">
       <div><button class="btn primary" onclick="pAddClientDlg('${kind}')">거래처 추가</button></div>   <!-- [2026.11.24] 세목 화면에서도 등록·수정·삭제(요청 "개인거래처 등록 수정 삭제 버튼도 없고") -->
       <div style="display:flex; align-items:center; gap:10px;">${pPerPickHtml(kind)}${pSearchHtml()}</div>
@@ -8187,7 +8193,7 @@ function pTaxHtml(kind){
       </div>
     </div>
     <div class="summary-row">
-      <div class="stat tone-violet"><div class="n">${all.length}</div><div class="label">${isPay ? '이번 달 신고대상' : '대상 거래처'}</div></div>
+      <div class="stat tone-violet"><div class="n">${all.length}</div><div class="label">${isHalf ? '반기 신고대상' : isPay ? '이번 달 신고대상' : '대상 거래처'}</div></div>
       ${doneCol ? `<div class="stat tone-violet"><div class="n">${done}</div><div class="label">${taxjEsc(doneCol.label)} 완료</div></div>` : ''}
     </div>
     <div class="table-scroll" style="margin-top:16px;">
@@ -8196,9 +8202,8 @@ function pTaxHtml(kind){
       <tbody>${rows.map(rowHtml).join('') || `<tr><td colspan="${nCol}"><div class="empty" style="padding:18px;">${empty}</div></td></tr>`}</tbody>
     </table>
     </div>
-    ${halfRows.length ? `<div class="hint" style="margin:18px 0 6px; text-align:left; font-weight:700;">반기 거래처 · 이번 달은 신고 없음 (6월·12월 귀속에 신고) · ${halfRows.length}곳</div>
-    <div class="table-scroll"><table style="width:100%;">${thead}<tbody>${halfRows.map(rowHtml).join('')}</tbody></table></div>` : ''}
-    <div class="hint" style="margin-top:10px; text-align:center;">${taxjEsc(pPerLabel(kind, per))} · 항목은 기간마다 따로 두고, 처음 여는 기간은 바로 앞 기간 항목을 이어받아요(적은 내용은 안 넘어가요).${isPay ? ' 신고구분이 없는 기간(원천세 시작 전·원천세 없음)인 거래처는 그 달 표에 안 나와요.' : ''}</div>`;
+    ${isPay && !isHalf && halfN ? `<div class="hint" style="margin-top:12px; text-align:center;">반기 거래처 ${halfN}곳은 <a href="javascript:void(0)" onclick="pSetPer('pay', '${per.slice(0, 4)}-${Number(per.slice(5)) <= 6 ? 'H1' : 'H2'}')" style="font-weight:800; color:var(--primary-dark); text-decoration:none;">${Number(per.slice(5)) <= 6 ? '상반기 (1~6월)' : '하반기 (7~12월)'} 귀속</a>에서 관리해요.</div>` : ''}
+    <div class="hint" style="margin-top:10px; text-align:center;">${taxjEsc(pPerLabel(kind, per))} · 항목은 기간마다 따로 두고, 처음 여는 기간은 바로 앞 기간 항목을 이어받아요(적은 내용은 안 넘어가요).${isPay ? ' 원천세 시작 전·원천세 없음인 기간에는 표에 안 나오고, 반기 거래처는 상반기·하반기 귀속에서 따로 봐요.' : ''}</div>`;
 }
 async function pAddCol(kind){
   const r = await smForm(`${P_TAX[kind]} 항목 추가`, [{ label:'항목 이름', placeholder:'예: 자료 요청' }, { label:'입력 방식', options: SM_COL_TYPES.map(x => x[1]), value:'날짜' }, smViewField()], { okText:'추가' });
