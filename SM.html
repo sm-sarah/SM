@@ -1901,6 +1901,10 @@ function smTogglePcView(){ try{ localStorage.setItem('sm_pc_view', window.SM_PC_
   :is(#tab-clients, #tab-pay, #tab-vat, #tab-close, #tab-corp, #tab-indiv, #tab-attend) .table-scroll > table,
   :is(#tab-clients, #tab-pay, #tab-vat, #tab-close, #tab-corp, #tab-indiv, #tab-attend) table.cl-table{ width:100%; }
   table.cl-table th, table.cl-table td{ padding:8px 12px; font-size:13px; white-space:nowrap; }
+  /* [2026.11.24] 개인거래처 거래처현황 - 칸이 많아 화면이 좁으면 오른쪽 '관리'(수정·이력·삭제)가 잘려 안 보이던 것: 칸 여백을 줄이고 관리 칸은 오른쪽에 붙여 둠 */
+  table.cl-table.p-list th, table.cl-table.p-list td{ padding:8px 8px; }
+  table.cl-table.p-list .p-act-sticky{ position:sticky; right:0; z-index:1; background:#fff; box-shadow:-6px 0 8px -6px rgba(190,24,93,.18); }
+  table.cl-table.p-list th.p-act-sticky{ background:rgb(250, 240, 245); }
   table.cl-table td.cl-addr{ max-width:280px; overflow:hidden; text-overflow:ellipsis; }   /* [2026.11.02] 사업장 주소 - 길면 … */
   /* [2026.10.16] 회사웹 상세구분 칩(본점·지점·성실·면세 등) + 메모 있으면 * (마우스를 올리면 내용) */
   .cl-subtag{ position:relative; display:inline-flex; align-items:center; margin-left:5px; padding:1px 7px; border-radius:8px; font-size:9.5px; font-weight:800; vertical-align:middle; }
@@ -7903,7 +7907,18 @@ function pSorted(){
   const n = v => { const x = parseInt(String(v || '').replace(/\D/g, ''), 10); return isNaN(x) ? Infinity : x; };
   return [...pClients].sort((a, b) => n(a.seq) - n(b.seq) || (a.type === '개인' ? 1 : 0) - (b.type === '개인' ? 1 : 0) || String(a.name).localeCompare(String(b.name), 'ko'));
 }
-function pRowsOf(kind){ return pSorted().filter(c => pTaxesOf(c).includes(kind) && (kind !== 'corp' || c.type !== '개인') && (kind !== 'indiv' || c.type === '개인')); }
+// [2026.11.24] 수임상태(요청 "수임상태인지 해임상태인지") - status '해임'이면 세목 화면에서 빠짐. 거래처현황은 수임 중/해임/전체로 골라 봄
+let pListFilter = 'on';
+function pIsOn(c){ return c.status !== '해임'; }
+function pToggleStatus(id){
+  const c = pClients.find(x => x.id === id); if(!c) return;
+  const from = pIsOn(c) ? '수임' : '해임', to = from === '수임' ? '해임' : '수임', changes = [{ field:'status', label:'수임상태', from, to }];
+  c.status = to;
+  if(to === '해임' && !c.endDate){ c.endDate = todayStr(); changes.push({ field:'endDate', label:'해임일', from:'', to:c.endDate }); }
+  c.history = (c.history || []).concat([{ at: new Date().toISOString(), kind:'수임상태 변경', changes }]);
+  renderAll();
+}
+function pRowsOf(kind){ return pSorted().filter(c => pIsOn(c) && pTaxesOf(c).includes(kind) && (kind !== 'corp' || c.type !== '개인') && (kind !== 'indiv' || c.type === '개인')); }
 function pMoveManualClients(){
   if(!clients.some(c => c.source === 'taxj')) return false;   // 회사 거래처를 아직 안 불러왔으면(모두 직접 넣은 것일 수 있음) 그대로 둠
   const isSample = c => typeof c.id === 'number' && c.id <= 8 && /^(110-81|220-11)-\d{5}$/.test(c.biz || '');
@@ -7925,6 +7940,15 @@ function pAddClient(){
   nameEl.value = ''; bizEl.value = '';
   renderAll();
 }
+// [2026.11.24] 세목 화면의 '거래처 추가' - 등록하면 그 세목은 켠 상태로
+async function pAddClientDlg(kind){
+  const r = await smForm('개인거래처 추가', [{ label:'상호명' }, { label:'사업자구분', options:['법인','개인'], value: kind === 'indiv' ? '개인' : '법인' }, { label:'사업자번호', placeholder:'000-00-00000' }], { okText:'추가' });
+  if(!r || !String(r[0] || '').trim()) return;
+  const c = { id: nextPClientId++, name: r[0].trim(), type: r[1] || '법인', biz: String(r[2] || '').trim(), history:[{ at: new Date().toISOString(), kind:'직접 추가', changes:[] }] };
+  if(kind && !pTaxesOf(c).includes(kind)) c.taxes = pTaxesOf(c).concat([kind]);
+  pClients.push(c);
+  renderAll();
+}
 const P_FIELDS = [
   { key:'seq', label:'순번' },
   { key:'taxType', label:'수임구분', options:['','기장대행','신고대리','기타'] },
@@ -7937,14 +7961,16 @@ const P_FIELDS = [
   { key:'fee', label:'수임료' },
   { key:'contractDate', label:'계약일', type:'date' },
   { key:'start', label:'수임시작일', type:'date' },
+  { key:'status', label:'수임상태', options:['수임','해임'], def:'수임' },
+  { key:'endDate', label:'해임일', type:'date' },
   { key:'memo', label:'메모' },
 ];
 async function pEditClient(id){
   const c = pClients.find(x => x.id === id); if(!c) return;
-  const r = await smForm(`${c.name} 수정`, P_FIELDS.map(f => ({ ...f, value: c[f.key] || '' })), { okText:'저장', icon:'✎', wide:true });
+  const r = await smForm(`${c.name} 수정`, P_FIELDS.map(f => ({ ...f, value: c[f.key] || f.def || '' })), { okText:'저장', icon:'✎', wide:true });
   if(!r) return;
   const changes = [];
-  P_FIELDS.forEach((f, i) => { const to = String(r[i] || '').trim(), from = c[f.key] || ''; if(to !== from){ changes.push({ field:f.key, label:f.label, from, to }); c[f.key] = to; } });
+  P_FIELDS.forEach((f, i) => { const to = String(r[i] || '').trim(), from = c[f.key] || f.def || ''; if(to !== from){ changes.push({ field:f.key, label:f.label, from, to }); c[f.key] = to; } });
   if(!changes.length) return;
   if(!c.name) c.name = (changes.find(x => x.field === 'name') || {}).from || '(이름 없음)';
   c.history = (c.history || []).concat([{ at: new Date().toISOString(), kind:'직접 수정', changes }]);
@@ -7975,14 +8001,15 @@ function pToggleTax(id, kind){
 }
 function pListHtml(){
   const e = taxjEsc, q = pQuery.trim().toLowerCase(), qd = q.replace(/\D/g, '');
-  const list = pSorted().filter(c => !q || String(c.name || '').toLowerCase().includes(q) || (qd && String(c.biz || '').replace(/\D/g, '').includes(qd)));
+  const list = pSorted().filter(c => (pListFilter === 'all' || (pListFilter === 'on') === pIsOn(c)) && (!q || String(c.name || '').toLowerCase().includes(q) || (qd && String(c.biz || '').replace(/\D/g, '').includes(qd))));
   const rows = list.map((c, i) => {
     const ec = c.type === '법인' ? '#0b5a78' : c.type === '개인' ? '#be185d' : 'inherit';
     const na = v => String(v == null ? '' : v).trim() ? '' : ' cl-na', V = v => String(v == null ? '' : v).trim() ? e(v) : '-';
     const fee = c.fee && !isNaN(Number(String(c.fee).replace(/,/g, ''))) ? Number(String(c.fee).replace(/,/g, '')).toLocaleString() : c.fee;
     const tx = pTaxesOf(c), kinds = Object.keys(P_TAX).filter(k => (k !== 'corp' || c.type !== '개인') && (k !== 'indiv' || c.type === '개인'));
-    return `<tr>
+    return `<tr${pIsOn(c) ? '' : ' style="opacity:.55;"'}>
       <td class="${na(c.seq)}">${c.seq ? e(c.seq) : i + 1}</td>
+      <td><span class="step-chip ${pIsOn(c) ? 'done tone-indiv' : ''}" style="padding:2px 8px; font-size:11px;" onclick="pToggleStatus(${c.id})" title="${pIsOn(c) ? '수임 중 · 누르면 해임으로' : `해임${c.endDate ? ' (' + e(c.endDate) + ')' : ''} · 누르면 다시 수임으로`}">${pIsOn(c) ? '수임' : '해임'}</span></td>
       <td class="cl-taxtype ${c.taxType === '기장대행' ? 'kj' : c.taxType === '신고대리' ? 'sd' : ''}${na(c.taxType)}">${V(c.taxType)}</td>
       <td style="color:${ec}; font-weight:800;">${V(c.type)}</td>
       <td class="cl-name-cell" onclick="pEditClient(${c.id})" title="눌러서 수정" style="color:${ec}; font-weight:800;">${V(c.name)}</td>
@@ -7993,9 +8020,9 @@ function pListHtml(){
       <td class="num ${c.taxType === '신고대리' ? 'cl-off' : na(fee)}">${V(fee)}</td>
       <td class="${na(c.contractDate)}">${V(c.contractDate)}</td>
       <td class="${na(c.start)}">${V(c.start)}</td>
-      <td><div class="steps" style="justify-content:center; flex-wrap:nowrap; gap:3px;">${kinds.map(k => `<span class="step-chip ${tx.includes(k) ? 'done tone-indiv' : ''}" style="padding:2px 7px; font-size:11px;" onclick="pToggleTax(${c.id},'${k}')" title="${tx.includes(k) ? `${P_TAX[k]} 메뉴에 나와요 · 누르면 빼기` : `누르면 ${P_TAX[k]} 메뉴에 넣기`}">${P_TAX[k]}</span>`).join('')}</div></td>
-      <td class="${na(c.memo)}" style="max-width:220px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${escapeAttr(c.memo || '')}">${V(c.memo)}</td>
-      <td class="cl-actions">
+      <td><div class="steps" style="justify-content:center; flex-wrap:nowrap; gap:3px;">${kinds.map(k => `<span class="step-chip ${tx.includes(k) ? 'done tone-indiv' : ''}" style="padding:2px 7px; font-size:11px;" onclick="pToggleTax(${c.id},'${k}')" title="${tx.includes(k) ? `${P_TAX[k]} 메뉴에 나와요 · 누르면 빼기` : `누르면 ${P_TAX[k]} 메뉴에 넣기`}">${P_TAX[k].slice(0, 2)}</span>`).join('')}</div></td>
+      <td class="${na(c.memo)}" style="max-width:120px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${escapeAttr(c.memo || '')}">${V(c.memo)}</td>
+      <td class="cl-actions p-act-sticky">
         <button class="icon-btn" onclick="pEditClient(${c.id})" title="수정" aria-label="수정">${ICON_EDIT}</button>
         <button class="icon-btn" onclick="pShowHistory(${c.id})" title="이력" aria-label="이력">${ICON_HISTORY}</button>
         <button class="icon-btn danger" onclick="pDeleteClient(${c.id})" title="삭제" aria-label="삭제">${ICON_TRASH}</button>
@@ -8007,12 +8034,13 @@ function pListHtml(){
       <input type="text" id="pNewBiz" placeholder="사업자번호 (예시)" onkeydown="if(event.key==='Enter') pAddClient()">
       <button class="btn primary" onclick="pAddClient()">거래처 추가</button>
       <div class="spacer"></div>
+      <select onchange="pListFilter=this.value; renderPClients();" title="수임상태로 골라 보기">${[['on','수임 중'],['off','해임'],['all','전체']].map(([v, l]) => `<option value="${v}" ${v === pListFilter ? 'selected' : ''}>${l} ${pClients.filter(c => v === 'all' || (v === 'on') === pIsOn(c)).length}</option>`).join('')}</select>
       ${pSearchHtml()}
     </div>
     <div class="table-scroll">
-    <table class="cl-table">
-      <thead><tr><th>순번</th><th>수임구분</th><th>사업자구분</th><th class="cl-name-th">상호명</th><th>사업자번호</th><th>법인등록번호</th><th>대표자</th><th>사업장 주소</th><th>수임료</th><th>계약일</th><th>수임시작일</th><th title="켜 둔 세목 메뉴에 이 거래처가 나와요">맡은 세목</th><th>메모</th><th style="text-align:center;">관리</th></tr></thead>
-      <tbody>${rows || `<tr><td colspan="14"><div class="empty" style="padding:18px;">${q ? '검색 결과가 없어요.' : '아직 개인거래처가 없어요. 위에서 거래처명을 넣고 \'거래처 추가\'를 눌러 주세요.'}</div></td></tr>`}</tbody>
+    <table class="cl-table p-list">
+      <thead><tr><th>순번</th><th>수임상태</th><th>수임구분</th><th>사업자구분</th><th class="cl-name-th">상호명</th><th>사업자번호</th><th>법인등록번호</th><th>대표자</th><th>사업장 주소</th><th>수임료</th><th>계약일</th><th>수임시작일</th><th title="켜 둔 세목 메뉴에 이 거래처가 나와요">맡은 세목</th><th>메모</th><th class="p-act-sticky" style="text-align:center;">관리</th></tr></thead>
+      <tbody>${rows || `<tr><td colspan="15"><div class="empty" style="padding:18px;">${q ? '검색 결과가 없어요.' : pListFilter === 'off' ? '해임한 개인거래처가 없어요.' : '아직 개인거래처가 없어요. 위에서 거래처명을 넣고 \'거래처 추가\'를 눌러 주세요.'}</div></td></tr>`}</tbody>
     </table>
     </div>`;
 }
@@ -8046,10 +8074,14 @@ function pTaxHtml(kind){
       <td class="tx-type"><span class="tag ${c.type === '법인' ? 'tag-corp-type' : 'tag-indiv-type'}">${taxjEsc(c.type || '')}</span></td>
       <td class="tx-name"><a class="cl-name" style="${smEntCss(c.type)}" onclick="pEditClient(${c.id})">${taxjEsc(c.name)}</a></td>
       <td style="white-space:nowrap;">${taxjEsc(c.biz || '-')}</td>
-      ${cols.map(col => smcTd(s, c.id, col, pGet(kind, c.id, col.id))).join('')}</tr>`).join('');
-  const empty = !all.length ? `거래처현황에서 개인거래처를 추가하고 '맡은 세목'에서 ${P_TAX[kind]}을(를) 켜면 여기에 나와요.` : '검색 결과가 없어요.';
+      ${cols.map(col => smcTd(s, c.id, col, pGet(kind, c.id, col.id))).join('')}
+      <td class="cl-actions" style="white-space:nowrap;">
+        <button class="icon-btn" onclick="pEditClient(${c.id})" title="수정" aria-label="수정">${ICON_EDIT}</button>
+        <button class="icon-btn danger" onclick="pDeleteClient(${c.id})" title="삭제" aria-label="삭제">${ICON_TRASH}</button>
+      </td></tr>`).join('');
+  const empty = !all.length ? `아직 ${P_TAX[kind]} 대상 개인거래처가 없어요. 왼쪽 위 '거래처 추가'로 등록해 주세요.` : '검색 결과가 없어요.';
   return `<div class="toolbar" style="display:grid; grid-template-columns:1fr auto 1fr; align-items:center;">
-      <div></div>
+      <div><button class="btn primary" onclick="pAddClientDlg('${kind}')">거래처 추가</button></div>   <!-- [2026.11.24] 세목 화면에서도 등록·수정·삭제(요청 "개인거래처 등록 수정 삭제 버튼도 없고") -->
       <div style="display:flex; align-items:center; gap:10px;">${pPerPickHtml(kind)}${pSearchHtml()}</div>
       <div style="display:flex; align-items:center; justify-content:flex-end; gap:6px;">
         <button class="sm-tool-ic" onclick="pAddCol('${kind}')" title="항목 추가" aria-label="항목 추가">${ICON_PLUS}</button>
@@ -8062,8 +8094,8 @@ function pTaxHtml(kind){
     </div>
     <div class="table-scroll" style="margin-top:16px;">
     <table style="width:100%;">   <!-- [2026.11.24] 표가 왼쪽에 몰려 보여서 카드 너비에 맞춤(요청) -->
-      <thead><tr><th class="tx-seq">순번</th><th class="tx-type">구분</th><th>상호명</th><th>사업자번호</th>${head}</tr></thead>
-      <tbody>${body || `<tr><td colspan="${4 + cols.length}"><div class="empty" style="padding:18px;">${empty}</div></td></tr>`}</tbody>
+      <thead><tr><th class="tx-seq">순번</th><th class="tx-type">구분</th><th>상호명</th><th>사업자번호</th>${head}<th style="text-align:center;">관리</th></tr></thead>
+      <tbody>${body || `<tr><td colspan="${5 + cols.length}"><div class="empty" style="padding:18px;">${empty}</div></td></tr>`}</tbody>
     </table>
     </div>
     <div class="hint" style="margin-top:10px; text-align:center;">${taxjEsc(pPerLabel(kind, pPerOf(kind)))} · 항목은 기간마다 따로 두고, 처음 여는 기간은 바로 앞 기간 항목을 이어받아요(적은 내용은 안 넘어가요).</div>`;
