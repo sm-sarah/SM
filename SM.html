@@ -13187,7 +13187,7 @@ async function calcIntPrint(list){
   // [2026.11.25] 여러 건이면 먼저 '모든 건 같음'으로 채무자·채권자를 한 번만 받고, '건마다 다름'을 고르면 다음 창에서 건별로(요청 "동일한 경우 한 번만 입력")
   const pa0 = multi ? ents[0].it.pa : '', pb0 = multi ? ents[0].it.pb : '', diff0 = multi && ents.some(x => (x.it.pa || '') !== (pa0 || '') || (x.it.pb || '') !== (pb0 || ''));
   const SAME = '모든 건 같음', EACH = '건마다 다르게 입력';
-  const fields = [{ label:'제목', value: last.t || '이자 계산 내역서' }, { label:'채권자 구분 (이자 받는 쪽)', options:['개인 (소득세)', '법인 (법인세)'], value: last.who === 'c' ? '법인 (법인세)' : '개인 (소득세)' }];
+  const fields = [{ label:'제목', value: (last.t && last.t !== '이자 계산 내역서' ? last.t : '') || '이자계산 내역서' }, { label:'채권자 구분 (이자 받는 쪽)', options:['개인 (소득세)', '법인 (법인세)'], value: last.who === 'c' ? '법인 (법인세)' : '개인 (소득세)' }];
   if(multi) fields.push({ label:`채무자·채권자 (${ents.length}건)`, options:[SAME, EACH], value: diff0 ? EACH : SAME });
   fields.push({ label:'채무자 (이자 지급·원천징수의무자)' + (multi ? ' - 모든 건 같을 때' : ''), placeholder:'예: 주식회사 ○○', value: pa0 || last.a || '' }, { label:'채권자 (이자 받는 분)' + (multi ? ' - 모든 건 같을 때' : ''), placeholder:'예: 홍길동', value: pb0 || last.b || '' }, { label:'비고 (선택)', type:'textarea', rows:2 });
   const f = await smForm(multi ? `이자 계산 내역서 ${ents.length}건 출력` : '이자 계산 내역서 출력', fields, { okText:'출력' });
@@ -13202,7 +13202,7 @@ async function calcIntPrint(list){
   try{ localStorage.setItem('sm_calc_int_pr', JSON.stringify({ t: f[0], who, a: ents[ents.length - 1].a, b: ents[ents.length - 1].b })); }catch(e){}
   if(multi) scheduleGoogleSave();
   const e = taxjEsc, w = calcWon, d = s => s ? `${s.slice(0, 4)}. ${Number(s.slice(5, 7))}. ${Number(s.slice(8, 10))}.` : '', cur = CALC_INT_RATES[CALC_INT_RATES.length - 1];
-  const title = e(f[0] || '이자 계산 내역서'), taxN = who === 'c' ? '법인세' : '소득세', today = new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10);
+  const title = e(f[0] || '이자계산 내역서'), taxN = who === 'c' ? '법인세' : '소득세', today = new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10);
   const row = (k, val, strong, l) => `<tr${strong ? ' class="s"' : ''}><th>${k}</th><td${l ? ' class="l"' : ''}>${val}</td></tr>`;
   const page = x => {
     const v = x.v, r = x.r, man = v.rm === 'man';
@@ -13210,7 +13210,7 @@ async function calcIntPrint(list){
     const formula = r.segs.map(y => `${w(calcNum(v.p))}원 × ${y.r}% × ${y.n}일 ÷ ${y.yd}${y.yd === 366 ? ' (윤년)' : ''}${r.segs.length > 1 ? ` (${d(y.from)} ~ ${d(y.to)})` : ''}`).join('<br>+ ');
     const wtSub = v.wt === '14' ? '*온라인투자연계금융업 14%' : '*비영업대금 25%';
     const law = who === 'c' ? '법인세법 제73조 (1,000원 미만 소액부징수)' : '소득세법 제129조 제1항 제1호 나목';
-    return `<section class="pg"><h1>${title}</h1><div class="dt">작성일: ${d(today)}</div>
+    return `<section class="pg"><h1>${title}</h1>
     ${x.a || x.b ? `<table>${x.a ? row('채무자 (원천징수의무자)', e(x.a), 0, 1) : ''}${x.b ? row('채권자 (소득자)', e(x.b), 0, 1) : ''}</table>` : ''}
     <div class="sec">1. 계산 기준</div>
     <table>${row('원금', `${w(calcNum(v.p))}원`)}${row('대여 기간', `${d(v.s)} ~ ${d(v.e)}`)}${row('일수', `${w(r.days)}일${v.dc === 'both' ? ' (양편넣기)' : ''}`)}${row('이율', rateTxt)}${row('1년 일수', '365일 (윤년 366일)')}</table>
@@ -13223,15 +13223,16 @@ async function calcIntPrint(list){
   };
   // 여러 건: 맨 앞 요약표(건별 한 줄 + 총합계, 원금~실지급액)
   const sum = k => ents.reduce((t, x) => t + (k === 'p' ? calcNum(x.v.p) || 0 : x.r[k]), 0);
-  const summary = !multi ? '' : `<section class="pg"><h1>${title}</h1><div class="dt">작성일: ${d(today)} · ${ents.length}건</div><div class="sec">요약</div>
+  const summary = !multi ? '' : `<section class="pg"><h1>${title}</h1><div class="sumh"><b>[요약]</b><span>(단위: 원)</span></div>
     <table class="sm"><thead><tr><th>No</th><th>채무자</th><th>채권자</th><th>차입일</th><th>상환일</th><th>일수</th><th>이율</th><th>원금</th><th>이자</th><th>${taxN}</th><th>지방소득세</th><th>실지급액</th></tr></thead><tbody>
     ${ents.map((x, i) => `<tr><td class="c">${i + 1}</td><td class="l">${e(x.a)}</td><td class="l">${e(x.b)}</td><td class="c">${d(x.v.s)}</td><td class="c">${d(x.v.e)}</td><td>${w(x.r.days)}일</td><td class="c">${x.v.rm === 'man' ? Number(String(x.v.rt).replace(/[^\d.]/g, '')) : x.r.segs.map(y => y.r).filter((y, i, a) => a.indexOf(y) === i).join('·')}%</td><td>${w(calcNum(x.v.p))}</td><td>${w(x.r.int)}</td><td>${w(x.r.it)}</td><td>${w(x.r.lt)}</td><td>${w(x.r.net)}</td></tr>`).join('')}
     <tr class="s"><td colspan="7" class="c">합계</td><td>${w(sum('p'))}</td><td>${w(sum('int'))}</td><td>${w(sum('it'))}</td><td>${w(sum('lt'))}</td><td>${w(sum('net'))}</td></tr></tbody></table>
-    <div class="note">· 건별 계산 내역은 다음 쪽부터 붙어 있습니다. (단위: 원)</div></section>`;
+    <div class="note">· 건별 계산 내역 (뒤 참조)</div></section>`;
   const html = `<!DOCTYPE html><html lang="ko"><head><meta charset="utf-8"><title>${title}</title><style>
     @page{ size:A4; margin:18mm 16mm; } *{ box-sizing:border-box; } body{ font-family:'Pretendard','Malgun Gothic',sans-serif; color:#111; font-size:12.5px; margin:0; }
     .pg + .pg{ page-break-before:always; break-before:page; }
-    h1{ text-align:center; font-size:22px; letter-spacing:.3em; margin:0 0 6px; } .dt{ text-align:right; color:#444; margin-bottom:14px; }
+    h1{ text-align:center; font-size:20px; font-weight:600; letter-spacing:.12em; margin:0 auto 22px; padding-bottom:8px; width:fit-content; border-bottom:2px double #333; }
+    .sumh{ position:relative; text-align:center; margin:4px 0 6px; } .sumh b{ font-size:13.5px; letter-spacing:.1em; } .sumh span{ position:absolute; right:0; bottom:0; font-size:10.5px; color:#444; }
     table{ width:100%; border-collapse:collapse; margin-bottom:14px; } th, td{ border:1px solid #888; padding:8px 10px; vertical-align:middle; } th{ width:34%; background:#f2f2f2; text-align:left; font-weight:700; white-space:nowrap; }
     th small{ display:block; font-size:10.5px; font-weight:600; color:#555; margin-top:2px; } th small.in{ display:inline; margin:0 0 0 2px; }
     td{ text-align:right; } td.l{ text-align:left; } td.c{ text-align:center; } tr.s th, tr.s td{ font-weight:800; font-size:13.5px; } .sec{ font-weight:800; margin:16px 0 6px; font-size:13px; }
