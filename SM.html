@@ -13216,7 +13216,7 @@ function calcPrintHtml(html){
 const calcYmd = s => { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s || ''); return m ? Date.UTC(+m[1], +m[2] - 1, +m[3]) : null; };
 const calcYmdStr = t => new Date(t).toISOString().slice(0, 10);
 const CALC_DOW = ['일','월','화','수','목','금','토'];
-let calcDt = (() => { try{ return Object.assign({ a:'', b:'', dc:'one' }, JSON.parse(localStorage.getItem('sm_calc_days') || 'null') || {}); }catch(e){ return { a:'', b:'', dc:'one' }; } })();
+let calcDt = (() => { try{ return Object.assign({ a:'', b:'', dc:'both' }, JSON.parse(localStorage.getItem('sm_calc_days') || 'null') || {}); }catch(e){ return { a:'', b:'', dc:'both' }; } })();   // [2026.11.25] 기본 양편넣기(요청)
 function calcDaysRun(v){
   const a = calcYmd(v.a), b = calcYmd(v.b); if(a == null || b == null) return null;
   if(b < a) return { err:'끝 날짜가 시작 날짜보다 뒤여야 해요' };
@@ -13254,7 +13254,7 @@ CALC_RENDER.days = el => {
   el.querySelectorAll('[data-seg]').forEach(b => b.onclick = () => { calcDt[b.dataset.seg] = b.dataset.v; save(); renderCalc(true); });
   el.querySelectorAll('[data-d]').forEach(i => i.addEventListener('change', () => { calcDt[i.dataset.d] = i.value; save(); out(); }));
   calcWireInputs(el, calcDt, 'sm_calc_days', out);
-  calcSaveWire(el, 'days', () => JSON.parse(JSON.stringify(calcDt)), sv => { calcDt = Object.assign({ a:'', b:'', dc:'one' }, sv); save(); renderCalc(true); });
+  calcSaveWire(el, 'days', () => JSON.parse(JSON.stringify(calcDt)), sv => { calcDt = Object.assign({ a:'', b:'', dc:'both' }, sv); save(); renderCalc(true); });
   out();
 };
 // [2026.11.25] 급여 일할계산(요청: "입사일 퇴사일 기본급 + 추가항목 등 해서 월기준/근무일수기준으로 계산")
