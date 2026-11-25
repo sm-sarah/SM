@@ -12915,7 +12915,7 @@ function calcSaveWire(el, k, getV, loadV){
     const a = b.dataset.ci;
     if(a === 'load') return loadV(it.v || {});
     if(a === 'del'){ if(!(await smConfirm('이 저장을 지울까요?', it.memo || '', { tone:'danger', icon:'!', okText:'삭제' }))) return; L.splice(L.indexOf(it), 1); scheduleGoogleSave(); return re(); }
-    const keys = Object.keys(it.v || {}).filter(f => !['k', 'd', 'tm', 'ty', 'fr', 'ep', 'sd', 'fd', 'pd', 'ad', 'rm', 'rt', 's', 'e', 'dc', 'yb', 'wt'].includes(f));   // [2026.11.25] 이자 계산의 이율 방식·날짜·옵션도 그대로   // [2026.11.19] 가산세의 세목·종류·날짜도 그대로(불러와서 바꿔요)   // 원천징수의 종류·방향은 그대로(불러와서 바꿔요)
+    const keys = Object.keys(it.v || {}).filter(f => !['k', 'd', 'tm', 'ty', 'fr', 'ep', 'sd', 'fd', 'pd', 'ad', 'rm', 'rt', 's', 'e', 'dc', 'yb', 'wt', 'ru'].includes(f));   // [2026.11.25] 이자 계산의 이율 방식·날짜·옵션도 그대로   // [2026.11.19] 가산세의 세목·종류·날짜도 그대로(불러와서 바꿔요)   // 원천징수의 종류·방향은 그대로(불러와서 바꿔요)
     const lab = { p:'원금', x:'세액', t: k === 'supply' ? '공급대가' : '총금액', n:'금액', r:'수입금액', z:'영세율 과세표준', u:'미납세액' };
     const r = await smForm('저장한 계산 수정', [{ label:'메모', value: it.memo || '' }, { label:'연도', options: [...new Set(yOpts().concat([String(it.y)]))], value: String(it.y) }].concat(keys.map(f => ({ label: lab[f] || f, value: it.v[f] || '' }))), { okText:'저장', icon:'✎' });
     if(!r) return;
@@ -13012,7 +13012,7 @@ function calcWireInputs(el, st, lsKey, out){
 //   차입일수 = 상환일 − 차입일(한편넣기: 차입일 제외·상환일 포함) 또는 +1일(양편넣기)
 //   원천징수 = 비영업대금 25%(온라인투자연계금융업자 통하면 14%) · 지방소득세 = 소득세 × 10% · 각각 10원 미만 버림(소득세법 제129조①1호나목)
 const CALC_INT_RATES = [['2016-03-07', 4.6]];   // 법인세법 시행규칙 제43조② "연간 1천분의 46"(2016.3.7. 개정)
-let calcInt = (() => { try{ return Object.assign({ rm:'auto', rt:'', p:'', s:'', e:'', dc:'one', yb:'365', wt:'25' }, JSON.parse(localStorage.getItem('sm_calc_int') || 'null') || {}); }catch(e){ return { rm:'auto', rt:'', p:'', s:'', e:'', dc:'one', yb:'365', wt:'25' }; } })();
+let calcInt = (() => { try{ return Object.assign({ rm:'auto', rt:'', p:'', s:'', e:'', dc:'one', yb:'365', wt:'25', ru:'1' }, JSON.parse(localStorage.getItem('sm_calc_int') || 'null') || {}); }catch(e){ return { rm:'auto', rt:'', p:'', s:'', e:'', dc:'one', yb:'365', wt:'25', ru:'1' }; } })();
 function calcIntRateAt(ymd){ let r = null; CALC_INT_RATES.forEach(([d, v]) => { if(d <= ymd) r = v; }); return r; }
 function calcIntRun(v){
   const p = calcNum(v.p), D = s => { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s || ''); return m ? Date.UTC(+m[1], +m[2] - 1, +m[3]) : null; };
@@ -13030,7 +13030,8 @@ function calcIntRun(v){
     const L = segs[segs.length - 1]; if(L && L.r === r && L.yd === yd){ L.n++; L.to = ymd; } else segs.push({ r, yd, y, n:1, from:ymd, to:ymd });
   }
   if(miss) return { err:`${CALC_INT_RATES[0][0].replace(/-/g, '.')}. 전 기간(${miss}일)은 당좌대출이자율 표에 없어서 '직접 입력'으로 계산해 주세요`, days };
-  const it0 = Math.floor(sum), f10 = n => Math.floor(n / 10) * 10, wr = v.wt === '14' ? 0.14 : v.wt === '0' ? 0 : 0.25;
+  const ru = v.ru === '10' ? 10 : 1, it0 = Math.floor(sum / ru) * ru, f10 = n => Math.floor(n / 10) * 10,   // [2026.11.25] 이자 버림 단위 선택(요청 - 기본 원 미만, 10원 미만도 고를 수 있게)
+    wr = v.wt === '14' ? 0.14 : v.wt === '0' ? 0 : 0.25;
   const it = f10(it0 * wr), lt = f10(it * 0.1);
   return { days, segs, int: it0, it, lt, wh: it + lt, net: it0 - it - lt, wr };
 }
@@ -13049,6 +13050,7 @@ CALC_RENDER.int = el => {
       <div style="height:10px;"></div>${seg('dc', [['one', '한편넣기 (차입일 제외)'], ['both', '양편넣기 (+1일)']])}
       ${seg('yb', [['365', '1년 365일'], ['366', '윤년은 366일']])}
       ${seg('wt', [['25', '비영업대금 25%'], ['14', '온투업 14%'], ['0', '원천징수 없음']])}
+      ${seg('ru', [['1', '이자 원 미만 버림'], ['10', '이자 10원 미만 버림']])}
       <div class="calc-r rest"><span>차입일수</span><b data-o="d" title="누르면 복사"></b></div>
       <div class="calc-r rest k"><span>이자</span><b data-o="i" title="누르면 복사"></b></div>
       <div class="calc-r rest"><span>소득세 <i data-o2="w"></i></span><b data-o="it" title="누르면 복사"></b></div>
@@ -13067,13 +13069,13 @@ CALC_RENDER.int = el => {
     el.querySelector('[data-inote]').innerHTML = r && r.err ? `<b style="color:#f7a8c6;">${taxjEsc(r.err)}</b>`
       : [ok ? `이자 = ${r.segs.map(x => `${calcWon(calcNum(calcInt.p))} × ${x.r}% × ${x.n}일 ÷ ${x.yd}${r.segs.length > 1 ? ` (${fmt(x.from)}~${fmt(x.to)})` : ''}`).join('<br>+ ')}` : '',
          calcInt.rm === 'auto' ? `당좌대출이자율 = 법인세법 시행규칙 제43조② 연 ${cur[1]}% (${fmt(cur[0])}. 시행) · 날짜별로 자동 적용` : '',
-         '이자 원 미만 · 원천세 10원 미만 버림'].filter(Boolean).join('<br>');
+         `이자 ${calcInt.ru === '10' ? '10원' : '원'} 미만 · 원천세 10원 미만 버림`].filter(Boolean).join('<br>');
   };
   el.querySelectorAll('[data-seg]').forEach(b => b.onclick = () => { calcInt[b.dataset.seg] = b.dataset.v; save(); renderCalc(true); });
   el.querySelectorAll('[data-d]').forEach(i => i.addEventListener('change', () => { calcInt[i.dataset.d] = i.value; save(); out(); }));
   const rt = el.querySelector('[data-rt]'); if(rt) rt.addEventListener('input', () => { rt.value = rt.value.replace(/[^\d.]/g, ''); calcInt.rt = rt.value; save(); out(); });
   calcWireInputs(el, calcInt, 'sm_calc_int', out);
-  calcSaveWire(el, 'int', () => JSON.parse(JSON.stringify(calcInt)), sv => { calcInt = Object.assign({ rm:'auto', rt:'', p:'', s:'', e:'', dc:'one', yb:'365', wt:'25' }, sv); save(); renderCalc(true); });
+  calcSaveWire(el, 'int', () => JSON.parse(JSON.stringify(calcInt)), sv => { calcInt = Object.assign({ rm:'auto', rt:'', p:'', s:'', e:'', dc:'one', yb:'365', wt:'25', ru:'1' }, sv); save(); renderCalc(true); });
   out();
 };
 CALC_RENDER.taxback = el => {
