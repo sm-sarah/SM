@@ -12871,6 +12871,7 @@ const calcWon = n => n == null || isNaN(n) ? '' : Number(n).toLocaleString('ko-K
 // [2026.11.11] "투박하지 않게, 가운데 정렬, 구분 없이 세액만 넣으면 역산 - 말 그대로 계산용"(요청) - 가운데 카드 하나: 세액(+ 총금액은 선택) → 공급가액 + 세액 = 공급대가.
 //   값을 누르면 복사. 입력값은 이 기기에만 잠깐 보관(시트에 안 올림)
 let calcTb = (() => { try{ const v = JSON.parse(localStorage.getItem('sm_calc_taxback2') || 'null'); if(v && typeof v === 'object') return v; }catch(e){} return { x:'', t:'' }; })();
+// [2026.11.25] 버튼 이름 '임시저장' → '저장'(요청) · 이자 계산은 옆에 '출력'(내역서)
 // [2026.11.11] 계산기 임시저장(요청: "임시저장 버튼 - 계산 아래 목록(평소엔 숨김), 메모 같이 저장, 목록 수정·삭제, 연도별 관리") - 모든 계산법 공통
 //   계산법마다 CALC_SUMMARY[id](입력값) = 목록에 보일 한 줄, 입력값은 그 계산법이 정함. 목록 펼침·보는 연도는 이 기기에 기억
 const CALC_SUMMARY = {
@@ -12886,7 +12887,7 @@ function calcSaveBarHtml(k){
   if(!ys.includes(calcListYear)) calcListYear = ys[0];
   const rows = L.filter(x => String(x.y) === calcListYear).sort((a, b) => String(b.at).localeCompare(String(a.at)));
   return `<div class="calc-sv">
-      <div class="calc-sv-bar"><button type="button" class="calc-btn" data-cs="save">임시저장</button><button type="button" class="calc-btn ghost" data-cs="toggle">저장 목록 ${L.length ? `<b>${L.length}</b>` : ''} <span class="calc-caret">${calcListOpen ? '▴' : '▾'}</span></button></div>
+      <div class="calc-sv-bar"><button type="button" class="calc-btn" data-cs="save">저장</button>${k === 'int' ? '<button type="button" class="calc-btn ghost" onclick="calcIntPrint()" title="거래처에 보낼 이자 계산 내역서(A4) - 인쇄·PDF 저장">출력</button>' : ''}<button type="button" class="calc-btn ghost" data-cs="toggle">저장 목록 ${L.length ? `<b>${L.length}</b>` : ''} <span class="calc-caret">${calcListOpen ? '▴' : '▾'}</span></button></div>
       ${calcListOpen ? `<div class="calc-list">
         <div class="calc-yrs">${ys.map(y => `<button type="button" class="calc-yr${y === calcListYear ? ' on' : ''}" data-cy="${y}">${y}년</button>`).join('')}</div>
         ${rows.length ? rows.map(x => `<div class="calc-it" data-id="${escapeAttr(x.id)}">
@@ -12902,7 +12903,7 @@ function calcSaveWire(el, k, getV, loadV){
   const yOpts = () => { const y = new Date().getFullYear(); return [y + 1, y, y - 1, y - 2].map(String); };
   el.querySelector('[data-cs=save]').onclick = async () => {
     const v = getV(); if(!Object.values(v).some(x => String(x || '').trim())) return smAlert('계산할 값이 없어요', '값을 넣은 뒤 저장해 주세요.');
-    const r = await smForm('임시저장', [{ label:'메모 (무엇을 계산했는지)', placeholder:'예: 비앤피랩 8월 현금영수증' }, { label:'연도', options: yOpts(), value: calcListYear || String(new Date().getFullYear()) }], { okText:'저장' });
+    const r = await smForm('저장', [{ label:'메모 (무엇을 계산했는지)', placeholder:'예: 비앤피랩 8월 현금영수증' }, { label:'연도', options: yOpts(), value: calcListYear || String(new Date().getFullYear()) }], { okText:'저장' });
     if(!r) return;
     calcSavesOf(k).push({ id: Date.now().toString(36) + Math.random().toString(36).slice(2, 5), y: r[1], at: new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 16), memo: String(r[0] || '').trim(), v: JSON.parse(JSON.stringify(v)) });
     calcListYear = r[1]; calcListOpen = true; try{ localStorage.setItem('sm_calc_list_open', '1'); }catch(e){}
@@ -13078,6 +13079,46 @@ CALC_RENDER.int = el => {
   calcSaveWire(el, 'int', () => JSON.parse(JSON.stringify(calcInt)), sv => { calcInt = Object.assign({ rm:'auto', rt:'', p:'', s:'', e:'', dc:'one', yb:'365', wt:'25', ru:'1' }, sv); save(); renderCalc(true); });
   out();
 };
+// [2026.11.25] 이자 계산 내역서 출력(요청: "이거를 거래처에 출력해서 보내주려고 하는데") - 새 창에 A4 한 장 내역서 → 인쇄(PDF 저장 가능)
+//   지급하는 분·받는 분·비고는 출력할 때만 물어봄(저장 안 함). 금액·기간·이율·계산식·원천징수 근거를 표로
+async function calcIntPrint(){
+  const v = calcInt, r = calcIntRun(v);
+  if(!r || r.err) return smAlert('출력할 계산이 없어요', r && r.err ? r.err : '원금·차입일·상환일을 넣어 주세요.');
+  const f = await smForm('이자 계산 내역서 출력', [{ label:'제목', value:'이자 계산 내역서' }, { label:'지급하는 분 (차입자)', placeholder:'예: 주식회사 ○○' }, { label:'받는 분 (대여자)', placeholder:'예: 홍길동' }, { label:'비고 (선택)', type:'textarea', rows:2 }], { okText:'출력' });
+  if(!f) return;
+  const e = taxjEsc, w = calcWon, d = s => s ? `${s.slice(0, 4)}. ${Number(s.slice(5, 7))}. ${Number(s.slice(8, 10))}.` : '', man = v.rm === 'man', cur = CALC_INT_RATES[CALC_INT_RATES.length - 1];
+  const rateTxt = man ? `연 ${Number(String(v.rt).replace(/[^\d.]/g, ''))}% (약정 이율)` : `연 ${r.segs.map(x => x.r).filter((x, i, a) => a.indexOf(x) === i).join('% · ')}% (당좌대출이자율, 법인세법 시행규칙 제43조 제2항)`;
+  const formula = r.segs.map(x => `${w(calcNum(v.p))}원 × ${x.r}% × ${x.n}일 ÷ ${x.yd}${r.segs.length > 1 ? ` (${d(x.from)} ~ ${d(x.to)})` : ''}`).join('<br>+ ');
+  const wtLab = v.wt === '0' ? '' : v.wt === '14' ? '14% (온라인투자연계금융업자를 통한 이자)' : '25% (비영업대금의 이익)';
+  const row = (k, val, strong) => `<tr${strong ? ' class="s"' : ''}><th>${k}</th><td>${val}</td></tr>`;
+  const today = new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10);
+  const html = `<!DOCTYPE html><html lang="ko"><head><meta charset="utf-8"><title>${e(f[0] || '이자 계산 내역서')}</title><style>
+    @page{ size:A4; margin:18mm 16mm; } *{ box-sizing:border-box; } body{ font-family:'Pretendard','Malgun Gothic',sans-serif; color:#111; font-size:12.5px; margin:0; }
+    h1{ text-align:center; font-size:22px; letter-spacing:.3em; margin:0 0 6px; } .dt{ text-align:right; color:#444; margin-bottom:14px; }
+    table{ width:100%; border-collapse:collapse; margin-bottom:14px; } th, td{ border:1px solid #888; padding:8px 10px; vertical-align:middle; } th{ width:32%; background:#f2f2f2; text-align:left; font-weight:700; }
+    td{ text-align:right; } td.l{ text-align:left; } tr.s th, tr.s td{ font-weight:800; font-size:13.5px; } .sec{ font-weight:800; margin:16px 0 6px; font-size:13px; }
+    .note{ color:#444; font-size:11px; line-height:1.7; border-top:1px solid #bbb; padding-top:8px; } .bar{ text-align:center; margin:18px 0; } .bar button{ font:inherit; padding:8px 22px; border-radius:999px; border:1px solid #888; background:#fff; cursor:pointer; }
+    @media print{ .bar{ display:none; } }
+  </style></head><body>
+    <div class="bar"><button onclick="window.print()">인쇄 / PDF로 저장</button></div>
+    <h1>${e(f[0] || '이자 계산 내역서')}</h1><div class="dt">작성일: ${d(today)}</div>
+    ${f[1] || f[2] ? `<table>${f[1] ? row('지급하는 분 (차입자)', `<span>${e(f[1])}</span>`).replace('<td>', '<td class="l">') : ''}${f[2] ? row('받는 분 (대여자)', `<span>${e(f[2])}</span>`).replace('<td>', '<td class="l">') : ''}</table>` : ''}
+    <div class="sec">1. 계산 기준</div>
+    <table>${row('원금', `${w(calcNum(v.p))}원`)}${row('대여 기간', `${d(v.s)} ~ ${d(v.e)}`)}${row('일수', `${w(r.days)}일 (${v.dc === 'both' ? '양편넣기: 차입일·상환일 모두 포함' : '차입일 제외, 상환일 포함'})`)}${row('이율', rateTxt)}${row('1년 일수', v.yb === '366' ? '365일 (윤년 366일)' : '365일')}</table>
+    <div class="sec">2. 이자 및 원천징수</div>
+    <table>${row('이자 계산식', `<span style="font-size:11.5px;">${formula}</span>`)}${row('이자', `${w(r.int)}원`, 1)}
+      ${wtLab ? row(`소득세 (${wtLab})`, `${w(r.it)}원`) + row('지방소득세 (소득세 × 10%)', `${w(r.lt)}원`) + row('원천징수세액 합계', `${w(r.wh)}원`, 1) : row('원천징수', '없음')}
+      ${row('실지급액 (이자 − 원천징수세액)', `${w(r.net)}원`, 1)}</table>
+    ${f[3] ? `<div class="sec">비고</div><div style="white-space:pre-wrap; border:1px solid #888; padding:8px 10px; margin-bottom:14px;">${e(f[3])}</div>` : ''}
+    <div class="note">· 이자: ${v.ru === '10' ? '10원' : '원'} 미만 버림 · 원천징수세액: 소득세·지방소득세 각각 10원 미만 버림(국고금 관리법 제47조)<br>
+      ${wtLab ? `· 원천징수세율: 소득세법 제129조 제1항 제1호 나목 · 원천징수한 세액은 지급일이 속하는 달의 다음 달 10일까지 신고·납부<br>` : ''}
+      ${man ? '' : `· 당좌대출이자율: 법인세법 시행규칙 제43조 제2항 연 ${cur[1]}% (${d(cur[0])} 시행)<br>`}· 본 내역은 계산 참고용이며, 실제 지급 금액은 당사자 간 약정에 따릅니다.</div>
+  </body></html>`;
+  const win = window.open('', '_blank');
+  if(!win) return smAlert('새 창이 막혔어요', '브라우저 주소창 오른쪽의 팝업 차단을 풀고 다시 눌러 주세요.');
+  win.document.open(); win.document.write(html); win.document.close();
+  setTimeout(() => { try{ win.focus(); win.print(); }catch(err){} }, 300);
+}
 CALC_RENDER.taxback = el => {
   el.innerHTML = `<div class="calc-card">
       <div class="calc-h">세액역산</div>
