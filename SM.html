@@ -13226,7 +13226,7 @@ async function calcIntPrint(list){
     <table class="sm"><thead><tr><th>No</th><th>채무자</th><th>채권자</th><th>차입일</th><th>상환일</th><th>일수</th><th>이율</th><th>원금</th><th>이자</th><th>${taxN}</th><th>지방소득세</th><th>실지급액</th></tr></thead><tbody>
     ${ents.map((x, i) => `<tr><td class="c">${i + 1}</td><td class="l">${e(x.a)}</td><td class="l">${e(x.b)}</td><td class="c">${d(x.v.s)}</td><td class="c">${d(x.v.e)}</td><td>${w(x.r.days)}일</td><td class="c">${x.v.rm === 'man' ? Number(String(x.v.rt).replace(/[^\d.]/g, '')) : x.r.segs.map(y => y.r).filter((y, i, a) => a.indexOf(y) === i).join('·')}%</td><td>${w(calcNum(x.v.p))}</td><td>${w(x.r.int)}</td><td>${w(x.r.it)}</td><td>${w(x.r.lt)}</td><td>${w(x.r.net)}</td></tr>`).join('')}
     <tr class="s"><td colspan="7" class="c">합계</td><td>${w(sum('p'))}</td><td>${w(sum('int'))}</td><td>${w(sum('it'))}</td><td>${w(sum('lt'))}</td><td>${w(sum('net'))}</td></tr></tbody></table>
-    <div class="note">· 건별 계산 내역 (뒤 참조)</div></section>`;
+    <div class="note" style="text-align:right;">※ 건별 계산 내역 별첨</div></section>`;
   const html = `<!DOCTYPE html><html lang="ko"><head><meta charset="utf-8"><title>${title}</title><style>
     @page{ size:A4; margin:18mm 16mm; } *{ box-sizing:border-box; } body{ font-family:'Pretendard','Malgun Gothic',sans-serif; color:#111; font-size:12.5px; margin:0; }
     .pg + .pg{ page-break-before:always; break-before:page; }
