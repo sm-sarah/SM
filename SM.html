@@ -11539,7 +11539,12 @@ function attWorkdays(ms, att, pd){
     return !!r.noLunch;
   }).length;
   const weekdays = Math.max(0, raw - hol);
-  return { weekdays, workdays: Math.max(0, weekdays - noLunch - exclusion - remoteNoLunch) };
+  // [2026.11.25] 회사웹 변경 반영(11.25) - 개인일정 구분 '교육'에 '식대기준일수에서 제외'(noLunch) 체크한 평일도 뺌(휴가·재택·회식·공휴일로 이미 빠진 날은 또 빼지 않음 - 회사웹 eduNoLunchDates와 같음)
+  const skipEdu = new Set(noLunchDates);
+  (att.remoteEntries || []).forEach(r => { if(r && r.date && (r.noLunch || r.bonus)) skipEdu.add(r.date); });
+  list.forEach(x => { if(x.reason === '공휴일' || x.reason === '점심회식' || x.reason === '기타') skipEdu.add(x.date); });
+  const eduNoLunch = new Set((((pd.schedule || {}).events) || []).filter(ev => ev && !ev.deleted && ev.type === '교육' && ev.noLunch && String(ev.date || '').startsWith(ms) && isWd(ev.date) && !skipEdu.has(ev.date) && (!hireFrom || ev.date >= hireFrom)).map(ev => ev.date)).size;
+  return { weekdays, workdays: Math.max(0, weekdays - noLunch - exclusion - remoteNoLunch - eduNoLunch) };
 }
 // Tax.J getLunchLimitFor와 같음: 그 달 말일까지 적용된 가장 최근 1일 한도
 function attLunchDaily(ms){
@@ -11579,10 +11584,11 @@ function renderAttend(){
       <div class="stat"><div class="n">${missOut}</div><div class="label">퇴근 기록 없음</div></div>`;
     // [2026.11.05] 회사웹 변경 반영(11.05) - 회사웹 출퇴근 기록에 접속 IP(checkInIp·checkOutIp)가 생겨서 IP 칸 추가(그 전 기록은 회사웹 증빙에만 있어 '-')
     const ipCell = e => (e.checkInIp || e.checkOutIp) ? `<span style="font-size:12px; color:var(--muted);" title="${escapeAttr(`출근 IP ${e.checkInIp || '-'} · 퇴근 IP ${e.checkOutIp || '-'}`)}">${taxjEsc(e.checkInIp || e.checkOutIp)}${e.checkInIp && e.checkOutIp && e.checkInIp !== e.checkOutIp ? '<br>' + taxjEsc(e.checkOutIp) : ''}</span>` : na;
+    // [2026.11.25] 회사웹 변경 반영(11.25) - 개인일정 '교육'도 근태 칸에(외근과 같은 표시)
     // [2026.11.11] 회사웹 변경 반영(10.21·11.06) - 근무지 오른쪽 '근태' 칸: 그날 휴가·반차(leaveUsage), 개인일정의 외근·출장·부재(시간은 마우스), 반일·시간 재택(시간대)
     const lvOn = {}, outOn = {}, remOn = {};
     (att.leaveUsage || []).filter(u => u && !u.deleted && inMonth(u)).forEach(u => (lvOn[u.date] = lvOn[u.date] || []).push(u));
-    (((pd.schedule || {}).events) || []).filter(ev => ev && !ev.deleted && inMonth(ev) && ['외근','출장','부재'].includes(ev.type)).forEach(ev => (outOn[ev.date] = outOn[ev.date] || []).push(ev));
+    (((pd.schedule || {}).events) || []).filter(ev => ev && !ev.deleted && inMonth(ev) && ['외근','출장','교육','부재'].includes(ev.type)).forEach(ev => (outOn[ev.date] = outOn[ev.date] || []).push(ev));
     (att.remoteEntries || []).filter(r => r && !r.deleted && inMonth(r) && (r.half || r.startTime || r.endTime)).forEach(r => { remOn[r.date] = r; });
     const atCell = ds => {
       const us = lvOn[ds] || [], os = outOn[ds] || [], rm = remOn[ds]; if(!us.length && !os.length && !rm) return na;
@@ -11616,7 +11622,8 @@ function renderAttend(){
     const exc = taxjDoc('exclusionDays'), sps = taxjDoc('specialPeriods'), whx = taxjDoc('workHourExceptions');
     (Array.isArray(exc) ? exc : []).filter(x => x && !x.deleted && inMonth(x)).forEach(x => {
       if(x.reason === '공휴일') hol[x.date] = hol[x.date] || x.name || '공휴일';
-      else put(x.date, chip('etc', x.name || x.reason || '제외일', [x.reason, x.name].filter(Boolean).join(' · ')));
+      else { const xt = x.startTime ? ` ${x.startTime}${x.endTime ? '~' + x.endTime : ''}` : '';   // [2026.11.25] 회사웹 변경 반영(11.24) - 회식·기타 일정에 시간
+        put(x.date, chip('etc', (x.name || x.reason || '제외일') + xt, [x.reason, x.name, xt.trim()].filter(Boolean).join(' · '))); }
     });
     const spRows = [].concat(Array.isArray(sps) ? sps : [], (Array.isArray(whx) ? whx : []).filter(e => !e.specialPeriodId || !(Array.isArray(sps) ? sps : []).some(p => p && p.id === e.specialPeriodId)));
     spRows.filter(p => p && !p.deleted && p.startDate && p.endDate && p.startDate <= mo + '-31' && p.endDate >= mo + '-01').forEach(p => {
@@ -12663,7 +12670,8 @@ function taxjCalMarks(){
   (Array.isArray(docs.s__exclusionDays) ? docs.s__exclusionDays : []).forEach(x => {
     if(!x || !x.date || x.deleted) return;
     if(x.reason === '공휴일') add(x.date, 'hol', x.name || '공휴일');
-    else add(x.date, 'item', { cls:'etc', label: x.name || x.reason || '제외일', title: [x.reason, x.name].filter(Boolean).join(' · ') });
+    else { const xt = x.startTime ? ` ${x.startTime}${x.endTime ? '~' + x.endTime : ''}` : '';   // [2026.11.25] 회사웹 변경 반영(11.24) - 회식 시간
+      add(x.date, 'item', { cls:'etc', label: (x.name || x.reason || '제외일') + xt, title: [x.reason, x.name, xt.trim()].filter(Boolean).join(' · ') }); }
   });
   const me = (docs.profiles || []).find(p => p && String(p.email || '').toLowerCase() === String(full.email || '').toLowerCase());
   const att = me ? ((docs['data__' + me.id] || {}).attendance || {}) : {};
@@ -13240,6 +13248,8 @@ const SM_WEB_BACKUP = [
   ['Firestore 시점 복구(PITR)', '최근 7일을 1분 단위로 되돌릴 수 있음. Google Cloud 콘솔 › Firestore › (default) › 재해 복구에서 관리자가 진행'],
   ['Firestore 예약 백업', '매일 밤 자동 · 98일 보관. 복원은 같은 프로젝트의 새 데이터베이스로(콘솔에서 관리자)'],
   ['사라진 항목 기록', '저장할 때 빠진 id 항목을 Firestore에 따로 적어 둠. 앱 백업복구 메뉴에서 되돌리기'],
+  ['결재 완료 달 고정', '[2026.11.25~] 지출결의서 최종 승인 때 그 직원의 그달 근태·경비·개인일정·회식을 결재 문서(taxj_approvals의 monthSnap)에 사본으로 둠. 그달은 직원 수정 잠김(관리자는 확인창). 결재본에만 있는 기록은 근태현황·경비정산 위 ⚠ [결재본으로 되살리기]. 이전에 결재된 달은 관리자 [지금 내용으로 고정]'],
+  ['회식 삭제 휴지통', '[2026.11.25~] 회식·공통 일정 삭제 때 확인창 + 휴지통(회식·공통 일정)에 남김'],
   ['예전 묶음 보관본', '서버 원본으로 옮기기 직전(11/16) 상태 그대로 Firestore taxj에 남겨 둠(지우지 않음). 대조·복구용'],
   ['안전장치', '한 번에 많이 지우면 확인창 · 서버 자료를 받기 전엔 저장·백업 안 함 · 복원 직전 자동 저장 · 저장한 계정·기기 기록(누가 어느 기기에서 바꿨는지 대조 가능)'],
 ];
