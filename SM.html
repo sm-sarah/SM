@@ -11576,7 +11576,11 @@ function renderAttend(){
   let body = '', stats = '';
   const emptyRow = cols => `<tr><td colspan="${cols}"><div class="empty" style="padding:18px;">${yy}년 ${mm}월 기록이 없어요.</div></td></tr>`;
   if(attendView === 'clock'){
-    const list = (att.clockLog || []).filter(inMonth).sort((a, b) => a.date < b.date ? 1 : -1);   // [2026.10.20] 회사웹 변경 반영(10.19) - 최신 날짜가 위에서부터
+    const list = (att.clockLog || []).filter(inMonth);
+    // [2026.11.25] 회사웹 변경 반영(11.25, 요청 "응 원해") - 도장 없이 교육만 간 날(오늘까지)도 회사웹처럼 한 줄로(근무지 '교육', 근태 칸에 교육)
+    { const has = new Set(list.map(e => e.date)), tS = todayStr();
+      (((pd.schedule || {}).events) || []).forEach(ev => { if(ev && !ev.deleted && ev.type === '교육' && inMonth(ev) && ev.date <= tS && !has.has(ev.date)){ has.add(ev.date); list.push({ date: ev.date, status: '교육' }); } }); }
+    list.sort((a, b) => a.date < b.date ? 1 : -1);   // [2026.10.20] 회사웹 변경 반영(10.19) - 최신 날짜가 위에서부터
     const remote = list.filter(e => e.status && e.status !== '사무실').length;
     const missOut = list.filter(e => e.checkIn && !e.checkOut).length;
     stats = `<div class="stat tone-blue"><div class="n">${list.filter(e => e.checkIn).length}</div><div class="label">출근 기록</div></div>
