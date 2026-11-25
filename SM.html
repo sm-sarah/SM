@@ -12880,6 +12880,19 @@ function renderCalc(force){
   el._v = calcView;
   (CALC_RENDER[calcView] || (() => { el.innerHTML = ''; }))(el);
 }
+// [2026.11.25] 계산기에서 엔터 = 다음 입력칸으로(요청 "엔터 치면 다음 항목 입력칸으로, 탭 기능처럼") · Shift+엔터 = 앞 칸
+//   날짜 칸 등은 칸을 떠날 때 화면을 다시 그리므로, 몇 번째 칸인지 기억해 두었다가 다시 찾아 옮김
+document.addEventListener('keydown', e => {
+  if(e.key !== 'Enter' || e.isComposing || e.ctrlKey || e.metaKey || e.altKey) return;
+  const t = e.target, tab = document.getElementById('tab-calc');
+  if(!tab || !tab.contains(t) || !t.matches('input:not([type=checkbox]):not([type=radio]), select')) return;
+  const list = () => [...tab.querySelectorAll('.calc-card input:not([type=checkbox]):not([type=radio]):not([disabled]), .calc-card select:not([disabled])')].filter(x => x.offsetParent !== null);
+  const i = list().indexOf(t); if(i < 0) return;
+  e.preventDefault();
+  const to = i + (e.shiftKey ? -1 : 1); if(to < 0 || to >= list().length) return;   // 첫·마지막 칸이면 그대로
+  t.blur();
+  setTimeout(() => { const n = list()[to]; if(n){ n.focus(); if(n.select && n.type !== 'date' && n.type !== 'month') try{ n.select(); }catch(err){} } }, 0);
+});
 const calcNum = t => { const s = String(t == null ? '' : t).replace(/[^\d\-]/g, ''); return s === '' || s === '-' ? null : Number(s); };
 const calcWon = n => n == null || isNaN(n) ? '' : Number(n).toLocaleString('ko-KR');
 // ── 세액역산: 세액만 나온 자료(현금영수증 매출내역누계 등)에서 과세분 공급가액·공급대가를 거꾸로 계산
