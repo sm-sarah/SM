@@ -13161,13 +13161,21 @@ async function calcIntPrint(list){
   const ents = multi ? list.map(x => ({ v: Object.assign({ rm:'auto', rt:'', p:'', s:'', e:'', dc:'one', yb:'365', wt:'25', ru:'1' }, x.v || {}), it: x })) : [{ v: calcInt }];
   for(const x of ents){ const r = calcIntRun(x.v); if(!r || r.err) return smAlert('출력할 계산이 없어요', (multi ? `[${x.it.memo || '메모 없음'}] ` : '') + (r && r.err ? r.err : '원금·차입일·상환일을 넣어 주세요.')); }
   let last = {}; try{ last = JSON.parse(localStorage.getItem('sm_calc_int_pr') || '{}') || {}; }catch(e){}
+  // [2026.11.25] 여러 건이면 먼저 '모든 건 같음'으로 채무자·채권자를 한 번만 받고, '건마다 다름'을 고르면 다음 창에서 건별로(요청 "동일한 경우 한 번만 입력")
+  const pa0 = multi ? ents[0].it.pa : '', pb0 = multi ? ents[0].it.pb : '', diff0 = multi && ents.some(x => (x.it.pa || '') !== (pa0 || '') || (x.it.pb || '') !== (pb0 || ''));
+  const SAME = '모든 건 같음', EACH = '건마다 다르게 입력';
   const fields = [{ label:'제목', value: last.t || '이자 계산 내역서' }, { label:'채권자 구분 (이자 받는 쪽)', options:['개인 (소득세)', '법인 (법인세)'], value: last.who === 'c' ? '법인 (법인세)' : '개인 (소득세)' }];
-  ents.forEach((x, i) => { const tag = multi ? `[${i + 1}] ${x.it.memo || x.v.s || ''} · ` : ''; fields.push({ label: tag + '채무자 (이자 지급·원천징수의무자)', placeholder:'예: 주식회사 ○○', value: (multi ? x.it.pa : '') || last.a || '' }, { label: tag + '채권자 (이자 받는 분)', placeholder:'예: 홍길동', value: (multi ? x.it.pb : '') || last.b || '' }); });
-  fields.push({ label:'비고 (선택)', type:'textarea', rows:2 });
+  if(multi) fields.push({ label:`채무자·채권자 (${ents.length}건)`, options:[SAME, EACH], value: diff0 ? EACH : SAME });
+  fields.push({ label:'채무자 (이자 지급·원천징수의무자)' + (multi ? ' - 모든 건 같을 때' : ''), placeholder:'예: 주식회사 ○○', value: pa0 || last.a || '' }, { label:'채권자 (이자 받는 분)' + (multi ? ' - 모든 건 같을 때' : ''), placeholder:'예: 홍길동', value: pb0 || last.b || '' }, { label:'비고 (선택)', type:'textarea', rows:2 });
   const f = await smForm(multi ? `이자 계산 내역서 ${ents.length}건 출력` : '이자 계산 내역서 출력', fields, { okText:'출력' });
   if(!f) return;
-  const who = String(f[1]).startsWith('법인') ? 'c' : 'p', note = f[f.length - 1];
-  ents.forEach((x, i) => { x.a = String(f[2 + i * 2] || '').trim(); x.b = String(f[3 + i * 2] || '').trim(); x.v = Object.assign({}, x.v, { who }); x.r = calcIntRun(x.v); if(multi){ x.it.pa = x.a; x.it.pb = x.b; } });
+  const who = String(f[1]).startsWith('법인') ? 'c' : 'p', o = multi ? 1 : 0, each = multi && f[2] === EACH, ca = String(f[2 + o] || '').trim(), cb = String(f[3 + o] || '').trim(), note = f[4 + o];
+  let per = null;
+  if(each){
+    const pf = []; ents.forEach((x, i) => { const tag = `[${i + 1}] ${x.it.memo || x.v.s || ''} · `; pf.push({ label: tag + '채무자', placeholder:'예: 주식회사 ○○', value: x.it.pa || ca }, { label: tag + '채권자', placeholder:'예: 홍길동', value: x.it.pb || cb }); });
+    per = await smForm('건별 채무자·채권자', pf, { okText:'출력' }); if(!per) return;
+  }
+  ents.forEach((x, i) => { x.a = per ? String(per[i * 2] || '').trim() : ca; x.b = per ? String(per[i * 2 + 1] || '').trim() : cb; x.v = Object.assign({}, x.v, { who }); x.r = calcIntRun(x.v); if(multi){ x.it.pa = x.a; x.it.pb = x.b; } });
   try{ localStorage.setItem('sm_calc_int_pr', JSON.stringify({ t: f[0], who, a: ents[ents.length - 1].a, b: ents[ents.length - 1].b })); }catch(e){}
   if(multi) scheduleGoogleSave();
   const e = taxjEsc, w = calcWon, d = s => s ? `${s.slice(0, 4)}. ${Number(s.slice(5, 7))}. ${Number(s.slice(8, 10))}.` : '', cur = CALC_INT_RATES[CALC_INT_RATES.length - 1];
