@@ -1472,6 +1472,7 @@ function smTogglePcView(){ try{ localStorage.setItem('sm_pc_view', window.SM_PC_
   .calc-hist-ic{ position:absolute; top:14px; right:14px; width:32px; height:32px; border-radius:50%; border:1px solid #5a4450; background:#4a3741; color:#e7d6de; display:inline-flex; align-items:center; justify-content:center; cursor:pointer; padding:0; }
   .calc-hist-ic:hover{ border-color:#f7a8c6; color:#f7a8c6; } .calc-hist-ic svg{ width:15px; height:15px; }
   .calc-hist-ic b{ position:absolute; top:-5px; right:-5px; min-width:16px; padding:0 4px; border-radius:8px; background:#ec7ba6; color:#fff; font-size:10px; line-height:16px; }
+  .calc-print-ic{ right:54px; }
   .calc-hist-ic.pulse{ animation:calcHistPulse .9s ease; } @keyframes calcHistPulse{ 0%{ transform:scale(1); } 30%{ transform:scale(1.25); background:#ec7ba6; color:#fff; } 100%{ transform:scale(1); } }
   .calc-hist-ov{ position:fixed; inset:0; z-index:850; background:rgba(30,16,24,.55); display:flex; align-items:flex-start; justify-content:center; padding:8vh 14px 14px; overflow:auto; }
   .calc-hist-card{ width:100%; max-width:420px; margin:0; } .calc-hist-x{ position:absolute; top:14px; right:14px; border:none; background:transparent; color:#c9b6c0; font-size:15px; cursor:pointer; }
@@ -1487,6 +1488,8 @@ function smTogglePcView(){ try{ localStorage.setItem('sm_pc_view', window.SM_PC_
   .calc-it-t{ display:flex; justify-content:space-between; gap:8px; align-items:baseline; }
   .calc-it-t b{ font-size:13px; color:#fff; word-break:keep-all; overflow-wrap:anywhere; }
   .calc-it-t span{ flex:none; font-size:11px; color:#9f8a95; }
+  .calc-it-t b{ flex:1; } .calc-it-ck{ flex:none; align-self:center; display:inline-flex; } .calc-it-ck input, .calc-sel-bar input{ accent-color:#ec7ba6; margin:0; cursor:pointer; }
+  .calc-sel-bar{ display:flex; justify-content:space-between; align-items:center; gap:8px; margin:2px 0 4px; font-size:12px; color:#c9b6c0; } .calc-sel-bar label{ display:inline-flex; align-items:center; gap:6px; cursor:pointer; }
   .calc-it-v{ margin-top:3px; font-size:12px; color:#e7d6de; font-variant-numeric:tabular-nums; }
   .calc-it-a{ display:flex; gap:4px; justify-content:flex-end; margin-top:6px; }
   .calc-it-a button{ font:inherit; font-size:11px; font-weight:700; border:1px solid #5a4450; background:transparent; color:#e7d6de; border-radius:7px; padding:2px 8px; cursor:pointer; }
@@ -12898,9 +12901,10 @@ let calcListYear = String(new Date().getFullYear());
 // [2026.11.25] 저장 목록은 카드 아래 펼침 대신 카드 오른쪽 위 '이력' 아이콘 → 창에서 연도별 목록·불러오기·수정·삭제(요청 "이력은 펼쳐지기가 아니라 상단에 이력 아이콘")
 function calcSavesOf(k){ calcSaves = calcSaves || {}; return calcSaves[k] = Array.isArray(calcSaves[k]) ? calcSaves[k] : []; }
 function calcSaveBarHtml(k){
-  return `<div class="calc-sv"><div class="calc-sv-bar"><button type="button" class="calc-btn" data-cs="save">저장</button>${k === 'int' ? '<button type="button" class="calc-btn ghost" onclick="calcIntPrint()" title="거래처에 보낼 이자 계산 내역서(A4) - 인쇄·PDF 저장">출력</button>' : ''}</div></div>`;
+  return `<div class="calc-sv"><div class="calc-sv-bar"><button type="button" class="calc-btn" data-cs="save">저장</button></div></div>`;
 }
-let calcHistCtx = null;   // { k, getV, loadV, el }
+let calcHistCtx = null;
+const calcHistSel = new Set();   // 이자 계산 이력에서 출력할 건(창을 닫아도 유지)   // { k, getV, loadV, el }
 function calcHistIcon(){
   const X = calcHistCtx; if(!X) return;
   const card = X.el.querySelector('.calc-card'); if(!card) return;
@@ -12909,7 +12913,10 @@ function calcHistIcon(){
   const n = calcSavesOf(X.k).length;
   b.title = n ? `저장 이력 ${n}건 - 불러오기·수정·삭제` : '저장 이력 (아직 없음)';
   b.innerHTML = ICON_HISTORY + (n ? `<b>${n}</b>` : '');
+  // [2026.11.25] 이자 계산은 이력 아이콘 옆에 출력 아이콘(요청 "출력버튼도 이력아이콘 옆에 아이콘 형태로")
+  if(X.k === 'int' && !card.querySelector('.calc-print-ic')){ const p = document.createElement('button'); p.type = 'button'; p.className = 'calc-hist-ic calc-print-ic'; p.title = '이자 계산 내역서 출력 (인쇄·PDF 저장)'; p.setAttribute('aria-label', '출력'); p.innerHTML = ICON_CALC_PRINT; p.onclick = () => calcIntPrint(); card.prepend(p); }
 }
+const ICON_CALC_PRINT = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V3h12v6"/><rect x="3" y="9" width="18" height="8" rx="2"/><path d="M6 14h12v7H6z"/></svg>';
 function calcSaveWire(el, k, getV, loadV){
   calcHistCtx = { k, getV, loadV, el };
   calcHistIcon();
@@ -12937,8 +12944,9 @@ function calcHistOpen(){
       <div class="calc-h">저장 이력</div><div class="calc-sub">${taxjEsc(lab)} · ${L.length}건</div>
       <div class="calc-list">
         <div class="calc-yrs">${ys.map(y => `<button type="button" class="calc-yr${y === calcListYear ? ' on' : ''}" data-cy="${y}">${y}년</button>`).join('')}</div>
+        ${k === 'int' && rows.length ? `<div class="calc-sel-bar"><label><input type="checkbox" data-ckall${rows.every(x => calcHistSel.has(x.id)) ? ' checked' : ''}> 전체 선택</label><button type="button" class="calc-btn" data-selprint>선택 출력 <b data-seln>${L.filter(x => calcHistSel.has(x.id)).length}</b></button></div>` : ''}
         ${rows.length ? rows.map(x => `<div class="calc-it" data-id="${escapeAttr(x.id)}">
-            <div class="calc-it-t"><b>${taxjEsc(x.memo || '(메모 없음)')}</b><span>${taxjEsc(String(x.at || '').slice(5, 16).replace('T', ' ').replace('-', '/'))}</span></div>
+            <div class="calc-it-t">${k === 'int' ? `<label class="calc-it-ck" title="여러 건 골라 한 번에 출력"><input type="checkbox" data-ck${calcHistSel.has(x.id) ? ' checked' : ''}></label>` : ''}<b>${taxjEsc(x.memo || '(메모 없음)')}</b><span>${taxjEsc(String(x.at || '').slice(5, 16).replace('T', ' ').replace('-', '/'))}</span></div>
             <div class="calc-it-v">${taxjEsc((CALC_SUMMARY[k] || (() => ''))(x.v || {}))}</div>
             <div class="calc-it-a"><button type="button" data-ci="load" title="계산기에 불러오기">불러오기</button><button type="button" data-ci="edit" title="메모·연도·금액 수정">수정</button><button type="button" data-ci="del" class="del" title="삭제">삭제</button></div>
           </div>`).join('') : `<div class="calc-empty">${calcListYear}년에 저장한 계산이 없어요</div>`}
@@ -12946,6 +12954,15 @@ function calcHistOpen(){
   const yOpts = () => { const y = new Date().getFullYear(); return [y + 1, y, y - 1, y - 2].map(String); };
   const re = () => { calcHistIcon(); if(document.getElementById('calcHistOv')) calcHistOpen(); };
   ov.querySelectorAll('[data-cy]').forEach(b => b.onclick = () => { calcListYear = b.dataset.cy; re(); });
+  // [2026.11.25] 이자 계산 여러 건 골라 한 번에 출력(요청 "여러 건 저장해서 한번에 출력") - 앞에 요약표 + 건별 내역서
+  const seln = () => { const n = ov.querySelector('[data-seln]'); if(n) n.textContent = L.filter(x => calcHistSel.has(x.id)).length; };
+  ov.querySelectorAll('[data-ck]').forEach(c => c.onchange = () => { const id = c.closest('.calc-it').dataset.id; c.checked ? calcHistSel.add(id) : calcHistSel.delete(id); const a = ov.querySelector('[data-ckall]'); if(a) a.checked = rows.every(x => calcHistSel.has(x.id)); seln(); });
+  const ca = ov.querySelector('[data-ckall]'); if(ca) ca.onchange = () => { rows.forEach(x => ca.checked ? calcHistSel.add(x.id) : calcHistSel.delete(x.id)); ov.querySelectorAll('[data-ck]').forEach(c => c.checked = ca.checked); seln(); };
+  const sp = ov.querySelector('[data-selprint]'); if(sp) sp.onclick = () => {
+    const sel = L.filter(x => calcHistSel.has(x.id)).sort((a, b) => String(a.v && a.v.s || '').localeCompare(String(b.v && b.v.s || '')));
+    if(!sel.length) return smAlert('출력할 건을 골라 주세요', '목록 왼쪽 네모를 눌러 고른 뒤 선택 출력을 눌러 주세요.');
+    calcIntPrint(sel);
+  };
   ov.querySelectorAll('.calc-it [data-ci]').forEach(b => b.onclick = async () => {
     const it = L.find(x => x.id === b.closest('.calc-it').dataset.id); if(!it) return;
     const a = b.dataset.ci;
@@ -13069,7 +13086,8 @@ function calcIntRun(v){
   if(miss) return { err:`${CALC_INT_RATES[0][0].replace(/-/g, '.')}. 전 기간(${miss}일)은 당좌대출이자율 표에 없어서 '직접 입력'으로 계산해 주세요`, days };
   const ru = v.ru === '10' ? 10 : 1, it0 = Math.floor(sum / ru) * ru, f10 = n => Math.floor(n / 10) * 10,   // [2026.11.25] 이자 버림 단위 선택(요청 - 기본 원 미만, 10원 미만도 고를 수 있게)
     wr = v.wt === '14' ? 0.14 : v.wt === '0' ? 0 : 0.25;
-  const it = f10(it0 * wr), lt = f10(it * 0.1);
+  let it = f10(it0 * wr); if(v.who === 'c' && it < 1000) it = 0;   // [2026.11.25] 소득자가 법인이면 법인세(같은 25%·14%) + 소액부징수(1,000원 미만 안 걷음, 법인세법 제73조)
+  const lt = f10(it * 0.1);
   return { days, segs, int: it0, it, lt, wh: it + lt, net: it0 - it - lt, wr };
 }
 CALC_SUMMARY.int = v => { const r = calcIntRun(v); return r && !r.err ? `원금 ${calcWon(calcNum(v.p))} · ${r.days}일 → 이자 ${calcWon(r.int)} (원천세 ${calcWon(r.wh)})` : '-'; };
@@ -13115,45 +13133,71 @@ CALC_RENDER.int = el => {
   calcSaveWire(el, 'int', () => JSON.parse(JSON.stringify(calcInt)), sv => { calcInt = Object.assign({ rm:'auto', rt:'', p:'', s:'', e:'', dc:'one', yb:'365', wt:'25', ru:'1' }, sv); save(); renderCalc(true); });
   out();
 };
-// [2026.11.25] 이자 계산 내역서 출력(요청: "이거를 거래처에 출력해서 보내주려고 하는데") - 새 창에 A4 한 장 내역서 → 인쇄(PDF 저장 가능)
-//   지급하는 분·받는 분·비고는 출력할 때만 물어봄(저장 안 함). 금액·기간·이율·계산식·원천징수 근거를 표로
-async function calcIntPrint(){
-  const v = calcInt, r = calcIntRun(v);
-  if(!r || r.err) return smAlert('출력할 계산이 없어요', r && r.err ? r.err : '원금·차입일·상환일을 넣어 주세요.');
-  const f = await smForm('이자 계산 내역서 출력', [{ label:'제목', value:'이자 계산 내역서' }, { label:'지급하는 분 (차입자)', placeholder:'예: 주식회사 ○○' }, { label:'받는 분 (대여자)', placeholder:'예: 홍길동' }, { label:'비고 (선택)', type:'textarea', rows:2 }], { okText:'출력' });
+// [2026.11.25] 이자 계산 내역서 출력(요청: "거래처에 출력해서 보내주려고") - A4 내역서 → 인쇄(PDF 저장 가능)
+//   새 탭 없이 숨긴 iframe으로 인쇄 창만 띄움(요청 "팝업 뒤에 새 탭에서 또 뜨는 것 막아줘")
+//   당사자 = 채무자(이자 지급·원천징수의무자) / 채권자(이자 받는 소득자) · 소득자 개인이면 소득세, 법인이면 법인세(소액부징수)
+//   list(이력에서 고른 건들)를 주면 1쪽에 요약표(건별 + 총합계) → 다음 쪽부터 건별 내역서. 채무자·채권자는 건마다 받아서 그 저장 건에 기억
+async function calcIntPrint(list){
+  const multi = Array.isArray(list);
+  const ents = multi ? list.map(x => ({ v: Object.assign({ rm:'auto', rt:'', p:'', s:'', e:'', dc:'one', yb:'365', wt:'25', ru:'1' }, x.v || {}), it: x })) : [{ v: calcInt }];
+  for(const x of ents){ const r = calcIntRun(x.v); if(!r || r.err) return smAlert('출력할 계산이 없어요', (multi ? `[${x.it.memo || '메모 없음'}] ` : '') + (r && r.err ? r.err : '원금·차입일·상환일을 넣어 주세요.')); }
+  let last = {}; try{ last = JSON.parse(localStorage.getItem('sm_calc_int_pr') || '{}') || {}; }catch(e){}
+  const fields = [{ label:'제목', value: last.t || '이자 계산 내역서' }, { label:'채권자 구분 (이자 받는 쪽)', options:['개인 (소득세)', '법인 (법인세)'], value: last.who === 'c' ? '법인 (법인세)' : '개인 (소득세)' }];
+  ents.forEach((x, i) => { const tag = multi ? `[${i + 1}] ${x.it.memo || x.v.s || ''} · ` : ''; fields.push({ label: tag + '채무자 (이자 지급·원천징수의무자)', placeholder:'예: 주식회사 ○○', value: (multi ? x.it.pa : '') || last.a || '' }, { label: tag + '채권자 (이자 받는 분)', placeholder:'예: 홍길동', value: (multi ? x.it.pb : '') || last.b || '' }); });
+  fields.push({ label:'비고 (선택)', type:'textarea', rows:2 });
+  const f = await smForm(multi ? `이자 계산 내역서 ${ents.length}건 출력` : '이자 계산 내역서 출력', fields, { okText:'출력' });
   if(!f) return;
-  const e = taxjEsc, w = calcWon, d = s => s ? `${s.slice(0, 4)}. ${Number(s.slice(5, 7))}. ${Number(s.slice(8, 10))}.` : '', man = v.rm === 'man', cur = CALC_INT_RATES[CALC_INT_RATES.length - 1];
-  const rateTxt = man ? `연 ${Number(String(v.rt).replace(/[^\d.]/g, ''))}% (약정 이율)` : `연 ${r.segs.map(x => x.r).filter((x, i, a) => a.indexOf(x) === i).join('% · ')}% (당좌대출이자율, 법인세법 시행규칙 제43조 제2항)`;
-  const formula = r.segs.map(x => `${w(calcNum(v.p))}원 × ${x.r}% × ${x.n}일 ÷ ${x.yd}${r.segs.length > 1 ? ` (${d(x.from)} ~ ${d(x.to)})` : ''}`).join('<br>+ ');
-  const wtLab = v.wt === '0' ? '' : v.wt === '14' ? '14% (온라인투자연계금융업자를 통한 이자)' : '25% (비영업대금의 이익)';
-  const row = (k, val, strong) => `<tr${strong ? ' class="s"' : ''}><th>${k}</th><td>${val}</td></tr>`;
-  const today = new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10);
-  const html = `<!DOCTYPE html><html lang="ko"><head><meta charset="utf-8"><title>${e(f[0] || '이자 계산 내역서')}</title><style>
-    @page{ size:A4; margin:18mm 16mm; } *{ box-sizing:border-box; } body{ font-family:'Pretendard','Malgun Gothic',sans-serif; color:#111; font-size:12.5px; margin:0; }
-    h1{ text-align:center; font-size:22px; letter-spacing:.3em; margin:0 0 6px; } .dt{ text-align:right; color:#444; margin-bottom:14px; }
-    table{ width:100%; border-collapse:collapse; margin-bottom:14px; } th, td{ border:1px solid #888; padding:8px 10px; vertical-align:middle; } th{ width:32%; background:#f2f2f2; text-align:left; font-weight:700; }
-    td{ text-align:right; } td.l{ text-align:left; } tr.s th, tr.s td{ font-weight:800; font-size:13.5px; } .sec{ font-weight:800; margin:16px 0 6px; font-size:13px; }
-    .note{ color:#444; font-size:11px; line-height:1.7; border-top:1px solid #bbb; padding-top:8px; } .bar{ text-align:center; margin:18px 0; } .bar button{ font:inherit; padding:8px 22px; border-radius:999px; border:1px solid #888; background:#fff; cursor:pointer; }
-    @media print{ .bar{ display:none; } }
-  </style></head><body>
-    <div class="bar"><button onclick="window.print()">인쇄 / PDF로 저장</button></div>
-    <h1>${e(f[0] || '이자 계산 내역서')}</h1><div class="dt">작성일: ${d(today)}</div>
-    ${f[1] || f[2] ? `<table>${f[1] ? row('지급하는 분 (차입자)', `<span>${e(f[1])}</span>`).replace('<td>', '<td class="l">') : ''}${f[2] ? row('받는 분 (대여자)', `<span>${e(f[2])}</span>`).replace('<td>', '<td class="l">') : ''}</table>` : ''}
+  const who = String(f[1]).startsWith('법인') ? 'c' : 'p', note = f[f.length - 1];
+  ents.forEach((x, i) => { x.a = String(f[2 + i * 2] || '').trim(); x.b = String(f[3 + i * 2] || '').trim(); x.v = Object.assign({}, x.v, { who }); x.r = calcIntRun(x.v); if(multi){ x.it.pa = x.a; x.it.pb = x.b; } });
+  try{ localStorage.setItem('sm_calc_int_pr', JSON.stringify({ t: f[0], who, a: ents[ents.length - 1].a, b: ents[ents.length - 1].b })); }catch(e){}
+  if(multi) scheduleGoogleSave();
+  const e = taxjEsc, w = calcWon, d = s => s ? `${s.slice(0, 4)}. ${Number(s.slice(5, 7))}. ${Number(s.slice(8, 10))}.` : '', cur = CALC_INT_RATES[CALC_INT_RATES.length - 1];
+  const title = e(f[0] || '이자 계산 내역서'), taxN = who === 'c' ? '법인세' : '소득세', today = new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10);
+  const row = (k, val, strong, l) => `<tr${strong ? ' class="s"' : ''}><th>${k}</th><td${l ? ' class="l"' : ''}>${val}</td></tr>`;
+  const page = x => {
+    const v = x.v, r = x.r, man = v.rm === 'man';
+    const rateTxt = man ? `연 ${Number(String(v.rt).replace(/[^\d.]/g, ''))}% (약정 이율)` : `연 ${r.segs.map(y => y.r).filter((y, i, a) => a.indexOf(y) === i).join('% · ')}% (당좌대출이자율, 법인세법 시행규칙 제43조 제2항)`;
+    const formula = r.segs.map(y => `${w(calcNum(v.p))}원 × ${y.r}% × ${y.n}일 ÷ ${y.yd}${r.segs.length > 1 ? ` (${d(y.from)} ~ ${d(y.to)})` : ''}`).join('<br>+ ');
+    const wtSub = v.wt === '14' ? '*온라인투자연계금융업 14%' : '*비영업대금 25%';
+    const law = who === 'c' ? '법인세법 제73조 (1,000원 미만 소액부징수)' : '소득세법 제129조 제1항 제1호 나목';
+    return `<section class="pg"><h1>${title}</h1><div class="dt">작성일: ${d(today)}</div>
+    ${x.a || x.b ? `<table>${x.a ? row('채무자 (원천징수의무자)', e(x.a), 0, 1) : ''}${x.b ? row('채권자 (소득자)', e(x.b), 0, 1) : ''}</table>` : ''}
     <div class="sec">1. 계산 기준</div>
-    <table>${row('원금', `${w(calcNum(v.p))}원`)}${row('대여 기간', `${d(v.s)} ~ ${d(v.e)}`)}${row('일수', `${w(r.days)}일 (${v.dc === 'both' ? '양편넣기: 차입일·상환일 모두 포함' : '차입일 제외, 상환일 포함'})`)}${row('이율', rateTxt)}${row('1년 일수', v.yb === '366' ? '365일 (윤년 366일)' : '365일')}</table>
+    <table>${row('원금', `${w(calcNum(v.p))}원`)}${row('대여 기간', `${d(v.s)} ~ ${d(v.e)}`)}${row('일수', `${w(r.days)}일${v.dc === 'both' ? ' (양편넣기)' : ''}`)}${row('이율', rateTxt)}${row('1년 일수', v.yb === '366' ? '365일 (윤년 366일)' : '365일')}</table>
     <div class="sec">2. 이자 및 원천징수</div>
     <table>${row('이자 계산식', `<span style="font-size:11.5px;">${formula}</span>`)}${row('이자', `${w(r.int)}원`, 1)}
-      ${wtLab ? row(`소득세 (${wtLab})`, `${w(r.it)}원`) + row('지방소득세 (소득세 × 10%)', `${w(r.lt)}원`) + row('원천징수세액 합계', `${w(r.wh)}원`, 1) : row('원천징수', '없음')}
-      ${row('실지급액 (이자 − 원천징수세액)', `${w(r.net)}원`, 1)}</table>
-    ${f[3] ? `<div class="sec">비고</div><div style="white-space:pre-wrap; border:1px solid #888; padding:8px 10px; margin-bottom:14px;">${e(f[3])}</div>` : ''}
-    <div class="note">· 이자: ${v.ru === '10' ? '10원' : '원'} 미만 버림 · 원천징수세액: 소득세·지방소득세 각각 10원 미만 버림(국고금 관리법 제47조)<br>
-      ${wtLab ? `· 원천징수세율: 소득세법 제129조 제1항 제1호 나목 · 원천징수한 세액은 지급일이 속하는 달의 다음 달 10일까지 신고·납부<br>` : ''}
-      ${man ? '' : `· 당좌대출이자율: 법인세법 시행규칙 제43조 제2항 연 ${cur[1]}% (${d(cur[0])} 시행)<br>`}· 본 내역은 계산 참고용이며, 실제 지급 금액은 당사자 간 약정에 따릅니다.</div>
-  </body></html>`;
-  const win = window.open('', '_blank');
-  if(!win) return smAlert('새 창이 막혔어요', '브라우저 주소창 오른쪽의 팝업 차단을 풀고 다시 눌러 주세요.');
-  win.document.open(); win.document.write(html); win.document.close();
-  setTimeout(() => { try{ win.focus(); win.print(); }catch(err){} }, 300);
+      ${v.wt !== '0' ? row(`${taxN}<small>${wtSub}</small>`, `${w(r.it)}원`) + row('지방소득세', `${w(r.lt)}원`) + row('원천징수세액 합계', `${w(r.wh)}원`, 1) : row('원천징수', '없음')}
+      ${row('실지급액 <small class="in">(이자 − 원천징수세액)</small>', `${w(r.net)}원`, 1)}</table>
+    ${note ? `<div class="sec">비고</div><div class="memo">${e(note)}</div>` : ''}
+    <div class="note">${v.wt !== '0' ? `· 원천징수세율: ${law} · 원천징수한 세액은 지급일이 속하는 달의 다음 달 10일까지 신고·납부<br>` : ''}${man ? '' : `· 당좌대출이자율: 법인세법 시행규칙 제43조 제2항 연 ${cur[1]}% (${d(cur[0])} 시행)<br>`}· 본 내역은 계산 참고용이며, 실제 지급 금액은 당사자 간 약정에 따릅니다.</div></section>`;
+  };
+  // 여러 건: 맨 앞 요약표(건별 한 줄 + 총합계, 원금~실지급액)
+  const sum = k => ents.reduce((t, x) => t + (k === 'p' ? calcNum(x.v.p) || 0 : x.r[k]), 0);
+  const summary = !multi ? '' : `<section class="pg"><h1>${title}</h1><div class="dt">작성일: ${d(today)} · ${ents.length}건</div><div class="sec">요약</div>
+    <table class="sm"><thead><tr><th>No</th><th>채무자</th><th>채권자</th><th>차입일</th><th>상환일</th><th>원금</th><th>이자</th><th>${taxN}</th><th>지방소득세</th><th>실지급액</th></tr></thead><tbody>
+    ${ents.map((x, i) => `<tr><td class="c">${i + 1}</td><td class="l">${e(x.a)}</td><td class="l">${e(x.b)}</td><td class="c">${d(x.v.s)}</td><td class="c">${d(x.v.e)}</td><td>${w(calcNum(x.v.p))}</td><td>${w(x.r.int)}</td><td>${w(x.r.it)}</td><td>${w(x.r.lt)}</td><td>${w(x.r.net)}</td></tr>`).join('')}
+    <tr class="s"><td colspan="5" class="c">합계</td><td>${w(sum('p'))}</td><td>${w(sum('int'))}</td><td>${w(sum('it'))}</td><td>${w(sum('lt'))}</td><td>${w(sum('net'))}</td></tr></tbody></table>
+    <div class="note">· 건별 계산 내역은 다음 쪽부터 붙어 있습니다. (단위: 원)</div></section>`;
+  const html = `<!DOCTYPE html><html lang="ko"><head><meta charset="utf-8"><title>${title}</title><style>
+    @page{ size:A4; margin:18mm 16mm; } *{ box-sizing:border-box; } body{ font-family:'Pretendard','Malgun Gothic',sans-serif; color:#111; font-size:12.5px; margin:0; }
+    .pg + .pg{ page-break-before:always; break-before:page; }
+    h1{ text-align:center; font-size:22px; letter-spacing:.3em; margin:0 0 6px; } .dt{ text-align:right; color:#444; margin-bottom:14px; }
+    table{ width:100%; border-collapse:collapse; margin-bottom:14px; } th, td{ border:1px solid #888; padding:8px 10px; vertical-align:middle; } th{ width:34%; background:#f2f2f2; text-align:left; font-weight:700; white-space:nowrap; }
+    th small{ display:block; font-size:10.5px; font-weight:600; color:#555; margin-top:2px; } th small.in{ display:inline; margin:0 0 0 2px; }
+    td{ text-align:right; } td.l{ text-align:left; } td.c{ text-align:center; } tr.s th, tr.s td{ font-weight:800; font-size:13.5px; } .sec{ font-weight:800; margin:16px 0 6px; font-size:13px; }
+    table.sm th, table.sm td{ width:auto; padding:6px 5px; font-size:10.5px; text-align:center; } table.sm td{ text-align:right; white-space:nowrap; } table.sm td.l{ text-align:left; white-space:normal; } table.sm td.c{ text-align:center; } table.sm tr.s td{ font-size:11px; background:#f7f7f7; }
+    .memo{ white-space:pre-wrap; border:1px solid #888; padding:8px 10px; margin-bottom:14px; } .note{ color:#444; font-size:11px; line-height:1.7; border-top:1px solid #bbb; padding-top:8px; }
+  </style></head><body>${summary}${ents.map(page).join('')}</body></html>`;
+  calcPrintHtml(html);
+}
+// 숨긴 iframe에 넣고 인쇄 창만 띄움(새 탭 안 생김). 인쇄 창을 닫으면 iframe 정리
+function calcPrintHtml(html){
+  const old = document.getElementById('calcPrintFr'); if(old) old.remove();
+  const fr = document.createElement('iframe'); fr.id = 'calcPrintFr'; fr.setAttribute('aria-hidden', 'true');
+  fr.style.cssText = 'position:fixed; right:0; bottom:0; width:0; height:0; border:0; visibility:hidden;';
+  document.body.appendChild(fr);
+  const doc = fr.contentWindow.document; doc.open(); doc.write(html); doc.close();
+  setTimeout(() => { try{ fr.contentWindow.focus(); fr.contentWindow.print(); }catch(err){ smAlert('인쇄를 열지 못했어요', String(err && err.message || err)); } setTimeout(() => { try{ fr.remove(); }catch(e){} }, 60000); }, 300);
 }
 // [2026.11.25] 날짜 계산(요청: "날짜 연월일~연월일 입력하면 며칠인지") - 일수(한편넣기 기본 / 양편넣기) + 몇 년 몇 개월 며칠 + 주 단위
 const calcYmd = s => { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s || ''); return m ? Date.UTC(+m[1], +m[2] - 1, +m[3]) : null; };
@@ -13208,7 +13252,26 @@ CALC_RENDER.days = el => {
 const CALC_PR_DEF = () => ({ m:'', js:'', le:'', base:'', xs:[], mode:'cal', ru:'1', wd:'', ww:'' });
 let calcPr = (() => { try{ return Object.assign(CALC_PR_DEF(), JSON.parse(localStorage.getItem('sm_calc_pr') || 'null') || {}); }catch(e){ return CALC_PR_DEF(); } })();
 function calcPrMonth(v){ if(/^\d{4}-\d{2}$/.test(v.m || '')) return v.m; const s = v.le || v.js; return s ? s.slice(0, 7) : todayStr().slice(0, 7); }
-function calcPrWeekdays(a, b){ let n = 0; for(let t = a; t <= b; t += 864e5){ const d = new Date(t).getUTCDay(); if(d && d !== 6) n++; } return n; }
+// [2026.11.25] 공휴일 표(요청 "공휴일은 자동으로 빼줘야지. 임시공휴일 같은 거 있을 수 있으니까 매월 1일에 확인해서")
+//   관공서의 공휴일에 관한 규정 + 대체공휴일 + 임시공휴일 + 선거일 + 근로자의 날(노동절). 주말에 겹친 날도 적어 둠(평일만 빼므로 영향 없음)
+//   매월 1일 예약 작업이 새 임시공휴일·다음 해 월력요항을 확인해서 이 표를 고쳐 배포함. 표에 없는 해는 공휴일을 못 빼고 메모에 알림
+const SM_HOLIDAYS = {
+  2025: '01-01 신정,01-27 임시공휴일,01-28 설날,01-29 설날,01-30 설날,03-01 삼일절,03-03 대체공휴일,05-01 근로자의 날,05-05 어린이날·부처님오신날,05-06 대체공휴일,06-03 대통령선거,06-06 현충일,08-15 광복절,10-03 개천절,10-05 추석,10-06 추석,10-07 추석,10-08 대체공휴일,10-09 한글날,12-25 성탄절',
+  2026: '01-01 신정,02-16 설날,02-17 설날,02-18 설날,03-01 삼일절,03-02 대체공휴일,05-01 노동절,05-05 어린이날,05-24 부처님오신날,05-25 대체공휴일,06-03 지방선거,06-06 현충일,07-17 제헌절,08-15 광복절,08-17 대체공휴일,09-24 추석,09-25 추석,09-26 추석,10-03 개천절,10-05 대체공휴일,10-09 한글날,12-25 성탄절',
+  2027: '01-01 신정,02-06 설날,02-07 설날,02-08 설날,02-09 대체공휴일,03-01 삼일절,05-01 노동절,05-03 대체공휴일,05-05 어린이날,05-13 부처님오신날,06-06 현충일,07-17 제헌절,07-19 대체공휴일,08-15 광복절,08-16 대체공휴일,09-14 추석,09-15 추석,09-16 추석,10-03 개천절,10-04 대체공휴일,10-09 한글날,10-11 대체공휴일,12-25 성탄절,12-27 대체공휴일',
+};
+function smHolidayMap(y){ const t = SM_HOLIDAYS[y]; if(!t) return null; const m = {}; t.split(',').forEach(x => { const i = x.indexOf(' '); m[`${y}-${x.slice(0, i)}`] = x.slice(i + 1); }); return m; }
+//   평일(월~금) 중 공휴일을 뺀 날 수 + 뺀 공휴일 목록 + 표에 없는 해
+function calcPrWeekdays(a, b){
+  let n = 0; const hol = [], miss = new Set(), cache = {};
+  for(let t = a; t <= b; t += 864e5){
+    const dt = new Date(t), d = dt.getUTCDay(); if(!d || d === 6) continue;
+    const y = dt.getUTCFullYear(), ymd = calcYmdStr(t); if(!(y in cache)) cache[y] = smHolidayMap(y);
+    if(!cache[y]) miss.add(y); else if(cache[y][ymd]){ hol.push([ymd, cache[y][ymd]]); continue; }
+    n++;
+  }
+  return { n, hol, miss:[...miss] };
+}
 function calcPrRun(v){
   const ym = calcPrMonth(v), y = +ym.slice(0, 4), m = +ym.slice(5, 7), ms = Date.UTC(y, m - 1, 1), me = Date.UTC(y, m, 0), dim = new Date(me).getUTCDate();
   const js = calcYmd(v.js), le = calcYmd(v.le);
@@ -13217,12 +13280,12 @@ function calcPrRun(v){
   const items = [{ n:'기본급', a: v.base, p:'1' }].concat(v.xs || []).map(x => ({ n: String(x.n || '').trim() || '추가 항목', a: calcNum(x.a), p: x.p !== '0' })).filter(x => x.a != null && x.a !== 0);
   if(!items.length) return { ym };
   if(s > e) return { err:`${y}년 ${m}월은 근무기간이 아니에요`, ym };
-  const wdAuto = calcPrWeekdays(ms, me), wwAuto = calcPrWeekdays(s, e);
+  const W1 = calcPrWeekdays(ms, me), W2 = calcPrWeekdays(s, e), wdAuto = W1.n, wwAuto = W2.n;
   const num = t => { const n = Number(String(t || '').replace(/[^\d]/g, '')); return n > 0 ? n : null; };
   const basis = v.mode === 'wd' ? (num(v.wd) || wdAuto) : dim, work = v.mode === 'wd' ? (num(v.ww) != null ? num(v.ww) : wwAuto) : Math.round((e - s) / 864e5) + 1;
   const full = s === ms && e === me, ru = v.ru === '10' ? 10 : 1;
   const rows = items.map(x => ({ ...x, pay: !x.p || full ? x.a : Math.floor(x.a * work / basis / ru) * ru }));
-  return { ym, y, m, dim, s: calcYmdStr(s), e: calcYmdStr(e), wdAuto, wwAuto, basis, work, full, rows, total: rows.reduce((t, x) => t + x.pay, 0), month: rows.reduce((t, x) => t + x.a, 0) };
+  return { ym, y, m, dim, s: calcYmdStr(s), e: calcYmdStr(e), wdAuto, wwAuto, hol: W1.hol, holMiss: W1.miss, basis, work, full, rows, total: rows.reduce((t, x) => t + x.pay, 0), month: rows.reduce((t, x) => t + x.a, 0) };
 }
 CALC_SUMMARY.prorate = v => { const r = calcPrRun(v); return r && r.rows ? `${r.y}년 ${r.m}월 · ${r.work}/${r.basis}일 → ${calcWon(r.total)}원 (월 ${calcWon(r.month)})` : '-'; };
 CALC_RENDER.prorate = el => {
@@ -13231,7 +13294,7 @@ CALC_RENDER.prorate = el => {
   el.innerHTML = `<div class="calc-card">
       <div class="calc-h">급여 일할계산</div>
       <div class="calc-sub">입사·퇴사한 달의 급여를 근무한 날만큼 나눠 계산해요</div>
-      ${seg('mode', [['cal', '월 기준 (달력일)'], ['wd', '근무일수 기준 (평일)']])}
+      ${seg('mode', [['cal', '월 기준 (달력일)'], ['wd', '근무일수 기준 (평일·공휴일 제외)']])}
       <label class="calc-f"><span>귀속월</span><input class="calc-mid" type="month" data-d="m" value="${escapeAttr(calcPrMonth(v))}"></label>
       <label class="calc-f"><span>입사일 <i>(그 달 입사면)</i></span><input class="calc-mid" type="date" data-d="js" value="${escapeAttr(v.js || '')}"></label>
       <label class="calc-f"><span>퇴사일 <i>(그 달 퇴사면)</i></span><input class="calc-mid" type="date" data-d="le" value="${escapeAttr(v.le || '')}"></label>
@@ -13239,7 +13302,7 @@ CALC_RENDER.prorate = el => {
       ${xs.map((x, i) => `<div class="calc-f calc-pr-x"><input class="calc-pr-n" data-xi="${i}" data-xk="n" placeholder="항목 이름 (예: 식대)" value="${escapeAttr(x.n || '')}"><input class="calc-mid calc-pr-a" data-xi="${i}" data-xk="a" data-fmt="money" inputmode="numeric" placeholder="월액" value="${escapeAttr(x.a || '')}"><em>원</em>
           <label class="calc-pr-p" title="끄면 일할 없이 전액"><input type="checkbox" data-xi="${i}" data-xk="p" ${x.p !== '0' ? 'checked' : ''}>일할</label><button type="button" class="calc-pr-del" data-xdel="${i}" title="항목 지우기">✕</button></div>`).join('')}
       <div style="text-align:center; margin:8px 0 4px;"><button type="button" class="calc-btn ghost" data-xadd>+ 추가 항목</button></div>
-      ${v.mode === 'wd' ? `<div class="calc-pen-g"><div class="calc-pen-t">근무일수 <i style="font-weight:600; color:#9f8a95;">(비우면 월~금 자동 · 공휴일은 직접 빼서 넣어요)</i></div>
+      ${v.mode === 'wd' ? `<div class="calc-pen-g"><div class="calc-pen-t">근무일수 <i style="font-weight:600; color:#9f8a95;">(비우면 월~금에서 공휴일 빼고 자동 · 다르면 고쳐 넣어요)</i></div>
         <label class="calc-f"><span>그 달 근무일</span><input class="calc-mid" data-wd="wd" inputmode="numeric" value="${escapeAttr(v.wd || '')}"><em>일</em></label>
         <label class="calc-f"><span>실제 근무일</span><input class="calc-mid" data-wd="ww" inputmode="numeric" value="${escapeAttr(v.ww || '')}"><em>일</em></label></div>` : ''}
       <div style="height:10px;"></div>${seg('ru', [['1', '원 미만 버림'], ['10', '10원 미만 버림']])}
@@ -13259,8 +13322,9 @@ CALC_RENDER.prorate = el => {
     el.querySelectorAll('[data-prrows] [data-o]').forEach(b => b.onclick = async () => { try{ await navigator.clipboard.writeText(b.textContent.replace(/,/g, '')); b.classList.add('copied'); setTimeout(() => b.classList.remove('copied'), 700); }catch(e){} });
     el.querySelector('[data-prnote]').innerHTML = r && r.err ? `<b style="color:#f7a8c6;">${taxjEsc(r.err)}</b>` : ok ? [
       `근무기간 ${r.s.replace(/-/g, '.')} ~ ${r.e.replace(/-/g, '.')}${r.full ? ' (한 달 전체 - 일할 없음)' : ''}`,
-      calcPr.mode === 'wd' ? `월액 × 실제 근무일 ${r.work}일 ÷ 그 달 근무일 ${r.basis}일 (월~금${calcPr.wd || calcPr.ww ? ', 고쳐 넣은 값' : ''})` : `월액 × 근무일 ${r.work}일 ÷ ${r.m}월 일수 ${r.dim}일 (입사일·퇴사일 포함)`,
-      `${calcPr.ru === '10' ? '10원' : '원'} 미만 버림 · 공휴일은 자동으로 빼지 않아요`].join('<br>') : '';
+      calcPr.mode === 'wd' ? `월액 × 실제 근무일 ${r.work}일 ÷ 그 달 근무일 ${r.basis}일 (월~금, 공휴일 제외${calcPr.wd || calcPr.ww ? ', 고쳐 넣은 값' : ''})` : `월액 × 근무일 ${r.work}일 ÷ ${r.m}월 일수 ${r.dim}일 (입사일·퇴사일 포함)`,
+      calcPr.mode === 'wd' ? (r.holMiss.length ? `<b style="color:#f7a8c6;">${r.holMiss.join('·')}년 공휴일 표가 아직 없어서 공휴일을 빼지 못했어요 - 근무일을 고쳐 넣어 주세요</b>` : r.hol.length ? `뺀 공휴일: ${r.hol.map(h => `${+h[0].slice(5, 7)}/${+h[0].slice(8)} ${taxjEsc(h[1])}`).join(', ')}` : '이 달 평일 공휴일 없음') : '',
+      `${calcPr.ru === '10' ? '10원' : '원'} 미만 버림`].filter(Boolean).join('<br>') : '';
   };
   el.querySelectorAll('[data-seg]').forEach(b => b.onclick = () => { calcPr[b.dataset.seg] = b.dataset.v; save(); renderCalc(true); });
   el.querySelectorAll('[data-d]').forEach(i => i.addEventListener('change', () => { calcPr[i.dataset.d] = i.value; if(i.dataset.d !== 'm' && i.value) calcPr.m = i.value.slice(0, 7); save(); if(i.dataset.d !== 'm') renderCalc(true); else out(); }));
