@@ -13307,7 +13307,7 @@ CALC_RENDER.prorate = el => {
   el.innerHTML = `<div class="calc-card">
       <div class="calc-h">급여 일할계산</div>
       <div class="calc-sub">입사·퇴사한 달의 급여를 근무한 날만큼 나눠 계산해요</div>
-      ${seg('mode', [['cal', '월 기준 (달력일)'], ['wd', '근무일수 기준 (평일·공휴일 제외)']])}
+      ${seg('mode', [['cal', '월 기준 (달력일)'], ['wd', '근무일수 기준 (주말·공휴일 제외)']])}
       <label class="calc-f"><span>귀속월</span><input class="calc-mid" type="month" data-d="m" value="${escapeAttr(calcPrMonth(v))}"></label>
       <label class="calc-f"><span>입사일 <i>(그 달 입사면)</i></span><input class="calc-mid" type="date" data-d="js" value="${escapeAttr(v.js || '')}"></label>
       <label class="calc-f"><span>퇴사일 <i>(그 달 퇴사면)</i></span><input class="calc-mid" type="date" data-d="le" value="${escapeAttr(v.le || '')}"></label>
