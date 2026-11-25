@@ -12921,7 +12921,7 @@ const calcHistSel = new Set();   // 이자 계산 이력에서 출력할 건(창
 function calcHistIcon(){
   const X = calcHistCtx; if(!X) return;
   const card = X.el.querySelector('.calc-card'); if(!card) return;
-  let b = card.querySelector('.calc-hist-ic');
+  let b = card.querySelector('.calc-hist-ic:not(.calc-print-ic)');
   if(!b){ b = document.createElement('button'); b.type = 'button'; b.className = 'calc-hist-ic'; b.onclick = calcHistOpen; card.prepend(b); }
   const n = calcSavesOf(X.k).length;
   b.title = n ? `저장 이력 ${n}건 - 불러오기·수정·삭제` : '저장 이력 (아직 없음)';
@@ -12940,7 +12940,7 @@ function calcSaveWire(el, k, getV, loadV){
     if(!r) return;
     calcSavesOf(k).push({ id: Date.now().toString(36) + Math.random().toString(36).slice(2, 5), y: r[1], at: new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 16), memo: String(r[0] || '').trim(), v: JSON.parse(JSON.stringify(v)) });
     calcListYear = r[1]; scheduleGoogleSave(); calcHistIcon();
-    const b = el.querySelector('.calc-hist-ic'); if(b){ b.classList.add('pulse'); setTimeout(() => b.classList.remove('pulse'), 900); }
+    const b = el.querySelector('.calc-hist-ic:not(.calc-print-ic)'); if(b){ b.classList.add('pulse'); setTimeout(() => b.classList.remove('pulse'), 900); }
   };
 }
 function calcHistClose(){ const o = document.getElementById('calcHistOv'); if(o) o.remove(); }
