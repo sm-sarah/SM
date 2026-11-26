@@ -13272,7 +13272,9 @@ async function calcIntXlsx(ents, title, who){
   const rate = x => x.v.rm === 'man' ? Number(String(x.v.rt).replace(/[^\d.]/g, '')) : x.r.segs.map(y => y.r).filter((y, i, a) => a.indexOf(y) === i).join('·');
   const hd = ['No', '채무자', '채권자', '차입일', '상환일', '일수', '이율(%)', '원금', '이자', taxN, '지방소득세', '원천징수세액', '실지급액'];
   const n = ents.length, top = 3;   // 0행 제목, 2행 [요약]·단위, 3행 머리글
-  const ws = {}, put = (r, c, cell) => { ws[X.utils.encode_cell({ r, c })] = cell; };
+  // 서식 객체를 칸마다 복사해 둠(같은 객체를 나눠 쓰면 한 칸의 숫자 서식(이율 0.00)이 No 칸 등에 옮겨 붙음), 숫자 칸은 서식을 꼭 지정
+  const fix = cell => { const c = Object.assign({}, cell); if(c.s) c.s = JSON.parse(JSON.stringify(c.s)); if(c.t === 'n' && !c.z) c.z = '0'; return c; };
+  const ws = {}, put = (r, c, cell) => { ws[X.utils.encode_cell({ r, c })] = fix(cell); };
   put(0, 0, { t:'s', v: title, s:{ font:{ bold:true, sz:16 }, alignment:{ horizontal:'center' } } });
   put(2, 0, { t:'s', v:'[요약]', s:{ font:{ bold:true, sz:11 } } }); put(2, 12, { t:'s', v:'(단위: 원)', s:{ font:{ sz:9 }, alignment:{ horizontal:'right' } } });
   hd.forEach((h, c) => put(top, c, { t:'s', v:h, s:sH }));
@@ -13292,7 +13294,7 @@ async function calcIntXlsx(ents, title, who){
   ws['!cols'] = [5, wid('a', 10), wid('b', 10), 11, 11, 7, 8, 13, 12, 11, 11, 12, 12].map(w => ({ wch:w }));
   ws['!rows'] = [{ hpt:26 }];
   // 시트2: 건별 계산식
-  const w2 = {}, p2 = (r, c, cell) => { w2[X.utils.encode_cell({ r, c })] = cell; };
+  const w2 = {}, p2 = (r, c, cell) => { w2[X.utils.encode_cell({ r, c })] = fix(cell); };
   ['No', '차입일', '상환일', '이자 계산식', '이자'].forEach((h, c) => p2(0, c, { t:'s', v:h, s:sH }));
   ents.forEach((x, i) => {
     const f = x.r.segs.map(y => `${calcWon(calcNum(x.v.p))} × ${y.r}% × ${y.n}일 ÷ ${y.yd}${y.yd === 366 ? '(윤년)' : ''}${x.r.segs.length > 1 ? ` (${ymd(y.from)}~${ymd(y.to)})` : ''}`).join(' + ');
