@@ -3086,11 +3086,14 @@ function addTask(){
   const dateEl = document.getElementById('newTaskDate');
   const textEl = document.getElementById('newTaskText');
   if(!textEl.value.trim()) return;
-  const nt = {id: nextTaskId++, date: dateEl.value || todayStr(), text: textEl.value.trim(), done:false};
   const noteEl = document.getElementById('newTaskNote');   // 할 일 추가할 때 메모도 같이(요청)
-  if(noteEl && noteEl.value.trim()) nt.note = noteEl.value.trim();
-  pushHist(nt, '추가');
-  tasks.push(nt);
+  const lines = splitPastedLines(textEl.value);   // [2026.11.27] 순번으로 이어 적으면 건별로
+  lines.forEach(text => {
+    const nt = {id: nextTaskId++, date: dateEl.value || todayStr(), text, done:false};
+    if(lines.length === 1 && noteEl && noteEl.value.trim()) nt.note = noteEl.value.trim();
+    pushHist(nt, '추가');
+    tasks.push(nt);
+  });
   textEl.value = '';
   if(noteEl) noteEl.value = '';
   renderAll();
@@ -3099,9 +3102,53 @@ function addTask(){
 // 체크박스 칸까지 같이 복사되면 딸려오는 TRUE/FALSE·빈 칸은 빼고 내용만 사용. 한 줄만 붙여넣으면 평소처럼 입력칸에 들어감.
 // 여러 줄 글을 한 줄씩 나눔. 스프레드시트 체크박스 칸에서 딸려오는 TRUE/FALSE·빈 칸·빈 줄은 뺌(할 일·체크리스트 공용)
 function splitPastedLines(raw){
-  return String(raw || '').split(/\r?\n/).map(line =>
+  const L = String(raw || '').split(/\r?\n/).map(line =>
     line.split('\t').map(c => c.trim()).filter(c => c && !/^(TRUE|FALSE|☐|☑|✓|✔)$/i.test(c)).join(' ').trim()
   ).filter(Boolean);
+  // [2026.11.27] 한 줄에 "1. A 2. B 3 C"처럼 순번으로 이어 쓴 것도 건별로 나눔(요청 "줄글로 순번 나눠지는 거 말고 건별로 등록")
+  const out = L.flatMap(smSplitNumbered);
+  // 여러 줄이 모두 "1. ", "2) "처럼 순번으로 시작하면 순번은 떼고 내용만(건별 등록이라 순번 필요 없음)
+  return out.length > 1 && out.every(x => /^\d{1,3}[.)]\s*\S/.test(x)) ? out.map(x => x.replace(/^\d{1,3}[.)]\s*/, '').trim()).filter(Boolean) : out;
+}
+// 한 줄 안의 이어지는 순번(n, n+1, n+2…)을 찾아 나눔. 맨 앞이 순번으로 시작하고 2개 이상 이어질 때만(예: "1. 리빙 2. 유엘 3업기 4 케이지")
+//   순번 = 숫자 + (. 또는 ) 또는 공백), 뒤는 바로 글자. "3층 공사", "2026년" 같은 건 순번으로 안 봄(숫자 바로 뒤가 글자이고 다음 순번이 아니면 그대로)
+function smSplitNumbered(line){
+  const t = String(line || '').trim(), m0 = t.match(/^(\d{1,3})(\s*[.)]\s*|\s+)(?=\S)/); if(!m0) return t ? [t] : [];
+  let n = +m0[1], pos = m0[0].length; const parts = [], starts = [pos];
+  while(true){
+    const k = n + 1;
+    // 다음 순번: "2." "2)"(앞 글자 상관없음) / 띄어 쓴 "2 " / 세 번째부터는 "3업기"처럼 바로 붙은 것도
+    const re = new RegExp(`(?<!\\d)(${k})(?:\\s*[.)]\\s*|(?<=[\\s,·/]${k})\\s+(?=\\S)${k >= 3 ? `|(?<=[\\s,·/]${k})(?=[가-힣A-Za-z(])` : ''})`, 'g'); re.lastIndex = pos;
+    const m = re.exec(t); if(!m) break;
+    parts.push(t.slice(starts[starts.length - 1], m.index).replace(/[\s,·/]+$/, '').trim());
+    pos = m.index + m[0].length; starts.push(pos); n = k;
+  }
+  if(!parts.length) return [t];
+  parts.push(t.slice(starts[starts.length - 1]).trim());
+  return parts.filter(Boolean);
+}
+// 예전에 한 칸에 순번으로 이어 적은 체크리스트·할 일을 건별로 나눔(서버 최신본을 받은 뒤 한 번). 첫 건은 원래 항목(이력 유지), 나머지는 바로 뒤에 새 항목
+function smSplitNumberedExisting(){
+  let n = 0;
+  Object.keys(worklistChecklist || {}).forEach(month => {
+    const list = worklistChecklist[month]; if(!Array.isArray(list)) return;
+    for(let i = list.length - 1; i >= 0; i--){
+      const it = list[i], parts = smSplitNumbered(it && it.text); if(!it || parts.length < 2) continue;
+      if(!it.origText && it.source !== 'user'){ it.origText = it.text; hideMasterKey('hiddenMasterChecklist', month + '|' + it.text); }
+      pushHist(it, '건별로 나눔', [{ label:'내용', from:it.text, to:parts[0] }]); it.text = parts[0];
+      list.splice(i + 1, 0, ...parts.slice(1).map(text => { const x = { text, done: !!it.done, source:'user' }; if(it.star) x.star = it.star; pushHist(x, '건별로 나눔 (추가)'); return x; }));
+      n += parts.length - 1;
+    }
+  });
+  (tasks || []).slice().forEach(t => {
+    const parts = smSplitNumbered(t && t.text); if(!t || parts.length < 2) return;
+    if(t.source === 'master'){ t.origKey = t.date + '|' + t.text; t.source = 'edited'; hideMasterKey('hiddenMasterTasks', t.origKey); }
+    pushHist(t, '건별로 나눔', [{ label:'내용', from:t.text, to:parts[0] }]); t.text = parts[0];
+    const at = tasks.indexOf(t);
+    tasks.splice(at + 1, 0, ...parts.slice(1).map(text => { const x = { id: nextTaskId++, date:t.date, text, done: !!t.done }; pushHist(x, '건별로 나눔 (추가)'); return x; }));
+    n += parts.length - 1;
+  });
+  return n;
 }
 function pasteTasks(e){
   const raw = (e.clipboardData || window.clipboardData)?.getData('text') || '';
@@ -3168,9 +3215,11 @@ async function editTask(id){
   if(!changes.length) return;
   // 마스터 시트 항목은 다시 불러올 때 통째로 교체되므로, 메모만 고쳐도 'edited'로 바꿔 메모가 지워지지 않게 함
   if(t.source === 'master'){ t.origKey = t.date + '|' + t.text; t.source = 'edited'; hideMasterKey('hiddenMasterTasks', t.origKey); }
-  t.date = date; t.text = text;
+  const parts = splitPastedLines(text);   // [2026.11.27] 순번으로 이어 적으면 건별로 나눠 등록(특이사항은 첫 건에)
+  t.date = date; t.text = parts[0] || text;
   if(note) t.note = note; else delete t.note;
   pushHist(t, '수정', changes);
+  if(parts.length > 1) tasks.splice(tasks.indexOf(t) + 1, 0, ...parts.slice(1).map(x => { const nt = { id: nextTaskId++, date, text:x, done:false }; pushHist(nt, '추가'); return nt; }));
   renderAll();
 }
 function showTaskHistory(id){
@@ -3560,8 +3609,10 @@ async function editChecklistItem(month, idx){
   const text = (r[0] || '').trim();
   if(!text || text === item.text) return;
   if(!item.origText && item.source !== 'user'){ item.origText = item.text; hideMasterKey('hiddenMasterChecklist', month + '|' + item.text); }
-  pushHist(item, '수정', [{ label:'내용', from:item.text, to:text }]);
-  item.text = text;
+  const parts = splitPastedLines(text);   // [2026.11.27] 순번으로 이어 적으면 건별로 나눠 등록
+  pushHist(item, '수정', [{ label:'내용', from:item.text, to:parts[0] || text }]);
+  item.text = parts[0] || text;
+  if(parts.length > 1) worklistChecklist[month].splice(idx + 1, 0, ...parts.slice(1).map(t => { const x = { text:t, done:false, source:'user' }; pushHist(x, '추가'); return x; }));
   renderAll();
 }
 function showChecklistHistory(month, idx){
@@ -9004,6 +9055,7 @@ async function afterGoogleSignIn(){
     await loadFromGoogleSheet();
     sheetLoadedOnce = true;
     resolvePendingAfterLoad();
+    try{ smSplitNumberedExisting(); }catch(e){ console.warn('건별 나누기 실패', e); }   // [2026.11.27] 서버 최신본을 받은 뒤에만(아래 renderAll에서 저장)
     settings.sheetsConnected = true;
     setSyncStatus('연동됨 · 방금 불러왔습니다');
     startGooglePolling();
