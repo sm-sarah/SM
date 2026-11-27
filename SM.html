@@ -11609,11 +11609,12 @@ function attWorkdays(ms, att, pd){
     return !!r.noLunch;
   }).length;
   const weekdays = Math.max(0, raw - hol);
+  // [2026.11.27] 회사웹 변경 반영(11.27) - 교육뿐 아니라 '식대기준일수에서 제외'를 체크한 모든 개인일정
   // [2026.11.25] 회사웹 변경 반영(11.25) - 개인일정 구분 '교육'에 '식대기준일수에서 제외'(noLunch) 체크한 평일도 뺌(휴가·재택·회식·공휴일로 이미 빠진 날은 또 빼지 않음 - 회사웹 eduNoLunchDates와 같음)
   const skipEdu = new Set(noLunchDates);
   (att.remoteEntries || []).forEach(r => { if(r && r.date && (r.noLunch || r.bonus)) skipEdu.add(r.date); });
   list.forEach(x => { if(x.reason === '공휴일' || x.reason === '점심회식' || x.reason === '기타') skipEdu.add(x.date); });
-  const eduNoLunch = new Set((((pd.schedule || {}).events) || []).filter(ev => ev && !ev.deleted && ev.type === '교육' && ev.noLunch && String(ev.date || '').startsWith(ms) && isWd(ev.date) && !skipEdu.has(ev.date) && (!hireFrom || ev.date >= hireFrom)).map(ev => ev.date)).size;
+  const eduNoLunch = new Set((((pd.schedule || {}).events) || []).filter(ev => ev && !ev.deleted && ev.noLunch && String(ev.date || '').startsWith(ms) && isWd(ev.date) && !skipEdu.has(ev.date) && (!hireFrom || ev.date >= hireFrom)).map(ev => ev.date)).size;
   return { weekdays, workdays: Math.max(0, weekdays - noLunch - exclusion - remoteNoLunch - eduNoLunch) };
 }
 // Tax.J getLunchLimitFor와 같음: 그 달 말일까지 적용된 가장 최근 1일 한도
