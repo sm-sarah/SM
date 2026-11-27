@@ -3907,7 +3907,7 @@ function smFabSync(){
 // [2026.11.02] "입력하는 곳에서 오른쪽 마우스 클릭하면 - 이나 해당없음이 뜨게, 적용 가능한 모든 곳"(요청)
 //   날짜·기간 칸(+ 버튼: 신고현황·결산·부가세 진행·법인세·종소세·제출)과 표 안의 글자 입력칸에서 오른쪽 클릭 → 작은 창에서 '-' / '미해당'을 고르면 그 값으로 저장.
 //   이미 오른쪽 클릭을 쓰는 칸(부가세 진행 체크 칸 = 미해당)은 그대로. 체크박스·드롭다운·검색칸·비밀번호칸은 값 형식이 달라 빼고, 글자 입력칸은 표 안(td)만
-const SM_QUICK_VALS = ['-', '미해당', '미확인', '진행중', '★'];   // [2026.11.16] 진행중 추가(요청)   // [2026.11.12] ★ = 확인 필요(요청)
+const SM_QUICK_VALS = ['-', '미해당', '미확인', '진행중', '✕', '★'];   // [2026.11.27] ✕ 추가(요청)   // [2026.11.16] 진행중 추가(요청)   // [2026.11.12] ★ = 확인 필요(요청)
 const SM_QUICK_SETTERS = {
   payDatePop: (b, v) => setPayCustomVal(b.dataset.key, b.dataset.col, v),
   closeDatePop: (b, v) => { closeSetVal(b.dataset.cid, b.dataset.col, v); renderClose(); },
@@ -4026,7 +4026,7 @@ document.addEventListener('contextmenu', e => {
   closeDatePopClose();
   const pop = document.createElement('div');
   pop.id = 'closeDatePop'; pop.className = 'cl-pop sm-quick';
-  pop.innerHTML = `<div class="cl-pop-row"><button type="button" data-q="-">-</button><button type="button" data-q="미해당">미해당</button><button type="button" data-q="미확인">미확인</button><button type="button" data-q="진행중">진행중</button><button type="button" data-q="★" title="확인 필요">★</button></div>`;
+  pop.innerHTML = `<div class="cl-pop-row"><button type="button" data-q="-">-</button><button type="button" data-q="미해당">미해당</button><button type="button" data-q="미확인">미확인</button><button type="button" data-q="진행중">진행중</button><button type="button" data-q="✕" title="✕ 표시">✕</button><button type="button" data-q="★" title="확인 필요">★</button></div>`;
   document.body.appendChild(pop);
   const pw = pop.offsetWidth, ph = pop.offsetHeight;
   pop.style.left = Math.max(8, Math.min(window.innerWidth - pw - 8, e.clientX)) + 'px';
@@ -5628,7 +5628,7 @@ function vatProgHtml(docs){
       // [2026.10.19] "체크 항목 미해당 표기 - 우클릭으로"(요청) - 우클릭(휴대폰은 길게 누르기) = 미해당(–) 켜기/끄기, 값은 'na'. – 를 누르면 빈칸으로
       // [2026.11.11] 우클릭 = 다른 칸처럼 -·미해당·미확인 고르기(요청). 미해당은 예전처럼 'na'(–), -·미확인은 그 글자로 저장
       if((c.type === 'check' || c.type === 'checkdate') && smStarParse(val)) return `<td style="text-align:center;" data-vpq="${cid}|${c.id}"><span class="vp-na smc-q star" data-star="${escapeAttr(val)}" title="${escapeAttr(smStarTip(val))}">★</span></td>`;   // [2026.11.12] ★ 확인 필요(일자·메모)
-      if((c.type === 'check' || c.type === 'checkdate') && (val === '-' || val === '미확인' || val === '진행중')) return `<td style="text-align:center;" data-vpq="${cid}|${c.id}"><span class="vp-na smc-q${val === '진행중' ? ' prog' : ''}" onclick="vatProgSet('${cid}','${c.id}',null,true)" title="${val === '★' ? '확인 필요' : val} · 누르면 지움 · 우클릭으로 바꾸기">${val}</span></td>`;
+      if((c.type === 'check' || c.type === 'checkdate') && (val === '-' || val === '미확인' || val === '진행중' || val === '✕')) return `<td style="text-align:center;" data-vpq="${cid}|${c.id}"><span class="vp-na smc-q${val === '진행중' ? ' prog' : ''}" onclick="vatProgSet('${cid}','${c.id}',null,true)" title="${val === '★' ? '확인 필요' : val} · 누르면 지움 · 우클릭으로 바꾸기">${val}</span></td>`;
       if(c.type === 'check') return `<td style="text-align:center;" data-vpq="${cid}|${c.id}" title="우클릭: - / 미해당 / 미확인">${val === 'na'
         ? `<span class="vp-na" onclick="vatProgToggleNa('${cid}','${c.id}')" title="미해당 · 누르면 해제">–</span>`
         : `<input type="checkbox" ${val ? 'checked' : ''} onchange="vatProgSet('${cid}','${c.id}',this.checked)">`}</td>`;
