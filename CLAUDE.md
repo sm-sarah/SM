@@ -25,6 +25,7 @@
 - 가져온 데이터의 수정은 works 저장 공간(localStorage / 개인 Google 시트)에서 한다.
 - 현재 가져오기: Tax.J 엑셀 업로드(`importTaxjExcel`), 마스터 시트 가져오기(`importFromMasterSheet` 등). 깨뜨리지 않고 대체 수단으로 유지한다.
 - 목표: Tax.J와 같은 Firebase Firestore(프로젝트 `taxj-a3e01`)를 실시간으로 읽기. [2026.11.16~] 원본은 `taxj_records`(한 건·거래처 한 칸씩)와 `taxj_approvals`(결재)이고, `taxj`는 옮기기 직전 보관본(관리자 목록·관리비밀번호·회사명만 원본). 읽는 방법은 Tax.J CLAUDE.md '서버 원본 저장'과 `recsBuild`·sendpush `readRecords` 참고.
+  - [2026.11.27~] works는 `taxj`(예전 묶음)와 `taxj_records`(서버 원본)를 둘 다 실시간으로 듣고, `taxj_records`를 예전 묶음 모양(`s__필드`·`data__직원`·`profiles`)으로 조립해 덮어쓴다(`taxjRecs*` 함수, 옮김이 끝난 `_done_필드` 묶음만). 회사웹 `RECS_CFG` 목록(list) 묶음이 늘면 `TAXJ_RECS_LIST`도 같이 맞춘다.
   - 필드명·문서 경로는 Tax.J 코드에서 grep으로 확인해 그대로 맞춘다. 짐작하지 않는다.
   - Tax.J는 @ciacc.co.kr Google 계정으로 로그인한다. Firestore 접근 규칙 때문에 works에서도 같은 계정 로그인이 필요할 수 있다.
   - Firebase 보안 규칙·승인 도메인 등 회사 쪽 설정을 바꿔야 하면 먼저 설명하고 확인받는다.

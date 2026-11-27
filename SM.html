@@ -10741,7 +10741,8 @@ async function loadTaxjFull(relogin){
     }
     if(!String(user.email || '').toLowerCase().endsWith(TAXJ_COMPANY_DOMAIN)){ await auth.signOut(); throw new Error(`회사 계정(${TAXJ_COMPANY_DOMAIN})으로 로그인해야 해요`); }
     const snap = await app.firestore().collection('taxj').get();
-    const docs = taxjParseSnap(snap);
+    await taxjRecsLoadOnce(app);   // [2026.11.27] 서버 원본(taxj_records)도 받아서 덮어씀
+    const docs = taxjRecsMerge(taxjParseSnap(snap));
     taxjFull = { at: Date.now(), email: user.email, docs };
     taxjMatchCache = null;
     taxjFullSaveMsg = '저장하는 중…'; renderTaxjFull();
@@ -10772,6 +10773,87 @@ function taxjParseSnap(snap){
   });
   return docs;
 }
+// [2026.11.27] 회사웹 서버 원본(taxj_records) 읽기(요청 "회사웹에 대표 주민번호 입력했는데 개인웹에 바로 반영이 안 돼")
+//   회사웹은 2026.11.16부터 자료를 'taxj_records'(기록 단위)에 저장하고, 예전 묶음 'taxj'는 옮긴 순간 그대로 보관본이 됨.
+//   개인웹은 'taxj'만 듣고 있어서 그 뒤 바뀐 거래처·신고현황·근태 등이 안 들어왔음 → taxj_records도 실시간으로 듣고,
+//   예전 묶음과 같은 모양(s__필드 / data__직원 / profiles)으로 다시 조립해 그 위에 덮어씀. 조립 방법 = 회사웹 recsBuild·recsRestOfKey·recsSetPath 그대로.
+//   옮김이 끝난(_done_필드) 묶음만 덮어씀(덜 옮겨진 묶음은 예전 묶음 그대로). 읽기만 함
+const TAXJ_RECS_LIST = new Set(['exclusionDays','workHourExceptions','noticeHistory','notificationLog','specialPeriods','specialPeriodHistory','trash','lunchLimitHistory','taxScheduleCustomItems','teamPolicyHistory','opsPolicyHistory','quickGuideHistory','pushTokens','orgChart','profiles']);
+let taxjRecsDocs = new Map(), taxjRecsDone = new Set(), taxjRecsOverlay = {}, taxjRecsUnsub = null, taxjRecsOn = false;
+function taxjRecsDec(s){ try{ return decodeURIComponent(String(s).slice(1)); }catch(e){ return String(s).slice(1); } }
+function taxjRecsRest(key){ if(key === '_') return []; if(key[0] === 'i') return [{ id: taxjRecsDec(key) }]; return key.split('|').map(taxjRecsDec); }
+function taxjRecsSet(root, path, val){
+  const plain = v => !!v && typeof v === 'object' && !Array.isArray(v), isId = s => !!s && typeof s === 'object';
+  let cur = root;
+  for(let i = 0; i < path.length - 1; i++){
+    const s = path[i];
+    if(isId(path[i + 1])){ if(!Array.isArray(cur[s])) cur[s] = []; } else if(!plain(cur[s])) cur[s] = {};
+    cur = cur[s];
+  }
+  const last = path[path.length - 1];
+  if(isId(last)){ const i = cur.findIndex(x => x && String(x.id) === last.id); if(i < 0) cur.push(val); else cur[i] = val; return; }
+  cur[last] = val;
+}
+function taxjRecsBuild(f){
+  const ents = [];
+  taxjRecsDocs.forEach(d => { if(d.f !== f) return; const p = Array.isArray(d.p) ? d.p : [], r = d.r || {}, o = d.o || {};
+    Object.keys(r).forEach(k => { if(typeof r[k] === 'string') ents.push({ path: p.concat(taxjRecsRest(k)), j: r[k], o: Number(o[k]) || 0 }); }); });
+  ents.sort((a, b) => (a.path.length - b.path.length) || (a.o - b.o));
+  const root = {}; ents.forEach(x => { try{ taxjRecsSet(root, x.path, JSON.parse(x.j)); }catch(e){} });
+  return root;
+}
+// 바뀐 묶음만 다시 조립해 taxjRecsOverlay(예전 묶음 모양)에 넣음
+function taxjRecsRebuild(fields){
+  const pm = /^(attendance|expense|schedule|settings)@(.+)$/;
+  fields.forEach(f => {
+    const m = pm.exec(f);
+    if(m){ if(!taxjRecsDone.has('prof')) return; const k = 'data__' + m[2]; taxjRecsOverlay[k] = Object.assign({}, taxjRecsOverlay[k] || {}, { [m[1]]: taxjRecsBuild(f) }); return; }
+    if(!taxjRecsDone.has(f)) return;
+    const root = taxjRecsBuild(f);
+    if(f === 'profiles') taxjRecsOverlay.profiles = Array.isArray(root.L) ? root.L : [];
+    else taxjRecsOverlay['s__' + f] = TAXJ_RECS_LIST.has(f) ? (Array.isArray(root.L) ? root.L : []) : root;
+  });
+}
+// 예전 묶음(docs) 위에 서버 원본을 덮음. 직원별 근태(data__)는 예전 묶음의 다른 칸은 두고 옮긴 종류만 바꿈
+function taxjRecsMerge(docs){
+  const out = Object.assign({}, docs || {});
+  Object.keys(taxjRecsOverlay).forEach(k => { out[k] = k.startsWith('data__') ? Object.assign({}, out[k] || {}, taxjRecsOverlay[k]) : taxjRecsOverlay[k]; });
+  return out;
+}
+function taxjRecsApply(snap){
+  const touched = new Set();
+  snap.docChanges().forEach(ch => {
+    const id = ch.doc.id;
+    if(id.startsWith('_done_')){ const f = id.slice(6); if(ch.type === 'removed') taxjRecsDone.delete(f); else taxjRecsDone.add(f); touched.add(f === 'prof' ? '*prof' : f); return; }
+    if(id.startsWith('_')) return;
+    const old = taxjRecsDocs.get(id);
+    if(ch.type === 'removed') taxjRecsDocs.delete(id); else taxjRecsDocs.set(id, ch.doc.data() || {});
+    const v = taxjRecsDocs.get(id) || old; if(v && v.f) touched.add(v.f);
+  });
+  if(touched.has('*prof')){ touched.delete('*prof'); taxjRecsDocs.forEach(d => { if(/@/.test(d.f || '')) touched.add(d.f); }); }
+  taxjRecsRebuild(touched);
+  return touched.size;
+}
+function taxjRecsStart(app){
+  if(taxjRecsUnsub) return;
+  taxjRecsUnsub = app.firestore().collection('taxj_records').onSnapshot(snap => {
+    if(snap.metadata && snap.metadata.fromCache) return;
+    const n = taxjRecsApply(snap); taxjRecsOn = true;
+    if(!n || !taxjFull) return;
+    const user = app.auth().currentUser;
+    taxjFull = { at: Date.now(), email: (user && user.email) || taxjFull.email || '', docs: taxjRecsMerge(taxjFull.docs) };
+    taxjMatchCache = null; taxjLiveRerender(); taxjLivePersist();
+  }, err => {
+    console.error('Tax.J 서버 원본(taxj_records) 수신 오류', err);
+    taxjRecsUnsub = null; taxjRecsOn = false;
+    if(!(err && err.code === 'permission-denied')) setTimeout(() => { if(taxjLiveUnsub) taxjRecsStart(app); }, 60 * 1000);
+  });
+}
+// 처음 한 번 받기(연결 버튼) - 예전 묶음을 받은 뒤 바로 덮어씀
+async function taxjRecsLoadOnce(app){
+  try{ const snap = await app.firestore().collection('taxj_records').get(); taxjRecsApply({ docChanges: () => snap.docs.map(d => ({ type:'added', doc:d })) }); }
+  catch(e){ console.warn('Tax.J 서버 원본 받기 실패(예전 묶음만 씀)', e); }
+}
 // ── [2026.10.12] 회사웹 신고·제출 실시간 연동(요청: "회사웹 메뉴와 데이터를 개인웹으로 연동해서 필요한 개인업무를 더해 작업") ──
 // 회사 계정으로 한 번 연결하면 Tax.J 저장소(Firestore)를 실시간으로 듣고(onSnapshot) 바뀔 때마다 taxjFull을 갱신 → 부가세·원천세·법인세·종소세 탭의
 // '회사 진행' 칸과 제출 탭에 바로 반영. 읽기만 하고 회사 원본은 고치지 않음. 내 확인·메모는 works 저장 공간(submitMine)에만 저장.
@@ -10787,7 +10869,7 @@ function taxjLiveStart(app){
     taxjLiveOn = true; taxjLiveErr = '';
     if(!changed) return;
     const user = app.auth().currentUser;
-    taxjFull = { at: Date.now(), email: (user && user.email) || (taxjFull && taxjFull.email) || '', docs: taxjParseSnap(snap) };
+    taxjFull = { at: Date.now(), email: (user && user.email) || (taxjFull && taxjFull.email) || '', docs: taxjRecsMerge(taxjParseSnap(snap)) };
     taxjMatchCache = null;
     taxjLiveRerender();
     taxjLivePersist();
@@ -10798,6 +10880,7 @@ function taxjLiveStart(app){
     if(!(err && err.code === 'permission-denied')) taxjLiveRetrySoon();   // [2026.10.13] 끊기면 1분 뒤 저절로 다시 연결
     taxjLiveRerender();
   });
+  taxjRecsStart(app);   // [2026.11.27] 서버 원본(taxj_records)도 같이 들음
   try{ localStorage.setItem('sm_taxj_live', '1'); }catch(e){}
 }
 function taxjLivePersist(){
